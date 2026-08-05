@@ -154,7 +154,7 @@ function render(cell) {
     note.style.textTransform = 'none';
     note.style.fontWeight = '400';
     note.style.marginTop = '6px';
-    note.textContent = 'Applies to the whole row/column — use for empty spacer rows or columns.';
+    note.textContent = 'In the output, this resizes only the empty spaces in this row/column — seated squares stay full size, which offsets them. The editing grid stays uniform.';
     g.appendChild(note);
   }));
 

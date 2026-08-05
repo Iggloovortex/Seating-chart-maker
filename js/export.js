@@ -33,21 +33,51 @@ async function renderToCanvas(dpi = 300) {
   const areaW = pxW - margin * 2;
   const areaH = pxH - margin * 2 - titleBand;
 
-  const colW = Array.from({ length: cols }, (_, c) => colWeight(c));
-  const rowH = Array.from({ length: rows }, (_, r) => rowWeight(r));
-  const totalColW = colW.reduce((a, b) => a + b, 0) || 1;
-  const totalRowH = rowH.reduce((a, b) => a + b, 0) || 1;
+  // Empty-space sizing (output only): every SEATED square renders at one uniform
+  // size; row-height / column-width weights resize only the EMPTY cells. Because
+  // seats stay full size while empty cells shrink or grow, the seats offset —
+  // exactly what row/column sizing is for here. All weights = 1 reproduces a
+  // plain uniform grid. The live editing grid is unaffected (config view).
+  const rowHasSeat = (r) => {
+    for (let c = 0; c < cols; c++) { const d = peekCell(r, c); if (d && d.enabled) return true; }
+    return false;
+  };
+  // Size of each cell in "units" (a seat is 1 wide; an empty cell uses its weight).
+  const cellUnitsW = (r, c) => (isEnabled(r, c) ? 1 : colWeight(c));
+  // A row's band height in units: 1 if it has any seat, else the row's weight
+  // (so fully-empty spacer rows can be made thin/tall).
+  const rowUnitsH = (r) => (rowHasSeat(r) ? 1 : rowWeight(r));
+  // A row's total width in units (sum of its cells' unit widths).
+  const rowUnitsW = (r) => {
+    let sum = 0;
+    for (let c = 0; c < cols; c++) sum += cellUnitsW(r, c);
+    return sum;
+  };
 
-  const unit = Math.min(areaW / totalColW, areaH / totalRowH);
-  const gridW = unit * totalColW;
-  const gridH = unit * totalRowH;
-  const originX = margin + (areaW - gridW) / 2; // centered horizontally
+  let maxRowUnitsW = 1;
+  for (let r = 0; r < rows; r++) maxRowUnitsW = Math.max(maxRowUnitsW, rowUnitsW(r));
+  let totalUnitsH = 0;
+  for (let r = 0; r < rows; r++) totalUnitsH += rowUnitsH(r);
+  totalUnitsH = totalUnitsH || 1;
+
+  const unit = Math.min(areaW / maxRowUnitsW, areaH / totalUnitsH);
+  const gridW = maxRowUnitsW * unit;
+  const originX = margin + (areaW - gridW) / 2; // block centered horizontally
   const originY = margin + titleBand;           // top-anchored, beneath the title
 
-  const xEdges = [originX];
-  for (let c = 0; c < cols; c++) xEdges.push(xEdges[c] + (colW[c] / totalColW) * gridW);
-  const yEdges = [originY];
-  for (let r = 0; r < rows; r++) yEdges.push(yEdges[r] + (rowH[r] / totalRowH) * gridH);
+  // Precompute each cell's rectangle by walking rows top→bottom, cells left→right.
+  const rects = new Map(); // "r,c" -> { x, y, w, h }
+  let yCursor = originY;
+  for (let r = 0; r < rows; r++) {
+    const bandH = rowUnitsH(r) * unit;
+    let xCursor = originX; // rows left-aligned to a common origin, so offsets read left→right
+    for (let c = 0; c < cols; c++) {
+      const w = cellUnitsW(r, c) * unit;
+      rects.set(keyOf(r, c), { x: xCursor, y: yCursor, w, h: bandH });
+      xCursor += w;
+    }
+    yCursor += bandH;
+  }
 
   // Title at the top, centered.
   if (title) {
@@ -58,10 +88,7 @@ async function renderToCanvas(dpi = 300) {
     ctx.fillText(fitText(ctx, title, areaW), pxW / 2, margin + titleBand * 0.55);
   }
 
-  const rectOf = (r, c) => ({
-    x: xEdges[c], y: yEdges[r],
-    w: xEdges[c + 1] - xEdges[c], h: yEdges[r + 1] - yEdges[r],
-  });
+  const rectOf = (r, c) => rects.get(keyOf(r, c));
 
   // Classify every enabled square: seats gathered around a table vs. connected desks.
   //  - A table's "footprint" is the bounding box of its selected squares.
