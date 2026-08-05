@@ -199,7 +199,7 @@ function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair) {
   let cursorY = -totalH / 2;
 
   if (hasIcon) {
-    const img = imgCache.get(`${iconId}|${data.border || '#2f6feb'}`);
+    const img = imgCache.get(`${iconId}|${iconColorOf(data)}`);
     if (img) ctx.drawImage(img, -iconSize / 2, cursorY, iconSize, iconSize);
     cursorY += iconSize;
   }
@@ -238,15 +238,20 @@ function drawTable(ctx, table, rectOf) {
   }
 }
 
+/** Icon color for a cell: its dedicated iconColor, falling back to border. */
+function iconColorOf(data) {
+  return data.iconColor || data.border || '#2f6feb';
+}
+
 async function preloadIcons(desks, seats) {
   const needed = new Map(); // "id|color" -> dataUrl
   const want = (id, color) => needed.set(`${id}|${color}`, iconDataUrl(id, color));
 
   for (const { data } of desks) {
-    if (data.icon) want(data.icon, data.border || '#2f6feb');
+    if (data.icon) want(data.icon, iconColorOf(data));
   }
   for (const { data } of seats) {
-    const color = data.border || '#2f6feb';
+    const color = iconColorOf(data);
     if (data.icon) want(data.icon, color);
     else if ((data.labels || []).filter((l) => l.text).length === 0) want('chair', color); // empty chair
   }

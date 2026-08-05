@@ -49,7 +49,10 @@ function buildCell(r, c) {
 
     if (data.icon) {
       const svg = iconUse(data.icon);
-      if (svg) content.appendChild(svg);
+      if (svg) {
+        svg.style.color = data.iconColor || '#1f2933'; // drives currentColor in the icon
+        content.appendChild(svg);
+      }
     }
 
     if (data.labels && data.labels.length) {

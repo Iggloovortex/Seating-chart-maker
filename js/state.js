@@ -24,6 +24,7 @@ const DEFAULTS = {
   fill: '#dbe7ff',
   border: '#2f6feb',
   labelColor: '#1f2933',
+  iconColor: '#1f2933',
   rowWeight: 1,
   colWeight: 1,
 };
@@ -33,6 +34,7 @@ function makeCell() {
     enabled: false,
     labels: [],                 // [{ text, color }]
     icon: null,                 // icon id from icons.js
+    iconColor: DEFAULTS.iconColor,
     rotation: 0,                // 0 | 90 | 180 | 270
     fill: DEFAULTS.fill,
     border: DEFAULTS.border,
