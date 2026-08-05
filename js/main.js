@@ -1,13 +1,5 @@
 // main.js — wire modules, controls, and the initial render.
 
-import { state, subscribe, setGrid, clearAll } from './state.js';
-import { renderGrid, refreshTables } from './grid.js';
-import { initInteractions, onRequestEdit } from './interactions.js';
-import { initEditor, openEditor } from './editor.js';
-import { initPaperControls, reflectPaper } from './paper.js';
-import { initTables } from './tables.js';
-import { downloadPng, showPreview, closePreview, printChart } from './export.js';
-import { initAutoSave, restoreFromCache, exportFile, importFile } from './storage.js';
 
 const chartEl = document.getElementById('chart');
 const colsInput = document.getElementById('grid-cols');

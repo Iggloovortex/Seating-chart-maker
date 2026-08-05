@@ -1,9 +1,7 @@
 // tables.js — table-select mode UI: build a table shape from selected squares.
 
-import { state, addTable, clearSelection, removeTable, subscribe } from './state.js';
-import { setSelectMode } from './interactions.js';
 
-export function initTables() {
+function initTables() {
   const selectBtn = document.getElementById('btn-select');
   const bar = document.getElementById('select-bar');
   const countEl = document.getElementById('select-count');

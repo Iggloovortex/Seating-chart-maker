@@ -1,7 +1,7 @@
 // icons.js — shared icon registry, reused by the grid, the picker, and the canvas export.
 // Each icon's `path` is drawn inside a 24×24 viewBox with `currentColor` stroking.
 
-export const ICONS = {
+const ICONS = {
   desktop: { label: 'Desktop', symbol: 'ic-desktop' },
   laptop:  { label: 'Laptop',  symbol: 'ic-laptop' },
   monitor: { label: 'Monitor', symbol: 'ic-monitor' },
@@ -12,7 +12,7 @@ export const ICONS = {
   star:    { label: 'Star',    symbol: 'ic-star' },
 };
 
-export const ICON_IDS = Object.keys(ICONS);
+const ICON_IDS = Object.keys(ICONS);
 
 /** Inner SVG markup for each symbol, keyed by symbol id. Mirrors the <symbol>s
  *  in index.html so the canvas exporter can rasterize icons without the DOM. */
@@ -42,7 +42,7 @@ const SYMBOL_MARKUP = {
 };
 
 /** A `<svg><use>` element referencing an inline symbol — for grid & picker. */
-export function iconUse(id, className = 'cell__icon') {
+function iconUse(id, className = 'cell__icon') {
   const meta = ICONS[id];
   if (!meta) return null;
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -55,7 +55,7 @@ export function iconUse(id, className = 'cell__icon') {
 }
 
 /** A standalone SVG data-URL for a given icon + color — used by the canvas exporter. */
-export function iconDataUrl(id, color) {
+function iconDataUrl(id, color) {
   const meta = ICONS[id];
   if (!meta) return null;
   const inner = SYMBOL_MARKUP[meta.symbol].replaceAll('COLOR', color);

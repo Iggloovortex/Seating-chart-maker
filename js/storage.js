@@ -1,7 +1,6 @@
 // storage.js — persistence: auto-save to localStorage, and export/import a
 // .seatchart file (JSON) via download + file picker.
 
-import { serialize, deserialize, subscribe } from './state.js';
 
 const LS_KEY = 'seatchart:last-session';
 const FILE_TYPE = 'seatchart';
@@ -11,14 +10,14 @@ const FILE_TYPE = 'seatchart';
 let saveTimer = 0;
 
 /** Begin auto-saving state to localStorage (debounced) on every change. */
-export function initAutoSave() {
+function initAutoSave() {
   subscribe(() => {
     clearTimeout(saveTimer);
     saveTimer = window.setTimeout(saveToCache, 300);
   });
 }
 
-export function saveToCache() {
+function saveToCache() {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify(wrap(serialize())));
   } catch {
@@ -27,7 +26,7 @@ export function saveToCache() {
 }
 
 /** Restore the last session. Returns true if something was loaded. */
-export function restoreFromCache() {
+function restoreFromCache() {
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return false;
@@ -41,7 +40,7 @@ export function restoreFromCache() {
 // ------------------------------------------------------------ file I/O
 
 /** Download the current chart as a .seatchart file. */
-export function exportFile(name = 'seating-chart') {
+function exportFile(name = 'seating-chart') {
   const blob = new Blob([JSON.stringify(wrap(serialize()), null, 2)], {
     type: 'application/json',
   });
@@ -54,7 +53,7 @@ export function exportFile(name = 'seating-chart') {
 }
 
 /** Read a File object and load it into state. Returns a Promise<boolean>. */
-export function importFile(file) {
+function importFile(file) {
   return file.text().then((text) => {
     const data = unwrap(JSON.parse(text));
     if (!data) throw new Error('Not a valid .seatchart file');

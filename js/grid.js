@@ -1,13 +1,11 @@
 // grid.js — build/refresh the DOM grid from state (fill, border, icon, label, rotation)
 // and render multi-square table overlays.
 
-import { state, keyOf, peekCell, rowWeight, colWeight, parseKey } from './state.js';
-import { iconUse } from './icons.js';
 
 const chart = document.getElementById('chart');
 
 /** Full re-render of the grid. Called on any state change. */
-export function renderGrid() {
+function renderGrid() {
   const { cols, rows } = state.grid;
 
   // Column/row track sizing uses the per-index weights (empty row/col heights).
@@ -113,7 +111,7 @@ function renderTables() {
 }
 
 /** Re-measure table overlays after layout changes (zoom, resize). */
-export function refreshTables() {
+function refreshTables() {
   chart.querySelectorAll('.table-shape').forEach((n) => n.remove());
   renderTables();
 }

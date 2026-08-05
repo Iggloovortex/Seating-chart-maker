@@ -167,6 +167,18 @@
     </section>
   </div>
 
-  <script type="module" src="js/main.js"></script>
+  <!-- Classic scripts (not ES modules) so the app also runs when index.html is
+       opened directly via file:// — module scripts are blocked over file://.
+       Load order matters: each file defines globals used by later ones. -->
+  <script src="js/state.js"></script>
+  <script src="js/icons.js"></script>
+  <script src="js/paper.js"></script>
+  <script src="js/grid.js"></script>
+  <script src="js/interactions.js"></script>
+  <script src="js/editor.js"></script>
+  <script src="js/tables.js"></script>
+  <script src="js/export.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/main.js"></script>
 </body>
 </html>

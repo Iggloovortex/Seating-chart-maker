@@ -2,11 +2,6 @@
 // Edits a single cell: labels (each line its own color), icon, rotation, fill/border,
 // plus that cell's row height and column width weights.
 
-import {
-  getCell, peekCell, updateCell, DEFAULTS,
-  setRowWeight, setColWeight, rowWeight, colWeight,
-} from './state.js';
-import { ICONS, ICON_IDS, iconUse } from './icons.js';
 
 const editorEl = document.getElementById('editor');
 const bodyEl = document.getElementById('editor-body');
@@ -14,7 +9,7 @@ const titleEl = document.getElementById('editor-title');
 
 let current = null; // { r, c }
 
-export function initEditor() {
+function initEditor() {
   editorEl.querySelectorAll('[data-close-editor]').forEach((el) =>
     el.addEventListener('click', closeEditor)
   );
@@ -23,7 +18,7 @@ export function initEditor() {
   });
 }
 
-export function openEditor(r, c) {
+function openEditor(r, c) {
   current = { r, c };
   const cell = getCell(r, c); // ensures it exists so edits persist
   titleEl.textContent = `Seat — Row ${r + 1}, Col ${c + 1}`;
@@ -34,7 +29,7 @@ export function openEditor(r, c) {
   bodyEl.querySelector('input, button, select')?.focus();
 }
 
-export function closeEditor() {
+function closeEditor() {
   editorEl.hidden = true;
   editorEl.setAttribute('aria-hidden', 'true');
   current = null;

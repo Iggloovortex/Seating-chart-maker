@@ -3,19 +3,18 @@
 //  - right-click / long-press => open the edit pane for that cell
 // Uses Pointer Events so one code path serves both input types.
 
-import { toggleEnabled, toggleSelection, parseKey } from './state.js';
 
 const LONG_PRESS_MS = 450;
 const MOVE_TOLERANCE = 10; // px of travel that cancels a tap/long-press
 
 let selectMode = false;
-export function setSelectMode(on) { selectMode = on; }
-export function isSelectMode() { return selectMode; }
+function setSelectMode(on) { selectMode = on; }
+function isSelectMode() { return selectMode; }
 
-let openEditor = () => {};
-export function onRequestEdit(fn) { openEditor = fn; }
+let editHandler = () => {};
+function onRequestEdit(fn) { editHandler = fn; }
 
-export function initInteractions(chartEl) {
+function initInteractions(chartEl) {
   let pointer = null; // { id, x, y, cell, timer, longFired }
 
   const cellFrom = (target) => target.closest?.('.cell');
@@ -80,5 +79,5 @@ function fireTap(cell) {
 
 function fireEdit(cell) {
   const [r, c] = parseKey(cell.dataset.key);
-  openEditor(r, c);
+  editHandler(r, c);
 }

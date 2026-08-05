@@ -1,14 +1,11 @@
 // export.js — render the chart to a canvas WITHOUT grid lines, sized to the chosen
 // paper (landscape). Powers Preview, PNG download, and Print / Save-as-PDF.
 
-import { state, peekCell, rowWeight, colWeight, keyOf, parseKey } from './state.js';
-import { iconDataUrl } from './icons.js';
-import { paperInches } from './paper.js';
 
 const MAX_DIM = 4000; // cap canvas pixels for memory safety
 
 /** Render the current chart onto a fresh canvas. Returns a Promise<canvas>. */
-export async function renderToCanvas(dpi = 300) {
+async function renderToCanvas(dpi = 300) {
   const { w: inW, h: inH } = paperInches();
   let pxW = Math.round(inW * dpi);
   let pxH = Math.round(inH * dpi);
@@ -270,7 +267,7 @@ function fitText(ctx, text, maxW) {
 
 // ---------------------------------------------------------------- actions
 
-export async function downloadPng() {
+async function downloadPng() {
   const canvas = await renderToCanvas(300);
   canvas.toBlob((blob) => {
     if (!blob) return;
@@ -283,7 +280,7 @@ export async function downloadPng() {
   }, 'image/png');
 }
 
-export async function showPreview() {
+async function showPreview() {
   const modal = document.getElementById('preview');
   const paper = document.getElementById('preview-paper');
   paper.replaceChildren();
@@ -293,7 +290,7 @@ export async function showPreview() {
   modal.setAttribute('aria-hidden', 'false');
 }
 
-export function closePreview() {
+function closePreview() {
   const modal = document.getElementById('preview');
   modal.hidden = true;
   modal.setAttribute('aria-hidden', 'true');
@@ -301,7 +298,7 @@ export function closePreview() {
 
 /** Print via the browser (user can "Save as PDF"). Renders to an image, injects a
  *  print-only root and a matching @page size, prints, then cleans up. */
-export async function printChart() {
+async function printChart() {
   const { w, h } = paperInches();
   const canvas = await renderToCanvas(300);
   const dataUrl = canvas.toDataURL('image/png');
