@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1f2933" />
+  <title>Seating Chart Maker</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪑</text></svg>" />
+</head>
+<body>
+  <!-- ===== Inline SVG icon symbols (reused by grid, picker, export) ===== -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="ic-desktop" viewBox="0 0 24 24">
+        <rect x="4" y="3" width="8" height="14" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <circle cx="8" cy="14" r="1" fill="currentColor"/>
+        <rect x="14" y="5" width="6" height="4" rx="0.5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      </symbol>
+      <symbol id="ic-laptop" viewBox="0 0 24 24">
+        <rect x="5" y="5" width="14" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M3 18h18l-1.5-2H4.5L3 18z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="ic-person" viewBox="0 0 24 24">
+        <circle cx="12" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M5.5 20c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="ic-chair" viewBox="0 0 24 24">
+        <path d="M7 4v8m10-8v8M6 12h12M8 12l-1 8m10-8l1 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="ic-monitor" viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M9 20h6m-3-4v4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="ic-phone" viewBox="0 0 24 24">
+        <rect x="7" y="3" width="10" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M10.5 18h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="ic-door" viewBox="0 0 24 24">
+        <path d="M6 21V4a1 1 0 0 1 1-1h8v18M6 21h12M15 12h.01" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="ic-star" viewBox="0 0 24 24">
+        <path d="M12 3l2.5 5.3 5.5.8-4 4 1 5.6L12 16l-5 2.7 1-5.6-4-4 5.5-.8L12 3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <div class="app">
+    <!-- ===================== Toolbar ===================== -->
+    <header class="toolbar">
+      <div class="toolbar__brand">
+        <span class="toolbar__logo" aria-hidden="true">🪑</span>
+        <span class="toolbar__title">Seating Chart Maker</span>
+      </div>
+
+      <div class="toolbar__group" role="group" aria-label="Grid size">
+        <label class="field">
+          <span class="field__label">Cols</span>
+          <input id="grid-cols" class="field__input field__input--num" type="number" min="1" max="40" value="6" inputmode="numeric" />
+        </label>
+        <span class="field__x">×</span>
+        <label class="field">
+          <span class="field__label">Rows</span>
+          <input id="grid-rows" class="field__input field__input--num" type="number" min="1" max="40" value="5" inputmode="numeric" />
+        </label>
+      </div>
+
+      <div class="toolbar__group" role="group" aria-label="Paper size">
+        <label class="field">
+          <span class="field__label">Paper</span>
+          <select id="paper-size" class="field__input"></select>
+        </label>
+        <label class="field field--custom-paper" hidden>
+          <span class="field__label">W</span>
+          <input id="paper-w" class="field__input field__input--num" type="number" min="1" step="0.1" value="11" inputmode="decimal" />
+        </label>
+        <label class="field field--custom-paper" hidden>
+          <span class="field__label">H</span>
+          <input id="paper-h" class="field__input field__input--num" type="number" min="1" step="0.1" value="8.5" inputmode="decimal" />
+        </label>
+        <label class="field field--custom-paper" hidden>
+          <span class="field__label">Unit</span>
+          <select id="paper-unit" class="field__input">
+            <option value="in">in</option>
+            <option value="mm">mm</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="toolbar__group toolbar__group--actions">
+        <button id="btn-select" class="btn btn--toggle" type="button" aria-pressed="false" title="Toggle table-select mode">Select</button>
+        <button id="btn-preview" class="btn" type="button">Preview</button>
+        <button id="btn-png" class="btn btn--primary" type="button">PNG</button>
+        <button id="btn-print" class="btn" type="button">Print / PDF</button>
+        <span class="toolbar__sep" aria-hidden="true"></span>
+        <button id="btn-save-file" class="btn" type="button" title="Download a .seatchart file">Save</button>
+        <button id="btn-open-file" class="btn" type="button" title="Open a .seatchart file">Open</button>
+        <button id="btn-clear" class="btn btn--ghost" type="button" title="Clear the chart">Clear</button>
+        <input id="file-input" type="file" accept=".seatchart,application/json" hidden />
+      </div>
+    </header>
+
+    <!-- ===== Table-select action bar (only shown in select mode) ===== -->
+    <div id="select-bar" class="selectbar" hidden>
+      <span id="select-count" class="selectbar__count">0 selected</span>
+      <div class="selectbar__actions">
+        <label class="field">
+          <span class="field__label">Color</span>
+          <input id="table-color" class="field__input field__input--color" type="color" value="#8d6e63" />
+        </label>
+        <button id="btn-table-round" class="btn" type="button">Round table</button>
+        <button id="btn-table-square" class="btn" type="button">Square table</button>
+        <button id="btn-select-clear" class="btn btn--ghost" type="button">Clear selection</button>
+      </div>
+    </div>
+
+    <!-- ===================== Main grid area ===================== -->
+    <main class="stage" id="stage">
+      <div class="stage__zoom">
+        <button id="btn-zoom-out" class="btn btn--icon" type="button" aria-label="Zoom out">−</button>
+        <button id="btn-zoom-reset" class="btn btn--icon" type="button" aria-label="Reset zoom">⌂</button>
+        <button id="btn-zoom-in" class="btn btn--icon" type="button" aria-label="Zoom in">+</button>
+      </div>
+      <div class="stage__scroll" id="stage-scroll">
+        <div class="chart" id="chart" role="grid" aria-label="Seating grid">
+          <!-- grid built by js/grid.js -->
+        </div>
+      </div>
+      <p class="stage__hint" id="stage-hint">
+        Tap a square to seat it. <span class="hint-desktop">Right-click</span><span class="hint-touch">Long-press</span> to edit.
+      </p>
+    </main>
+  </div>
+
+  <!-- ===================== Edit pane (drawer / bottom sheet) ===================== -->
+  <div class="editor" id="editor" hidden aria-hidden="true">
+    <div class="editor__backdrop" data-close-editor></div>
+    <section class="editor__panel" role="dialog" aria-modal="true" aria-labelledby="editor-title">
+      <header class="editor__head">
+        <h2 class="editor__title" id="editor-title">Edit seat</h2>
+        <button class="btn btn--icon editor__close" type="button" data-close-editor aria-label="Close">✕</button>
+      </header>
+      <div class="editor__body" id="editor-body">
+        <!-- populated by js/editor.js -->
+      </div>
+    </section>
+  </div>
+
+  <!-- ===================== Preview modal ===================== -->
+  <div class="modal" id="preview" hidden aria-hidden="true">
+    <div class="modal__backdrop" data-close-preview></div>
+    <section class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="preview-title">
+      <header class="modal__head">
+        <h2 class="modal__title" id="preview-title">Preview</h2>
+        <button class="btn btn--icon" type="button" data-close-preview aria-label="Close">✕</button>
+      </header>
+      <div class="modal__body">
+        <div class="preview__paper" id="preview-paper">
+          <!-- a grid-line-free rendering, populated by js/export.js -->
+        </div>
+      </div>
+      <footer class="modal__foot">
+        <button class="btn" type="button" data-close-preview>Close</button>
+        <button id="btn-preview-png" class="btn btn--primary" type="button">Download PNG</button>
+        <button id="btn-preview-print" class="btn" type="button">Print / PDF</button>
+      </footer>
+    </section>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
