@@ -17,6 +17,8 @@ function initTables() {
     bar.hidden = !on;
     if (!on) clearSelection();
     stageHint.style.display = on ? 'none' : '';
+    const editBtn = document.getElementById('btn-edit-selected');
+    if (editBtn) editBtn.disabled = state.selection.size === 0;
   };
 
   selectBtn.addEventListener('click', () => setActive(!active));
@@ -29,11 +31,18 @@ function initTables() {
   });
   document.getElementById('btn-select-clear').addEventListener('click', () => clearSelection());
 
-  // Keep the selection counter in sync.
+  // Bulk-edit every selected square at once.
+  const editBtn = document.getElementById('btn-edit-selected');
+  editBtn.addEventListener('click', () => {
+    if (state.selection.size) openBulkEditor([...state.selection]);
+  });
+
+  // Keep the selection counter + Edit button state in sync.
   subscribe(() => {
     if (!active) return;
     const n = state.selection.size;
     countEl.textContent = `${n} selected`;
+    editBtn.disabled = n === 0;
   });
   // Tables are removed via the ✕ button rendered on each shape (see grid.js).
 }

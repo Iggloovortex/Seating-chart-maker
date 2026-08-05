@@ -23,9 +23,23 @@ function openEditor(r, c) {
   const cell = getCell(r, c); // ensures it exists so edits persist
   titleEl.textContent = `Seat — Row ${r + 1}, Col ${c + 1}`;
   render(cell);
+  showPane();
+}
+
+/** Bulk-edit every selected square at once. Shared properties (seat, icon,
+ *  facing, fill, border) apply to all; label line colors can be changed for
+ *  all, but each square keeps its own label text. */
+function openBulkEditor(keys) {
+  current = null;
+  if (!keys || keys.length === 0) return;
+  titleEl.textContent = `Edit ${keys.length} selected square${keys.length > 1 ? 's' : ''}`;
+  renderBulk([...keys]);
+  showPane();
+}
+
+function showPane() {
   editorEl.hidden = false;
   editorEl.setAttribute('aria-hidden', 'false');
-  // Focus first control for accessibility.
   bodyEl.querySelector('input, button, select')?.focus();
 }
 
@@ -153,6 +167,125 @@ function render(cell) {
   done.addEventListener('click', closeEditor);
   foot.appendChild(done);
   bodyEl.appendChild(foot);
+}
+
+// ---------------------------------------------------------------- bulk render
+
+function renderBulk(keys) {
+  bodyEl.replaceChildren();
+
+  // Seed color/rotation controls from the first selected cell.
+  const [sr, sc] = keys[0].split(',').map(Number);
+  const first = getCell(sr, sc);
+
+  // --- Seat on/off (all) ---------------------------------------------------
+  bodyEl.appendChild(group('Seat (all selected)', (g) => {
+    const seg = document.createElement('div');
+    seg.className = 'seg';
+    seg.append(
+      segBtn('Seat all', false, () => updateCells(keys, { enabled: true })),
+      segBtn('Empty all', false, () => updateCells(keys, { enabled: false })),
+    );
+    g.appendChild(seg);
+  }));
+
+  // --- Label line colors (text stays individual) --------------------------
+  bodyEl.appendChild(group('Label line colors', (g) => {
+    const maxLines = maxLabelLines(keys);
+    if (maxLines === 0) {
+      const note = document.createElement('p');
+      note.className = 'egroup__title';
+      note.style.textTransform = 'none';
+      note.style.fontWeight = '400';
+      note.textContent = 'None of the selected squares have label lines yet. Add label text per square first, then recolor the lines here.';
+      g.appendChild(note);
+    } else {
+      for (let i = 0; i < maxLines; i++) {
+        const seed = seedLineColor(keys, i);
+        g.appendChild(colorRow(`Line ${i + 1} color`, seed, (v) => setLineColorForCells(keys, i, v)));
+      }
+      const note = document.createElement('p');
+      note.className = 'egroup__title';
+      note.style.textTransform = 'none';
+      note.style.fontWeight = '400';
+      note.style.marginTop = '6px';
+      note.textContent = 'Only squares that have that line are recolored; text is unchanged.';
+      g.appendChild(note);
+    }
+  }));
+
+  // --- Icon (all) ---------------------------------------------------------
+  bodyEl.appendChild(group('Icon (all selected)', (g) => {
+    const picker = document.createElement('div');
+    picker.className = 'icon-picker';
+
+    const none = document.createElement('button');
+    none.type = 'button';
+    none.className = 'icon-picker__btn icon-picker__btn--none';
+    none.textContent = 'None';
+    none.addEventListener('click', () => updateCells(keys, { icon: null }));
+    picker.appendChild(none);
+
+    for (const id of ICON_IDS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'icon-picker__btn';
+      btn.title = ICONS[id].label;
+      btn.setAttribute('aria-label', ICONS[id].label);
+      const svg = iconUse(id, '');
+      if (svg) btn.appendChild(svg);
+      btn.addEventListener('click', () => updateCells(keys, { icon: id }));
+      picker.appendChild(btn);
+    }
+    g.appendChild(picker);
+  }));
+
+  // --- Facing (all) -------------------------------------------------------
+  bodyEl.appendChild(group('Facing (all selected)', (g) => {
+    const seg = document.createElement('div');
+    seg.className = 'seg';
+    const dirs = [
+      { deg: 0, arrow: '↑', label: 'Up' },
+      { deg: 90, arrow: '→', label: 'Right' },
+      { deg: 180, arrow: '↓', label: 'Down' },
+      { deg: 270, arrow: '←', label: 'Left' },
+    ];
+    for (const { deg, arrow, label } of dirs) {
+      const b = segBtn(arrow, false, () => updateCells(keys, { rotation: deg }));
+      b.classList.add('seg__btn--arrow');
+      b.setAttribute('aria-label', `Face ${label}`);
+      b.title = label;
+      seg.appendChild(b);
+    }
+    g.appendChild(seg);
+  }));
+
+  // --- Colors (all) -------------------------------------------------------
+  bodyEl.appendChild(group('Colors (all selected)', (g) => {
+    g.appendChild(colorRow('Space (fill)', first.fill, (v) => updateCells(keys, { fill: v })));
+    g.appendChild(colorRow('Border', first.border, (v) => updateCells(keys, { border: v })));
+  }));
+
+  // --- Footer -------------------------------------------------------------
+  const foot = document.createElement('div');
+  foot.className = 'editor__foot';
+  const done = document.createElement('button');
+  done.type = 'button';
+  done.className = 'btn btn--primary';
+  done.textContent = 'Done';
+  done.addEventListener('click', closeEditor);
+  foot.appendChild(done);
+  bodyEl.appendChild(foot);
+}
+
+/** First non-default color found on line `index` among the selected cells. */
+function seedLineColor(keys, index) {
+  for (const k of keys) {
+    const [r, c] = k.split(',').map(Number);
+    const cell = peekCell(r, c);
+    if (cell && cell.labels[index]) return cell.labels[index].color;
+  }
+  return DEFAULTS.labelColor;
 }
 
 // ---------------------------------------------------------------- builders

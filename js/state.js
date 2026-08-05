@@ -119,6 +119,41 @@ function setPaper(paper) { state.paper = paper; emit(); }
 
 function setTitle(title) { state.title = title || ''; emit(); }
 
+// ---------------------------------------------------------------- bulk edit
+
+/** Apply a shared patch to every cell key, emitting once. */
+function updateCells(keys, patch) {
+  batch(() => {
+    for (const k of keys) {
+      const [r, c] = parseKey(k);
+      Object.assign(getCell(r, c), patch);
+    }
+  });
+}
+
+/** Recolor label line `index` on every listed cell that has that line — text
+ *  is never touched (labels stay individual per square). */
+function setLineColorForCells(keys, index, color) {
+  batch(() => {
+    for (const k of keys) {
+      const [r, c] = parseKey(k);
+      const cell = getCell(r, c);
+      if (cell.labels[index]) cell.labels[index].color = color;
+    }
+  });
+}
+
+/** Largest label-line count across the listed cells. */
+function maxLabelLines(keys) {
+  let max = 0;
+  for (const k of keys) {
+    const [r, c] = parseKey(k);
+    const cell = peekCell(r, c);
+    if (cell) max = Math.max(max, cell.labels.length);
+  }
+  return max;
+}
+
 // ---------------------------------------------------------------- selection
 
 function toggleSelection(r, c) {
