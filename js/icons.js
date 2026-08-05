@@ -31,7 +31,7 @@ const SYMBOL_MARKUP = {
     '<circle cx="12" cy="8" r="3.2" fill="none" stroke="COLOR" stroke-width="1.6"/>' +
     '<path d="M5.5 20c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" fill="none" stroke="COLOR" stroke-width="1.6" stroke-linecap="round"/>',
   'ic-chair':
-    '<path d="M7 4v8m10-8v8M6 12h12M8 12l-1 8m10-8l1 8" fill="none" stroke="COLOR" stroke-width="1.6" stroke-linecap="round"/>',
+    '<path d="M8 3V20M8 13H17V20M8 8H14" fill="none" stroke="COLOR" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
   'ic-phone':
     '<rect x="7" y="3" width="10" height="18" rx="2" fill="none" stroke="COLOR" stroke-width="1.6"/>' +
     '<path d="M10.5 18h3" stroke="COLOR" stroke-width="1.6" stroke-linecap="round"/>',

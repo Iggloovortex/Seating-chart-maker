@@ -100,15 +100,25 @@ function render(cell) {
     g.appendChild(picker);
   }));
 
-  // --- Rotation -----------------------------------------------------------
-  bodyEl.appendChild(group('Rotation (seat facing)', (g) => {
+  // --- Rotation (arrows for the direction the seat faces) -----------------
+  bodyEl.appendChild(group('Facing', (g) => {
     const seg = document.createElement('div');
     seg.className = 'seg';
-    for (const deg of [0, 90, 180, 270]) {
-      const b = segBtn(`${deg}°`, (cell.rotation || 0) === deg, () => {
+    // deg maps to the on-screen rotation; arrow shows which way content points.
+    const dirs = [
+      { deg: 0, arrow: '↑', label: 'Up' },
+      { deg: 90, arrow: '→', label: 'Right' },
+      { deg: 180, arrow: '↓', label: 'Down' },
+      { deg: 270, arrow: '←', label: 'Left' },
+    ];
+    for (const { deg, arrow, label } of dirs) {
+      const b = segBtn(arrow, (cell.rotation || 0) === deg, () => {
         updateCell(current.r, current.c, { rotation: deg });
         render(peekCell(current.r, current.c));
       });
+      b.classList.add('seg__btn--arrow');
+      b.setAttribute('aria-label', `Face ${label}`);
+      b.title = label;
       seg.appendChild(b);
     }
     g.appendChild(seg);

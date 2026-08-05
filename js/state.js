@@ -41,6 +41,7 @@ function makeCell() {
 
 const state = {
   version: 1,
+  title: '',                    // chart title, shown on page and in output
   grid: { cols: 6, rows: 5 },
   cells: new Map(),             // key "r,c" -> cell
   rowWeights: [],               // per-row size weight (empty => DEFAULTS.rowWeight)
@@ -116,6 +117,8 @@ function colWeight(c) { return state.colWeights[c] || DEFAULTS.colWeight; }
 
 function setPaper(paper) { state.paper = paper; emit(); }
 
+function setTitle(title) { state.title = title || ''; emit(); }
+
 // ---------------------------------------------------------------- selection
 
 function toggleSelection(r, c) {
@@ -158,6 +161,7 @@ function pruneTables() {
 
 function clearAll() {
   batch(() => {
+    state.title = '';
     state.cells.clear();
     state.tables = [];
     state.selection.clear();
@@ -173,6 +177,7 @@ function clearAll() {
 function serialize() {
   return {
     version: state.version,
+    title: state.title,
     grid: { ...state.grid },
     cells: [...state.cells.entries()].map(([k, v]) => [k, v]),
     rowWeights: [...state.rowWeights],
@@ -185,6 +190,7 @@ function serialize() {
 function deserialize(data) {
   if (!data || typeof data !== 'object') return false;
   batch(() => {
+    state.title = typeof data.title === 'string' ? data.title : '';
     state.grid = {
       cols: clampInt(data.grid?.cols, 1, 40, 6),
       rows: clampInt(data.grid?.rows, 1, 40, 5),

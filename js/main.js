@@ -4,9 +4,19 @@
 const chartEl = document.getElementById('chart');
 const colsInput = document.getElementById('grid-cols');
 const rowsInput = document.getElementById('grid-rows');
+const titleInput = document.getElementById('chart-title-input');
+const titleDisplay = document.getElementById('chart-title');
 
 // ---- Render loop: re-render grid on any state change -----------------------
 subscribe(() => renderGrid());
+
+// ---- Title: input drives state; state drives the on-page heading -----------
+const updateTitleDisplay = () => {
+  titleDisplay.textContent = state.title;
+  titleDisplay.hidden = !state.title.trim();
+};
+titleInput.addEventListener('input', () => setTitle(titleInput.value));
+subscribe(updateTitleDisplay);
 
 // Re-measure table overlays after paint (they depend on cell geometry).
 const scheduleTableRefresh = () => requestAnimationFrame(() => requestAnimationFrame(refreshTables));
@@ -79,6 +89,8 @@ document.getElementById('btn-zoom-reset').addEventListener('click', () => { zoom
 function reflectControls() {
   colsInput.value = state.grid.cols;
   rowsInput.value = state.grid.rows;
+  titleInput.value = state.title;
+  updateTitleDisplay();
   reflectPaper();
 }
 

@@ -23,20 +23,40 @@ async function renderToCanvas(dpi = 300) {
   ctx.fillRect(0, 0, pxW, pxH);
 
   const { cols, rows } = state.grid;
-  const margin = Math.round(Math.min(pxW, pxH) * 0.04);
+  const margin = Math.round(Math.min(pxW, pxH) * 0.05);
+  const title = (state.title || '').trim();
+  const titleBand = title ? Math.round(pxH * 0.11) : 0;
+
+  // Content is anchored to the TOP (title band, then grid); any leftover space
+  // falls to the bottom. Cells keep their aspect (square when weights are equal)
+  // rather than stretching to fill the whole page.
   const areaW = pxW - margin * 2;
-  const areaH = pxH - margin * 2;
+  const areaH = pxH - margin * 2 - titleBand;
 
   const colW = Array.from({ length: cols }, (_, c) => colWeight(c));
   const rowH = Array.from({ length: rows }, (_, r) => rowWeight(r));
   const totalColW = colW.reduce((a, b) => a + b, 0) || 1;
   const totalRowH = rowH.reduce((a, b) => a + b, 0) || 1;
 
-  // Cell edges in canvas coordinates.
-  const xEdges = [margin];
-  for (let c = 0; c < cols; c++) xEdges.push(xEdges[c] + (colW[c] / totalColW) * areaW);
-  const yEdges = [margin];
-  for (let r = 0; r < rows; r++) yEdges.push(yEdges[r] + (rowH[r] / totalRowH) * areaH);
+  const unit = Math.min(areaW / totalColW, areaH / totalRowH);
+  const gridW = unit * totalColW;
+  const gridH = unit * totalRowH;
+  const originX = margin + (areaW - gridW) / 2; // centered horizontally
+  const originY = margin + titleBand;           // top-anchored, beneath the title
+
+  const xEdges = [originX];
+  for (let c = 0; c < cols; c++) xEdges.push(xEdges[c] + (colW[c] / totalColW) * gridW);
+  const yEdges = [originY];
+  for (let r = 0; r < rows; r++) yEdges.push(yEdges[r] + (rowH[r] / totalRowH) * gridH);
+
+  // Title at the top, centered.
+  if (title) {
+    ctx.fillStyle = '#1f2933';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `700 ${Math.round(titleBand * 0.5)}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+    ctx.fillText(fitText(ctx, title, areaW), pxW / 2, margin + titleBand * 0.55);
+  }
 
   const rectOf = (r, c) => ({
     x: xEdges[c], y: yEdges[r],

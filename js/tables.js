@@ -35,10 +35,5 @@ function initTables() {
     const n = state.selection.size;
     countEl.textContent = `${n} selected`;
   });
-
-  // Double-click / double-tap a table shape removes it.
-  document.getElementById('chart').addEventListener('dblclick', (e) => {
-    const shape = e.target.closest?.('.table-shape');
-    if (shape) removeTable(shape.dataset.tableId);
-  });
+  // Tables are removed via the ✕ button rendered on each shape (see grid.js).
 }
