@@ -3,24 +3,24 @@
 const listeners = new Set();
 let quiet = false; // suppress emits during bulk updates
 
-export function subscribe(fn) {
+function subscribe(fn) {
   listeners.add(fn);
   return () => listeners.delete(fn);
 }
 
-export function emit() {
+function emit() {
   if (quiet) return;
   for (const fn of listeners) fn(state);
 }
 
 /** Run several mutations, then emit once. */
-export function batch(fn) {
+function batch(fn) {
   quiet = true;
   try { fn(); } finally { quiet = false; }
   emit();
 }
 
-export const DEFAULTS = {
+const DEFAULTS = {
   fill: '#dbe7ff',
   border: '#2f6feb',
   labelColor: '#1f2933',
@@ -39,8 +39,9 @@ function makeCell() {
   };
 }
 
-export const state = {
+const state = {
   version: 1,
+  title: '',                    // chart title, shown on page and in output
   grid: { cols: 6, rows: 5 },
   cells: new Map(),             // key "r,c" -> cell
   rowWeights: [],               // per-row size weight (empty => DEFAULTS.rowWeight)
@@ -50,14 +51,14 @@ export const state = {
   selection: new Set(),         // keys highlighted in select mode
 };
 
-export const keyOf = (r, c) => `${r},${c}`;
-export const parseKey = (k) => k.split(',').map(Number);
+const keyOf = (r, c) => `${r},${c}`;
+const parseKey = (k) => k.split(',').map(Number);
 
-export function inBounds(r, c) {
+function inBounds(r, c) {
   return r >= 0 && c >= 0 && r < state.grid.rows && c < state.grid.cols;
 }
 
-export function getCell(r, c) {
+function getCell(r, c) {
   const k = keyOf(r, c);
   let cell = state.cells.get(k);
   if (!cell) { cell = makeCell(); state.cells.set(k, cell); }
@@ -65,18 +66,18 @@ export function getCell(r, c) {
 }
 
 /** Non-creating peek; returns undefined if the cell has no stored data. */
-export function peekCell(r, c) {
+function peekCell(r, c) {
   return state.cells.get(keyOf(r, c));
 }
 
-export function isEnabled(r, c) {
+function isEnabled(r, c) {
   const cell = peekCell(r, c);
   return !!(cell && cell.enabled);
 }
 
 // ---------------------------------------------------------------- mutations
 
-export function setGrid(cols, rows) {
+function setGrid(cols, rows) {
   cols = clampInt(cols, 1, 40, state.grid.cols);
   rows = clampInt(rows, 1, 40, state.grid.rows);
   state.grid = { cols, rows };
@@ -92,39 +93,93 @@ export function setGrid(cols, rows) {
   emit();
 }
 
-export function toggleEnabled(r, c) {
+function toggleEnabled(r, c) {
   const cell = getCell(r, c);
   cell.enabled = !cell.enabled;
   emit();
 }
 
-export function updateCell(r, c, patch) {
+function updateCell(r, c, patch) {
   Object.assign(getCell(r, c), patch);
   emit();
 }
 
-export function setRowWeight(r, w) {
+function setRowWeight(r, w) {
   state.rowWeights[r] = w > 0 ? w : undefined;
   emit();
 }
-export function setColWeight(c, w) {
+function setColWeight(c, w) {
   state.colWeights[c] = w > 0 ? w : undefined;
   emit();
 }
-export function rowWeight(r) { return state.rowWeights[r] || DEFAULTS.rowWeight; }
-export function colWeight(c) { return state.colWeights[c] || DEFAULTS.colWeight; }
+function rowWeight(r) { return state.rowWeights[r] || DEFAULTS.rowWeight; }
+function colWeight(c) { return state.colWeights[c] || DEFAULTS.colWeight; }
 
-export function setPaper(paper) { state.paper = paper; emit(); }
+function setPaper(paper) { state.paper = paper; emit(); }
+
+function setTitle(title) { state.title = title || ''; emit(); }
+
+// ---------------------------------------------------------------- bulk edit
+
+/** Apply a shared patch to every cell key, emitting once. */
+function updateCells(keys, patch) {
+  batch(() => {
+    for (const k of keys) {
+      const [r, c] = parseKey(k);
+      Object.assign(getCell(r, c), patch);
+    }
+  });
+}
+
+/** Recolor label line `index` on every listed cell that has that line — text
+ *  is never touched (labels stay individual per square). */
+function setLineColorForCells(keys, index, color) {
+  batch(() => {
+    for (const k of keys) {
+      const [r, c] = parseKey(k);
+      const cell = getCell(r, c);
+      if (cell.labels[index]) cell.labels[index].color = color;
+    }
+  });
+}
+
+/** Largest label-line count across the listed cells. */
+function maxLabelLines(keys) {
+  let max = 0;
+  for (const k of keys) {
+    const [r, c] = parseKey(k);
+    const cell = peekCell(r, c);
+    if (cell) max = Math.max(max, cell.labels.length);
+  }
+  return max;
+}
 
 // ---------------------------------------------------------------- selection
 
-export function toggleSelection(r, c) {
+function toggleSelection(r, c) {
   const k = keyOf(r, c);
   if (state.selection.has(k)) state.selection.delete(k);
   else state.selection.add(k);
   emit();
 }
-export function clearSelection() { state.selection.clear(); emit(); }
+function clearSelection() { state.selection.clear(); emit(); }
+
+/** Select every seated (enabled) square. */
+function selectAllEnabled() {
+  batch(() => {
+    state.selection.clear();
+    for (const [k, cell] of state.cells) if (cell.enabled) state.selection.add(k);
+  });
+}
+
+/** Select every square in the grid. */
+function selectAllSquares() {
+  batch(() => {
+    state.selection.clear();
+    for (let r = 0; r < state.grid.rows; r++)
+      for (let c = 0; c < state.grid.cols; c++) state.selection.add(keyOf(r, c));
+  });
+}
 function pruneSelection() {
   for (const k of [...state.selection]) {
     const [r, c] = parseKey(k);
@@ -134,7 +189,7 @@ function pruneSelection() {
 
 // ---------------------------------------------------------------- tables
 
-export function addTable(shape, color) {
+function addTable(shape, color) {
   const cellKeys = [...state.selection];
   if (cellKeys.length === 0) return null;
   const table = { id: `t${Date.now().toString(36)}`, cellKeys, shape, color };
@@ -143,7 +198,7 @@ export function addTable(shape, color) {
   emit();
   return table;
 }
-export function removeTable(id) {
+function removeTable(id) {
   state.tables = state.tables.filter((t) => t.id !== id);
   emit();
 }
@@ -156,8 +211,9 @@ function pruneTables() {
 
 // ---------------------------------------------------------------- reset
 
-export function clearAll() {
+function clearAll() {
   batch(() => {
+    state.title = '';
     state.cells.clear();
     state.tables = [];
     state.selection.clear();
@@ -170,9 +226,10 @@ export function clearAll() {
 
 // ---------------------------------------------------------------- serialize
 
-export function serialize() {
+function serialize() {
   return {
     version: state.version,
+    title: state.title,
     grid: { ...state.grid },
     cells: [...state.cells.entries()].map(([k, v]) => [k, v]),
     rowWeights: [...state.rowWeights],
@@ -182,9 +239,10 @@ export function serialize() {
   };
 }
 
-export function deserialize(data) {
+function deserialize(data) {
   if (!data || typeof data !== 'object') return false;
   batch(() => {
+    state.title = typeof data.title === 'string' ? data.title : '';
     state.grid = {
       cols: clampInt(data.grid?.cols, 1, 40, 6),
       rows: clampInt(data.grid?.rows, 1, 40, 5),

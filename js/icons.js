@@ -1,7 +1,7 @@
 // icons.js — shared icon registry, reused by the grid, the picker, and the canvas export.
 // Each icon's `path` is drawn inside a 24×24 viewBox with `currentColor` stroking.
 
-export const ICONS = {
+const ICONS = {
   desktop: { label: 'Desktop', symbol: 'ic-desktop' },
   laptop:  { label: 'Laptop',  symbol: 'ic-laptop' },
   monitor: { label: 'Monitor', symbol: 'ic-monitor' },
@@ -12,7 +12,7 @@ export const ICONS = {
   star:    { label: 'Star',    symbol: 'ic-star' },
 };
 
-export const ICON_IDS = Object.keys(ICONS);
+const ICON_IDS = Object.keys(ICONS);
 
 /** Inner SVG markup for each symbol, keyed by symbol id. Mirrors the <symbol>s
  *  in index.html so the canvas exporter can rasterize icons without the DOM. */
@@ -31,7 +31,7 @@ const SYMBOL_MARKUP = {
     '<circle cx="12" cy="8" r="3.2" fill="none" stroke="COLOR" stroke-width="1.6"/>' +
     '<path d="M5.5 20c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" fill="none" stroke="COLOR" stroke-width="1.6" stroke-linecap="round"/>',
   'ic-chair':
-    '<path d="M7 4v8m10-8v8M6 12h12M8 12l-1 8m10-8l1 8" fill="none" stroke="COLOR" stroke-width="1.6" stroke-linecap="round"/>',
+    '<path d="M8 3V20M8 13H17V20M8 8H14" fill="none" stroke="COLOR" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
   'ic-phone':
     '<rect x="7" y="3" width="10" height="18" rx="2" fill="none" stroke="COLOR" stroke-width="1.6"/>' +
     '<path d="M10.5 18h3" stroke="COLOR" stroke-width="1.6" stroke-linecap="round"/>',
@@ -42,7 +42,7 @@ const SYMBOL_MARKUP = {
 };
 
 /** A `<svg><use>` element referencing an inline symbol — for grid & picker. */
-export function iconUse(id, className = 'cell__icon') {
+function iconUse(id, className = 'cell__icon') {
   const meta = ICONS[id];
   if (!meta) return null;
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -55,7 +55,7 @@ export function iconUse(id, className = 'cell__icon') {
 }
 
 /** A standalone SVG data-URL for a given icon + color — used by the canvas exporter. */
-export function iconDataUrl(id, color) {
+function iconDataUrl(id, color) {
   const meta = ICONS[id];
   if (!meta) return null;
   const inner = SYMBOL_MARKUP[meta.symbol].replaceAll('COLOR', color);

@@ -3,19 +3,23 @@
 //  - right-click / long-press => open the edit pane for that cell
 // Uses Pointer Events so one code path serves both input types.
 
-import { toggleEnabled, toggleSelection, parseKey } from './state.js';
 
 const LONG_PRESS_MS = 450;
 const MOVE_TOLERANCE = 10; // px of travel that cancels a tap/long-press
 
 let selectMode = false;
-export function setSelectMode(on) { selectMode = on; }
-export function isSelectMode() { return selectMode; }
+function setSelectMode(on) { selectMode = on; }
+function isSelectMode() { return selectMode; }
 
-let openEditor = () => {};
-export function onRequestEdit(fn) { openEditor = fn; }
+let editHandler = () => {};
+function onRequestEdit(fn) { editHandler = fn; }
 
-export function initInteractions(chartEl) {
+// Ctrl/Cmd+click adds to the selection even when not in select mode; this hook
+// lets the UI turn select mode on so the select bar appears.
+let enterSelectHandler = () => {};
+function onEnterSelect(fn) { enterSelectHandler = fn; }
+
+function initInteractions(chartEl) {
   let pointer = null; // { id, x, y, cell, timer, longFired }
 
   const cellFrom = (target) => target.closest?.('.cell');
@@ -25,7 +29,8 @@ export function initInteractions(chartEl) {
     const cell = cellFrom(e.target);
     if (!cell) return;
 
-    pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, cell, longFired: false, timer: 0 };
+    const additive = e.ctrlKey || e.metaKey; // Ctrl (Win/Linux) or Cmd (Mac) = add to selection
+    pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, cell, longFired: false, timer: 0, additive };
     pointer.timer = window.setTimeout(() => {
       pointer.longFired = true;
       fireEdit(cell);
@@ -43,7 +48,7 @@ export function initInteractions(chartEl) {
   const endHandler = (e) => {
     if (!pointer || e.pointerId !== pointer.id) return;
     window.clearTimeout(pointer.timer);
-    if (!pointer.longFired) fireTap(pointer.cell);
+    if (!pointer.longFired) fireTap(pointer.cell, pointer.additive);
     pointer = null;
   };
   chartEl.addEventListener('pointerup', endHandler);
@@ -72,13 +77,19 @@ export function initInteractions(chartEl) {
   });
 }
 
-function fireTap(cell) {
+function fireTap(cell, additive) {
   const [r, c] = parseKey(cell.dataset.key);
-  if (selectMode) toggleSelection(r, c);
-  else toggleEnabled(r, c);
+  if (selectMode) {
+    toggleSelection(r, c);
+  } else if (additive) {
+    enterSelectHandler();     // turn on select mode + show the select bar
+    toggleSelection(r, c);
+  } else {
+    toggleEnabled(r, c);
+  }
 }
 
 function fireEdit(cell) {
   const [r, c] = parseKey(cell.dataset.key);
-  openEditor(r, c);
+  editHandler(r, c);
 }

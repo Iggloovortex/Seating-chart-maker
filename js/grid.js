@@ -1,13 +1,11 @@
 // grid.js — build/refresh the DOM grid from state (fill, border, icon, label, rotation)
 // and render multi-square table overlays.
 
-import { state, keyOf, peekCell, rowWeight, colWeight, parseKey } from './state.js';
-import { iconUse } from './icons.js';
 
 const chart = document.getElementById('chart');
 
 /** Full re-render of the grid. Called on any state change. */
-export function renderGrid() {
+function renderGrid() {
   const { cols, rows } = state.grid;
 
   // Column/row track sizing uses the per-index weights (empty row/col heights).
@@ -109,11 +107,24 @@ function renderTables() {
     shape.style.background = table.color;
     shape.dataset.tableId = table.id;
     chart.appendChild(shape);
+
+    // Remove button — the shape itself is pointer-events:none, so this button
+    // (pointer-events:auto) is how a table gets deleted. Placed at its top-right.
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'table-remove';
+    del.textContent = '✕';
+    del.title = 'Remove table';
+    del.setAttribute('aria-label', 'Remove table');
+    del.style.left = `${right - inset - 12}px`;
+    del.style.top = `${top + inset - 12}px`;
+    del.addEventListener('click', (e) => { e.stopPropagation(); removeTable(table.id); });
+    chart.appendChild(del);
   }
 }
 
 /** Re-measure table overlays after layout changes (zoom, resize). */
-export function refreshTables() {
-  chart.querySelectorAll('.table-shape').forEach((n) => n.remove());
+function refreshTables() {
+  chart.querySelectorAll('.table-shape, .table-remove').forEach((n) => n.remove());
   renderTables();
 }

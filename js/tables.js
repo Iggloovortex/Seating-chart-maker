@@ -1,9 +1,7 @@
 // tables.js — table-select mode UI: build a table shape from selected squares.
 
-import { state, addTable, clearSelection, removeTable, subscribe } from './state.js';
-import { setSelectMode } from './interactions.js';
 
-export function initTables() {
+function initTables() {
   const selectBtn = document.getElementById('btn-select');
   const bar = document.getElementById('select-bar');
   const countEl = document.getElementById('select-count');
@@ -19,9 +17,24 @@ export function initTables() {
     bar.hidden = !on;
     if (!on) clearSelection();
     stageHint.style.display = on ? 'none' : '';
+    const editBtn = document.getElementById('btn-edit-selected');
+    if (editBtn) editBtn.disabled = state.selection.size === 0;
   };
 
   selectBtn.addEventListener('click', () => setActive(!active));
+
+  // Ctrl/Cmd+click on a square (outside select mode) turns select mode on.
+  onEnterSelect(() => { if (!active) setActive(true); });
+
+  // Select-all helpers.
+  document.getElementById('btn-select-enabled').addEventListener('click', () => {
+    if (!active) setActive(true);
+    selectAllEnabled();
+  });
+  document.getElementById('btn-select-all').addEventListener('click', () => {
+    if (!active) setActive(true);
+    selectAllSquares();
+  });
 
   document.getElementById('btn-table-round').addEventListener('click', () => {
     addTable('round', colorInput.value);
@@ -31,16 +44,18 @@ export function initTables() {
   });
   document.getElementById('btn-select-clear').addEventListener('click', () => clearSelection());
 
-  // Keep the selection counter in sync.
+  // Bulk-edit every selected square at once.
+  const editBtn = document.getElementById('btn-edit-selected');
+  editBtn.addEventListener('click', () => {
+    if (state.selection.size) openBulkEditor([...state.selection]);
+  });
+
+  // Keep the selection counter + Edit button state in sync.
   subscribe(() => {
     if (!active) return;
     const n = state.selection.size;
     countEl.textContent = `${n} selected`;
+    editBtn.disabled = n === 0;
   });
-
-  // Double-click / double-tap a table shape removes it.
-  document.getElementById('chart').addEventListener('dblclick', (e) => {
-    const shape = e.target.closest?.('.table-shape');
-    if (shape) removeTable(shape.dataset.tableId);
-  });
+  // Tables are removed via the ✕ button rendered on each shape (see grid.js).
 }

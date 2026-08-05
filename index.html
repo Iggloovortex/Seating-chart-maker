@@ -26,7 +26,7 @@
         <path d="M5.5 20c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
       </symbol>
       <symbol id="ic-chair" viewBox="0 0 24 24">
-        <path d="M7 4v8m10-8v8M6 12h12M8 12l-1 8m10-8l1 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M8 3V20M8 13H17V20M8 8H14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
       </symbol>
       <symbol id="ic-monitor" viewBox="0 0 24 24">
         <rect x="3" y="4" width="18" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/>
@@ -51,6 +51,13 @@
       <div class="toolbar__brand">
         <span class="toolbar__logo" aria-hidden="true">🪑</span>
         <span class="toolbar__title">Seating Chart Maker</span>
+      </div>
+
+      <div class="toolbar__group toolbar__group--title" role="group" aria-label="Chart title">
+        <label class="field field--title">
+          <span class="field__label">Title</span>
+          <input id="chart-title-input" class="field__input" type="text" placeholder="Untitled chart" maxlength="80" />
+        </label>
       </div>
 
       <div class="toolbar__group" role="group" aria-label="Grid size">
@@ -104,6 +111,10 @@
     <div id="select-bar" class="selectbar" hidden>
       <span id="select-count" class="selectbar__count">0 selected</span>
       <div class="selectbar__actions">
+        <button id="btn-select-enabled" class="btn" type="button" title="Select every seated square">All seated</button>
+        <button id="btn-select-all" class="btn" type="button" title="Select every square">All squares</button>
+        <button id="btn-edit-selected" class="btn btn--primary" type="button">Edit selected</button>
+        <span class="toolbar__sep" aria-hidden="true"></span>
         <label class="field">
           <span class="field__label">Color</span>
           <input id="table-color" class="field__input field__input--color" type="color" value="#8d6e63" />
@@ -122,8 +133,11 @@
         <button id="btn-zoom-in" class="btn btn--icon" type="button" aria-label="Zoom in">+</button>
       </div>
       <div class="stage__scroll" id="stage-scroll">
-        <div class="chart" id="chart" role="grid" aria-label="Seating grid">
-          <!-- grid built by js/grid.js -->
+        <div class="chart-wrap">
+          <h1 class="chart-title" id="chart-title" hidden></h1>
+          <div class="chart" id="chart" role="grid" aria-label="Seating grid">
+            <!-- grid built by js/grid.js -->
+          </div>
         </div>
       </div>
       <p class="stage__hint" id="stage-hint">
@@ -167,6 +181,18 @@
     </section>
   </div>
 
-  <script type="module" src="js/main.js"></script>
+  <!-- Classic scripts (not ES modules) so the app also runs when index.html is
+       opened directly via file:// — module scripts are blocked over file://.
+       Load order matters: each file defines globals used by later ones. -->
+  <script src="js/state.js"></script>
+  <script src="js/icons.js"></script>
+  <script src="js/paper.js"></script>
+  <script src="js/grid.js"></script>
+  <script src="js/interactions.js"></script>
+  <script src="js/editor.js"></script>
+  <script src="js/tables.js"></script>
+  <script src="js/export.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/main.js"></script>
 </body>
 </html>
