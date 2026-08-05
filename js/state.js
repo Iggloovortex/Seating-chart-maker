@@ -163,6 +163,23 @@ function toggleSelection(r, c) {
   emit();
 }
 function clearSelection() { state.selection.clear(); emit(); }
+
+/** Select every seated (enabled) square. */
+function selectAllEnabled() {
+  batch(() => {
+    state.selection.clear();
+    for (const [k, cell] of state.cells) if (cell.enabled) state.selection.add(k);
+  });
+}
+
+/** Select every square in the grid. */
+function selectAllSquares() {
+  batch(() => {
+    state.selection.clear();
+    for (let r = 0; r < state.grid.rows; r++)
+      for (let c = 0; c < state.grid.cols; c++) state.selection.add(keyOf(r, c));
+  });
+}
 function pruneSelection() {
   for (const k of [...state.selection]) {
     const [r, c] = parseKey(k);

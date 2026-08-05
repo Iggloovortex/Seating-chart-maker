@@ -23,6 +23,19 @@ function initTables() {
 
   selectBtn.addEventListener('click', () => setActive(!active));
 
+  // Ctrl/Cmd+click on a square (outside select mode) turns select mode on.
+  onEnterSelect(() => { if (!active) setActive(true); });
+
+  // Select-all helpers.
+  document.getElementById('btn-select-enabled').addEventListener('click', () => {
+    if (!active) setActive(true);
+    selectAllEnabled();
+  });
+  document.getElementById('btn-select-all').addEventListener('click', () => {
+    if (!active) setActive(true);
+    selectAllSquares();
+  });
+
   document.getElementById('btn-table-round').addEventListener('click', () => {
     addTable('round', colorInput.value);
   });
