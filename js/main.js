@@ -88,6 +88,21 @@ fileInput.addEventListener('change', async () => {
   fileInput.value = '';
 });
 
+// Copy a link that reopens this layout. Briefly confirms on the button itself.
+const linkBtn = document.getElementById('btn-copy-link');
+linkBtn.addEventListener('click', async () => {
+  const link = await buildShareLink();
+  const ok = await copyText(link);
+  if (ok) {
+    const original = linkBtn.textContent;
+    linkBtn.textContent = 'Copied!';
+    setTimeout(() => { linkBtn.textContent = original; }, 1500);
+  } else {
+    // Clipboard blocked (file:// is not a secure context): let them copy it.
+    prompt('Copy this link to reopen the layout:', link);
+  }
+});
+
 document.getElementById('btn-clear').addEventListener('click', () => {
   if (confirm('Clear the whole chart? This cannot be undone.')) clearAll();
 });
@@ -113,8 +128,13 @@ function reflectControls() {
 }
 
 // ---- Boot ------------------------------------------------------------------
-restoreFromCache();      // load last session if present
-reflectControls();
-renderGrid();
-scheduleTableRefresh();
-initAutoSave();          // start persisting after the initial restore
+(async () => {
+  // A shared link wins over the saved session; otherwise pick up where we left
+  // off. Either way autosave then takes over, so editing continues normally.
+  const fromLink = await loadFromHash();
+  if (!fromLink) restoreFromCache();
+  reflectControls();
+  renderGrid();
+  scheduleTableRefresh();
+  initAutoSave();        // start persisting after the initial restore
+})();
