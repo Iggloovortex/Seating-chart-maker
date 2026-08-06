@@ -123,11 +123,12 @@ async function renderToCanvas(dpi = 300) {
 
   const desks = [];
   const seats = [];
+  const covered = []; // seated squares under a table: only their content draws
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const data = peekCell(r, c);
       if (!data || !data.enabled) continue;
-      if (insideAnyFootprint(r, c)) continue; // covered by the table shape
+      if (insideAnyFootprint(r, c)) { covered.push({ r, c, data }); continue; }
       const st = seatTableOf(r, c);
       if (st) seats.push({ r, c, data, fp: st.fp });
       else desks.push({ r, c, data });
@@ -136,9 +137,9 @@ async function renderToCanvas(dpi = 300) {
   const deskSet = new Set(desks.map((d) => keyOf(d.r, d.c)));
 
   // Preload icon images (async), keyed by "id|color" — including a chair for empty seats.
-  const imgCache = await preloadIcons(desks, seats);
+  const imgCache = await preloadIcons(desks, seats, covered);
 
-  // 1) Table shapes (transparent inset so they don't touch cell borders).
+  // 1) Table shapes (drawn solid; the editing grid shows them semi-transparent).
   for (const table of state.tables) drawTable(ctx, table, rectOf);
 
   // 2) Connected desks.
@@ -146,6 +147,13 @@ async function renderToCanvas(dpi = 300) {
 
   // 3) Seats gathered around their table.
   for (const s of seats) drawTableSeat(ctx, rectOf, s, imgCache);
+
+  // 4) Labels and icons of squares the table covers, painted last so they stay
+  //    readable on top of the solid table.
+  for (const { r, c, data } of covered) {
+    const { x, y, w, h } = rectOf(r, c);
+    drawContent(ctx, x + w / 2, y + h / 2, w, h, data, imgCache, false);
+  }
 
   return canvas;
 }
@@ -274,11 +282,11 @@ function iconColorOf(data) {
   return data.iconColor || data.border || '#2f6feb';
 }
 
-async function preloadIcons(desks, seats) {
+async function preloadIcons(desks, seats, covered = []) {
   const needed = new Map(); // "id|color" -> dataUrl
   const want = (id, color) => needed.set(`${id}|${color}`, iconDataUrl(id, color));
 
-  for (const { data } of desks) {
+  for (const { data } of [...desks, ...covered]) {
     if (data.icon) want(data.icon, iconColorOf(data));
   }
   for (const { data } of seats) {

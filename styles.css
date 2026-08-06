@@ -415,6 +415,10 @@ body {
   padding: 2px;
   transform: rotate(var(--rot, 0deg));
   transition: transform .12s;
+  /* Above .table-shape (z-index 1) so labels and icons stay readable when a
+     table covers the square. */
+  position: relative;
+  z-index: 2;
 }
 
 .cell__icon {
@@ -444,6 +448,9 @@ body {
   position: absolute;
   pointer-events: none;
   z-index: 1;
+  /* Slightly see-through on the editing grid so the squares underneath stay
+     visible and clickable. The exported output draws tables solid. */
+  opacity: .8;
   border: 2px solid rgba(0,0,0,.15);
   box-sizing: border-box;
 }
