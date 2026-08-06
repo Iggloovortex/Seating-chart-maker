@@ -127,8 +127,19 @@ function toggleEnabled(r, c) {
   emit();
 }
 
+/** Giving an empty square content implies it is a seat, so setting an icon or
+ *  label text fills it in. Skipped when the caller sets `enabled` itself, so
+ *  "Empty all" can clear squares that still carry an icon or labels. */
+function seatIfContent(cell) {
+  if (cell.enabled) return;
+  const hasText = (cell.labels || []).some((l) => l.text && l.text.trim());
+  if (cell.icon || hasText) cell.enabled = true;
+}
+
 function updateCell(r, c, patch) {
-  Object.assign(getCell(r, c), patch);
+  const cell = getCell(r, c);
+  Object.assign(cell, patch);
+  if (!('enabled' in patch)) seatIfContent(cell);
   emit();
 }
 
@@ -157,7 +168,9 @@ function updateCells(keys, patch) {
   batch(() => {
     for (const k of keys) {
       const [r, c] = parseKey(k);
-      Object.assign(getCell(r, c), patch);
+      const cell = getCell(r, c);
+      Object.assign(cell, patch);
+      if (!('enabled' in patch)) seatIfContent(cell);
     }
   });
 }
@@ -185,6 +198,7 @@ function setLineTextForCells(keys, index, text) {
         cell.labels.push({ text: '', color: defaultLabelColor(cell.labels.length) });
       }
       cell.labels[index].text = text;
+      seatIfContent(cell); // label text fills an empty square
     }
   });
 }
@@ -245,6 +259,7 @@ function copySquareFrom(r, c) {
   const cell = peekCell(r, c);
   if (!cell) return false;
   squareClipboard = {
+    enabled: cell.enabled,
     fill: cell.fill,
     border: cell.border,
     icon: cell.icon,
@@ -266,6 +281,7 @@ function pasteSquareTo(keys) {
     for (const k of keys) {
       const [r, c] = parseKey(k);
       const cell = getCell(r, c);
+      cell.enabled = f.enabled;   // pasting a seated square fills an empty one
       cell.fill = f.fill;
       cell.border = f.border;
       cell.icon = f.icon;
