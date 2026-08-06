@@ -28,7 +28,15 @@ const DEFAULTS = {
   iconColor: '#1f2933',
   rowWeight: 1,
   colWeight: 1,
+  chairScale: 0.7,          // chairs draw smaller than a desk by default
 };
+
+/** A square acts as a "chair" when its icon is the chair: it is furniture
+ *  rather than a desk, so it can shrink to fit a walkway. */
+function isChairCell(cell) {
+  return !!(cell && cell.enabled && cell.icon === 'chair');
+}
+function isChairAt(r, c) { return isChairCell(peekCell(r, c)); }
 
 /** Default color for label line `index` (line 2 and beyond use labelColor2). */
 function defaultLabelColor(index) {
@@ -43,6 +51,8 @@ function makeCell() {
     labels: [],                 // [{ text, color }]
     icon: null,                 // icon id from icons.js
     iconColor: state.defaults.iconColor,
+    chairScale: DEFAULTS.chairScale, // size of the chair within its square
+
     rotation: 0,                // 0 | 90 | 180 | 270
     fill: state.defaults.fill,
     border: state.defaults.border,

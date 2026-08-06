@@ -113,6 +113,19 @@ function render(cell) {
     }
     g.appendChild(picker);
     g.appendChild(colorRow('Icon color', cell.iconColor, (v) => updateCell(current.r, current.c, { iconColor: v })));
+
+    // The chair icon makes the square a chair: furniture that scales down and
+    // fits inside a thinned walkway instead of claiming a full desk square.
+    if (cell.icon === 'chair') {
+      g.appendChild(chairSizeRow(cell.chairScale, (v) => updateCell(current.r, current.c, { chairScale: v })));
+      const note = document.createElement('p');
+      note.className = 'egroup__title';
+      note.style.textTransform = 'none';
+      note.style.fontWeight = '400';
+      note.style.marginTop = '6px';
+      note.textContent = 'Chairs shrink to their row/column size in the output, so they fit walkway paths.';
+      g.appendChild(note);
+    }
   }));
 
   // --- Rotation (arrows for the direction the seat faces) -----------------
@@ -411,6 +424,30 @@ function bindColorInput(input, apply) {
   input.addEventListener('input', apply);
   input.addEventListener('change', apply);
   input.addEventListener('blur', apply);
+}
+
+/** Chair size: how much of its square the chair occupies (0.2–1). */
+function chairSizeRow(value, onChange) {
+  const row = document.createElement('div');
+  row.className = 'erow';
+  const span = document.createElement('span');
+  span.style.flex = '1';
+  span.textContent = 'Chair size';
+  const num = document.createElement('input');
+  num.type = 'number';
+  num.className = 'field__input field__input--num';
+  num.min = '0.2';
+  num.max = '1';
+  num.step = '0.05';
+  num.value = value ?? 0.7;
+  num.inputMode = 'decimal';
+  num.addEventListener('change', () => {
+    const v = Math.min(1, Math.max(0.2, parseFloat(num.value) || 0.7));
+    num.value = v;
+    onChange(v);
+  });
+  row.append(span, num);
+  return row;
 }
 
 function weightRow(label, value, onChange) {

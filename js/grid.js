@@ -78,6 +78,11 @@ function buildCell(r, c) {
       const svg = iconUse(data.icon);
       if (svg) {
         svg.style.color = data.iconColor || '#1f2933'; // drives currentColor in the icon
+        // Chairs preview at their chair size, matching the scaled-down output.
+        if (data.icon === 'chair') {
+          const scale = data.chairScale || 0.7;
+          svg.style.width = `${Math.round(60 * scale)}%`;
+        }
         content.appendChild(svg);
       }
     }

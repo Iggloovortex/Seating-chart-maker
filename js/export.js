@@ -40,8 +40,45 @@ async function renderToCanvas(dpi = 300) {
   // by cell from the top-left: x accumulates across each row, y down each column,
   // so seats stay uniform and small empty cells offset their neighbours. All
   // weights = 1 reproduces a plain uniform grid. The editing grid is unaffected.
-  const wUnits = (r, c) => (isEnabled(r, c) ? 1 : colWeight(c)); // cell width in units
-  const hUnits = (r, c) => (isEnabled(r, c) ? 1 : rowWeight(r)); // cell height in units
+  // Table footprints and their surrounding ring, needed before layout so that
+  // chair-like squares can be sized by weight.
+  const footprints = state.tables.map((t) => ({ t, fp: footprintOf(t.cellKeys) }));
+
+  const insideAnyFootprint = (r, c) =>
+    footprints.some(({ fp }) => r >= fp.minR && r <= fp.maxR && c >= fp.minC && c <= fp.maxC);
+
+  const seatTableOf = (r, c) => {
+    let best = null, bestDist = Infinity;
+    for (const f of footprints) {
+      const { fp } = f;
+      const inRing = r >= fp.minR - 1 && r <= fp.maxR + 1 && c >= fp.minC - 1 && c <= fp.maxC + 1;
+      const inside = r >= fp.minR && r <= fp.maxR && c >= fp.minC && c <= fp.maxC;
+      if (inRing && !inside) {
+        const dr = (fp.minR + fp.maxR) / 2, dc = (fp.minC + fp.maxC) / 2;
+        const dist = Math.max(Math.abs(r - dr), Math.abs(c - dc));
+        if (dist < bestDist) { bestDist = dist; best = f; }
+      }
+    }
+    return best;
+  };
+
+  // A square counts as a chair when it carries the chair icon, or when it is a
+  // bare seat around a table (no icon, no labels) — those already render as an
+  // empty chair, so they are furniture too.
+  const chairLike = (r, c) => {
+    const d = peekCell(r, c);
+    if (!d || !d.enabled) return false;
+    if (d.icon === 'chair') return true;
+    const bare = !d.icon && !(d.labels || []).some((l) => l.text && l.text.trim());
+    return bare && !!seatTableOf(r, c);
+  };
+
+  // Desks claim a full unit; empty squares — and chairs, which are furniture
+  // rather than desks — take their row/column weight, so a chair dropped into a
+  // thinned walkway column stays inside the walkway instead of widening it.
+  const sizedByWeight = (r, c) => !isEnabled(r, c) || chairLike(r, c);
+  const wUnits = (r, c) => (sizedByWeight(r, c) ? colWeight(c) : 1); // cell width in units
+  const hUnits = (r, c) => (sizedByWeight(r, c) ? rowWeight(r) : 1); // cell height in units
 
   // Fit to the page using the widest row and the tallest column (in units).
   let maxRowUnitsW = 1;
@@ -94,33 +131,12 @@ async function renderToCanvas(dpi = 300) {
 
   const rectOf = (r, c) => rects.get(keyOf(r, c));
 
-  // Classify every enabled square: seats gathered around a table vs. connected desks.
-  //  - A table's "footprint" is the bounding box of its selected squares.
+  // Classify every enabled square (footprints/ring computed above):
   //  - Any enabled square in the 1-cell ring around a footprint (orthogonal OR
   //    diagonal) is a seat at that table; it renders smaller, pulled toward the
   //    table. An empty (unlabelled, icon-less) seat renders as an empty chair.
   //  - Every other enabled square is an individual desk; adjacent desks render
   //    touching, as one connected block (outer borders only).
-  const footprints = state.tables.map((t) => ({ t, fp: footprintOf(t.cellKeys) }));
-
-  const insideAnyFootprint = (r, c) =>
-    footprints.some(({ fp }) => r >= fp.minR && r <= fp.maxR && c >= fp.minC && c <= fp.maxC);
-
-  const seatTableOf = (r, c) => {
-    let best = null, bestDist = Infinity;
-    for (const f of footprints) {
-      const { fp } = f;
-      const inRing = r >= fp.minR - 1 && r <= fp.maxR + 1 && c >= fp.minC - 1 && c <= fp.maxC + 1;
-      const inside = r >= fp.minR && r <= fp.maxR && c >= fp.minC && c <= fp.maxC;
-      if (inRing && !inside) {
-        const dr = (fp.minR + fp.maxR) / 2, dc = (fp.minC + fp.maxC) / 2;
-        const dist = Math.max(Math.abs(r - dr), Math.abs(c - dc));
-        if (dist < bestDist) { bestDist = dist; best = f; }
-      }
-    }
-    return best;
-  };
-
   const desks = [];
   const seats = [];
   const covered = []; // seated squares under a table: only their content draws
@@ -134,7 +150,8 @@ async function renderToCanvas(dpi = 300) {
       else desks.push({ r, c, data });
     }
   }
-  const deskSet = new Set(desks.map((d) => keyOf(d.r, d.c)));
+  // Chairs are standalone furniture, so they never merge into a desk block.
+  const deskSet = new Set(desks.filter((d) => !isChairCell(d.data)).map((d) => keyOf(d.r, d.c)));
 
   // Preload icon images (async), keyed by "id|color" — including a chair for empty seats.
   const imgCache = await preloadIcons(desks, seats, covered);
@@ -142,8 +159,11 @@ async function renderToCanvas(dpi = 300) {
   // 1) Table shapes (drawn solid; the editing grid shows them semi-transparent).
   for (const table of state.tables) drawTable(ctx, table, rectOf);
 
-  // 2) Connected desks.
-  for (const d of desks) drawDesk(ctx, rectOf, d, deskSet, imgCache);
+  // 2) Connected desks — chairs draw as small furniture instead.
+  for (const d of desks) {
+    if (isChairCell(d.data)) drawChair(ctx, rectOf(d.r, d.c), d.data, imgCache);
+    else drawDesk(ctx, rectOf, d, deskSet, imgCache);
+  }
 
   // 3) Seats gathered around their table.
   for (const s of seats) drawTableSeat(ctx, rectOf, s, imgCache);
@@ -189,6 +209,25 @@ function drawDesk(ctx, rectOf, { r, c, data }, deskSet, imgCache) {
   drawContent(ctx, x + w / 2, y + h / 2, w, h, data, imgCache, false);
 }
 
+/** A chair: standalone furniture drawn at `chairScale` of its square, centered.
+ *  Because it is scaled rather than filling the cell, it still reads correctly
+ *  when its row/column has been thinned into a walkway. */
+function drawChair(ctx, rect, data, imgCache) {
+  const scale = data.chairScale || 0.7;
+  const size = Math.min(rect.w, rect.h) * scale;
+  const cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;
+  const x = cx - size / 2, y = cy - size / 2;
+
+  roundRect(ctx, x, y, size, size, size * 0.18);
+  ctx.fillStyle = data.fill || '#dbe7ff';
+  ctx.fill();
+  ctx.lineWidth = Math.max(1, size * 0.05);
+  ctx.strokeStyle = data.border || '#2f6feb';
+  ctx.stroke();
+
+  drawContent(ctx, cx, cy, size, size, data, imgCache, false);
+}
+
 /** A seat around a table: smaller and shifted toward the table centre. Empty
  *  seats (no label, no icon) render as an empty chair. */
 function drawTableSeat(ctx, rectOf, { r, c, data, fp }, imgCache) {
@@ -205,7 +244,11 @@ function drawTableSeat(ctx, rectOf, { r, c, data, fp }, imgCache) {
   dx /= len; dy /= len;
 
   const base = Math.min(rect.w, rect.h);
-  const size = base * 0.62;            // smaller than a desk => "closer together"
+  // Chairs — explicit (chair icon) or implicit (a bare ring seat) — honour their
+  // own scale; labelled/iconed seats use the standard gathered size.
+  const labelled = (data.labels || []).some((l) => l.text && l.text.trim());
+  const isChair = data.icon === 'chair' || (!data.icon && !labelled);
+  const size = base * (isChair ? (data.chairScale || 0.7) : 0.62);
   const shift = base * 0.18;           // nudge toward the table
   const cx = seatCx + dx * shift, cy = seatCy + dy * shift;
   const x = cx - size / 2, y = cy - size / 2;
