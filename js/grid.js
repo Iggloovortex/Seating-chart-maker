@@ -4,15 +4,42 @@
 
 const chart = document.getElementById('chart');
 
+// Live editing grid uses ONE uniform square size for every cell (row/column
+// weights are output-only). The base fits ~2 label lines of 10 characters, so
+// basic use never resizes; when any cell needs more, they all grow together.
+const CELL_BASE = 88;      // px — fits 2 lines × 10 chars (+icon)
+const CHAR_W = 7.2;        // approx px per label character at the grid font
+const PAD = 16;            // inner padding allowance
+const LINE_H = 16;         // px per label line
+const ICON_RESERVE = 40;   // px reserved for an icon above labels
+
+/** Uniform square cell size (px) needed to hold the largest cell's content. */
+function uniformCellSize() {
+  const { cols, rows } = state.grid;
+  let maxChars = 10, maxLines = 2, anyIcon = false;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const d = peekCell(r, c);
+      if (!d || !d.enabled) continue;
+      if (d.icon) anyIcon = true;
+      const lines = (d.labels || []).filter((l) => l.text);
+      maxLines = Math.max(maxLines, lines.length);
+      for (const l of lines) maxChars = Math.max(maxChars, l.text.length);
+    }
+  }
+  const neededW = maxChars * CHAR_W + PAD;
+  const neededH = PAD + (anyIcon ? ICON_RESERVE : 0) + maxLines * LINE_H;
+  return Math.round(Math.max(CELL_BASE, neededW, neededH));
+}
+
 /** Full re-render of the grid. Called on any state change. */
 function renderGrid() {
   const { cols, rows } = state.grid;
 
-  // Column/row track sizing uses the per-index weights (empty row/col heights).
-  chart.style.gridTemplateColumns =
-    Array.from({ length: cols }, (_, c) => `${colWeight(c)}fr`).join(' ');
-  chart.style.gridTemplateRows =
-    Array.from({ length: rows }, (_, r) => `${rowWeight(r)}fr`).join(' ');
+  // All cells share one square size, so the grid stays uniform as content grows.
+  const size = uniformCellSize();
+  chart.style.gridTemplateColumns = `repeat(${cols}, ${size}px)`;
+  chart.style.gridTemplateRows = `repeat(${rows}, ${size}px)`;
 
   chart.replaceChildren();
 
