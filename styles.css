@@ -243,6 +243,20 @@ body {
 .btn--ghost { background: transparent; }
 .btn--ghost:hover { background: var(--surface-2); }
 
+/* Seat / empty actions read at a glance: green adds seats, red clears them. */
+.btn--seat {
+  color: #fff;
+  background: #2e7d32;
+  border-color: #2e7d32;
+}
+.btn--seat:hover { background: #276d2b; border-color: #276d2b; }
+.btn--empty {
+  color: #fff;
+  background: #c0392b;
+  border-color: #c0392b;
+}
+.btn--empty:hover { background: #a93226; border-color: #a93226; }
+
 .btn--toggle[aria-pressed="true"] {
   color: var(--accent-ink);
   background: var(--accent);

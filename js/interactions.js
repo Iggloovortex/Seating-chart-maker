@@ -17,6 +17,10 @@ function isSelectMode() { return selectMode; }
 let editHandler = () => {};
 function onRequestEdit(fn) { editHandler = fn; }
 
+// Editing a selected square in select mode opens the bulk pane instead.
+let bulkEditHandler = () => {};
+function onRequestBulkEdit(fn) { bulkEditHandler = fn; }
+
 // Ctrl/Cmd+click adds to the selection even when not in select mode; this hook
 // lets the UI turn select mode on so the select bar appears.
 let enterSelectHandler = () => {};
@@ -102,10 +106,14 @@ function fireTap(cell, mods = {}) {
   if (shift) {
     enterSelectHandler();
     const inLine = anchor && (anchor.r === r || anchor.c === c);
+    if (!inLine) {
+      // A first Shift+click — or one off the anchor's line — starts over:
+      // drop any previous selection and select just this square.
+      clearSelection();
+      anchor = { r, c };
+    }
     const a = inLine ? anchor : { r, c };
     seatRange(a.r, a.c, r, c, !isEnabled(r, c));
-    // Keep the anchor while extending along a line; a diagonal click re-anchors.
-    if (!inLine) anchor = { r, c };
     return;
   }
 
@@ -123,5 +131,11 @@ function fireTap(cell, mods = {}) {
 
 function fireEdit(cell) {
   const [r, c] = parseKey(cell.dataset.key);
+  // In select mode, editing a square that's part of the selection edits the
+  // whole selection; anything else falls through to the single-square pane.
+  if (selectMode && state.selection.has(keyOf(r, c))) {
+    bulkEditHandler([...state.selection]);
+    return;
+  }
   editHandler(r, c);
 }

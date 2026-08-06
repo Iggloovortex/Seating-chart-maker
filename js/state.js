@@ -164,6 +164,52 @@ function setLineColorForCells(keys, index, color) {
   });
 }
 
+/** Set the TEXT of label line `index` on every listed cell, creating the line
+ *  (and any lines before it) where missing. Used by bulk "overwrite" edits. */
+function setLineTextForCells(keys, index, text) {
+  batch(() => {
+    for (const k of keys) {
+      const [r, c] = parseKey(k);
+      const cell = getCell(r, c);
+      while (cell.labels.length <= index) {
+        cell.labels.push({ text: '', color: defaultLabelColor(cell.labels.length) });
+      }
+      cell.labels[index].text = text;
+    }
+  });
+}
+
+/** Remove label line `index` from every listed cell that has it. */
+function removeLineForCells(keys, index) {
+  batch(() => {
+    for (const k of keys) {
+      const [r, c] = parseKey(k);
+      const cell = getCell(r, c);
+      if (cell.labels[index]) cell.labels.splice(index, 1);
+    }
+  });
+}
+
+/** Add one more label line to every listed cell, padding shorter cells so the
+ *  same line index means the same line on every selected square. */
+function addLineForCells(keys, text = '') {
+  setLineTextForCells(keys, maxLabelLines(keys), text);
+}
+
+/** The shared text of label line `index` across cells, or null when they
+ *  differ (so the bulk pane can show a common value but not clobber others). */
+function commonLineText(keys, index) {
+  let seen = null, first = true;
+  for (const k of keys) {
+    const [r, c] = parseKey(k);
+    const cell = peekCell(r, c);
+    const text = cell?.labels[index]?.text ?? null;
+    if (first) { seen = text; first = false; }
+    else if (seen !== text) return null;
+  }
+  return seen;
+}
+
 /** Largest label-line count across the listed cells. */
 function maxLabelLines(keys) {
   let max = 0;

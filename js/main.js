@@ -27,6 +27,7 @@ window.addEventListener('resize', refreshTables);
 initInteractions(chartEl);
 initEditor();
 onRequestEdit(openEditor);
+onRequestBulkEdit(openBulkEditor);
 
 // ---- Grid size inputs ------------------------------------------------------
 const applyGrid = () => setGrid(parseInt(colsInput.value, 10), parseInt(rowsInput.value, 10));

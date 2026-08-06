@@ -181,29 +181,37 @@ function renderBulk(keys) {
 
   // Seat all / Empty all live in the select bar, not here.
 
-  // --- Label line colors (text stays individual) --------------------------
-  bodyEl.appendChild(group('Label line colors', (g) => {
+  // --- Labels for every selected square -----------------------------------
+  // Each line shows the shared text when all selected squares match, or a
+  // "(multiple)" placeholder when they differ. Typing overwrites that line on
+  // every selected square; the color applies to all of them too.
+  bodyEl.appendChild(group('Labels (all selected)', (g) => {
     const maxLines = maxLabelLines(keys);
-    if (maxLines === 0) {
-      const note = document.createElement('p');
-      note.className = 'egroup__title';
-      note.style.textTransform = 'none';
-      note.style.fontWeight = '400';
-      note.textContent = 'None of the selected squares have label lines yet. Add label text per square first, then recolor the lines here.';
-      g.appendChild(note);
-    } else {
-      for (let i = 0; i < maxLines; i++) {
-        const seed = seedLineColor(keys, i);
-        g.appendChild(colorRow(`Line ${i + 1} color`, seed, (v) => setLineColorForCells(keys, i, v)));
-      }
-      const note = document.createElement('p');
-      note.className = 'egroup__title';
-      note.style.textTransform = 'none';
-      note.style.fontWeight = '400';
-      note.style.marginTop = '6px';
-      note.textContent = 'Only squares that have that line are recolored; text is unchanged.';
-      g.appendChild(note);
+    for (let i = 0; i < maxLines; i++) {
+      g.appendChild(bulkLabelRow(keys, i));
     }
+
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'link-btn';
+    add.textContent = '+ Add label line to all';
+    add.addEventListener('click', () => {
+      addLineForCells(keys);
+      renderBulk(keys);
+      const inputs = bodyEl.querySelectorAll('.erow input[type="text"]');
+      inputs[inputs.length - 1]?.focus();
+    });
+    g.appendChild(add);
+
+    const note = document.createElement('p');
+    note.className = 'egroup__title';
+    note.style.textTransform = 'none';
+    note.style.fontWeight = '400';
+    note.style.marginTop = '6px';
+    note.textContent = maxLines
+      ? 'Typing replaces that line on every selected square. Lines showing “(multiple)” keep each square’s own text until you type.'
+      : 'No label lines yet — add one to give every selected square the same line.';
+    g.appendChild(note);
   }));
 
   // --- Icon (all) ---------------------------------------------------------
@@ -269,6 +277,41 @@ function renderBulk(keys) {
   done.addEventListener('click', closeEditor);
   foot.appendChild(done);
   bodyEl.appendChild(foot);
+}
+
+/** One bulk label line: shared text (or a "(multiple)" placeholder), a color
+ *  that applies to every selected square, and a remove button. */
+function bulkLabelRow(keys, index) {
+  const row = document.createElement('div');
+  row.className = 'erow';
+
+  const shared = commonLineText(keys, index); // null => squares differ
+  const text = document.createElement('input');
+  text.type = 'text';
+  text.className = 'field__input';
+  text.value = shared ?? '';
+  text.placeholder = shared === null ? '(multiple)' : `Line ${index + 1}`;
+  // Only write on real input, so simply opening the pane never clobbers text.
+  text.addEventListener('input', () => setLineTextForCells(keys, index, text.value));
+
+  const color = document.createElement('input');
+  color.type = 'color';
+  color.className = 'field__input field__input--color erow__color';
+  color.value = seedLineColor(keys, index);
+  bindColorInput(color, () => setLineColorForCells(keys, index, color.value));
+
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'btn btn--icon btn--ghost';
+  del.textContent = '✕';
+  del.setAttribute('aria-label', `Remove label line ${index + 1} from all selected`);
+  del.addEventListener('click', () => {
+    removeLineForCells(keys, index);
+    renderBulk(keys);
+  });
+
+  row.append(text, color, del);
+  return row;
 }
 
 /** First non-default color found on line `index` among the selected cells. */
