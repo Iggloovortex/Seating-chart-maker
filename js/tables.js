@@ -56,6 +56,20 @@ function initTables() {
     selectAllSquares();
   });
 
+  // Filtered selections — all imply "seated".
+  const FILTER_BUTTONS = {
+    'btn-select-labeled': selectLabeled,
+    'btn-select-unlabeled': selectUnlabeled,
+    'btn-select-icons': selectWithIcons,
+    'btn-select-no-icons': selectWithoutIcons,
+  };
+  for (const [id, select] of Object.entries(FILTER_BUTTONS)) {
+    document.getElementById(id).addEventListener('click', () => {
+      if (!active) setActive(true);
+      select();
+    });
+  }
+
   document.getElementById('btn-table-round').addEventListener('click', () => {
     addTable('round', colorInput.value);
   });

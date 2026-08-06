@@ -34,6 +34,9 @@ function onSelectionEmptied(fn) { selectionEmptiedHandler = fn; }
 // Anchor for Shift+click range selection (the last clicked cell).
 let anchor = null;
 
+/** Forget the range anchor, so the next Shift+click starts a fresh run. */
+function resetSelectAnchor() { anchor = null; }
+
 function initInteractions(chartEl) {
   let pointer = null; // { id, x, y, cell, timer, longFired }
 
@@ -106,14 +109,11 @@ function fireTap(cell, mods = {}) {
   if (shift) {
     enterSelectHandler();
     const inLine = anchor && (anchor.r === r || anchor.c === c);
-    if (!inLine) {
-      // A first Shift+click — or one off the anchor's line — starts over:
-      // drop any previous selection and select just this square.
-      clearSelection();
-      anchor = { r, c };
-    }
-    const a = inLine ? anchor : { r, c };
-    seatRange(a.r, a.c, r, c, !isEnabled(r, c));
+    // A first Shift+click — or one off the anchor's line — starts a new run.
+    if (!inLine) anchor = { r, c };
+    // seatRange replaces the selection, so whatever the line covers becomes the
+    // whole selection and anything outside it is dropped.
+    seatRange(anchor.r, anchor.c, r, c, !isEnabled(r, c));
     return;
   }
 

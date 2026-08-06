@@ -241,12 +241,15 @@ function selectRange(r1, c1, r2, c2) {
   });
 }
 
-/** Set the seat state of every square in the rectangle AND add them to the
- *  selection (Shift+click both seats/unseats and selects). */
+/** Set the seat state of every square in the rectangle and make it THE
+ *  selection (Shift+click both seats/unseats and selects). The range replaces
+ *  the selection rather than adding to it, so squares outside the line are
+ *  dropped. */
 function seatRange(r1, c1, r2, c2, enabled) {
   const rMin = Math.min(r1, r2), rMax = Math.max(r1, r2);
   const cMin = Math.min(c1, c2), cMax = Math.max(c1, c2);
   batch(() => {
+    state.selection.clear();
     for (let r = rMin; r <= rMax; r++)
       for (let c = cMin; c <= cMax; c++) {
         getCell(r, c).enabled = enabled;
@@ -262,6 +265,28 @@ function selectAllEnabled() {
     for (const [k, cell] of state.cells) if (cell.enabled) state.selection.add(k);
   });
 }
+
+/** Select every SEATED square matching `pred(cell)`. (A first pass at
+ *  filtered selection; a general filter system can replace this later.) */
+function selectSeatedWhere(pred) {
+  batch(() => {
+    state.selection.clear();
+    for (const [k, cell] of state.cells) {
+      if (cell.enabled && pred(cell)) state.selection.add(k);
+    }
+  });
+}
+
+const hasLabelText = (cell) => (cell.labels || []).some((l) => l.text && l.text.trim());
+
+/** Seated squares that carry at least one non-empty label line. */
+function selectLabeled() { selectSeatedWhere(hasLabelText); }
+/** Seated squares with no label text at all. */
+function selectUnlabeled() { selectSeatedWhere((cell) => !hasLabelText(cell)); }
+/** Seated squares that have an icon. */
+function selectWithIcons() { selectSeatedWhere((cell) => !!cell.icon); }
+/** Seated squares with no icon. */
+function selectWithoutIcons() { selectSeatedWhere((cell) => !cell.icon); }
 
 /** Select every square in the grid. */
 function selectAllSquares() {
@@ -303,6 +328,9 @@ function pruneTables() {
 // ---------------------------------------------------------------- reset
 
 function clearAll() {
+  // Wiping the chart also drops the Shift+click range anchor (defined in
+  // interactions.js) so the next Shift+click can't extend from a stale cell.
+  if (typeof resetSelectAnchor === 'function') resetSelectAnchor();
   batch(() => {
     state.title = '';
     state.cells.clear();
