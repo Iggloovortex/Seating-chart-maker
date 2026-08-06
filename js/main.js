@@ -33,6 +33,21 @@ const applyGrid = () => setGrid(parseInt(colsInput.value, 10), parseInt(rowsInpu
 colsInput.addEventListener('change', applyGrid);
 rowsInput.addEventListener('change', applyGrid);
 
+// ---- Default colors --------------------------------------------------------
+const DEFAULT_COLOR_INPUTS = {
+  fill: 'def-fill', border: 'def-border', iconColor: 'def-icon', labelColor: 'def-label',
+};
+for (const [key, id] of Object.entries(DEFAULT_COLOR_INPUTS)) {
+  const el = document.getElementById(id);
+  el.value = state.defaults[key];
+  bindColorInput(el, () => setDefault(key, el.value));
+}
+function reflectDefaults() {
+  for (const [key, id] of Object.entries(DEFAULT_COLOR_INPUTS)) {
+    document.getElementById(id).value = state.defaults[key];
+  }
+}
+
 // ---- Paper, tables ---------------------------------------------------------
 initPaperControls();
 initTables();
@@ -91,6 +106,7 @@ function reflectControls() {
   rowsInput.value = state.grid.rows;
   titleInput.value = state.title;
   updateTitleDisplay();
+  reflectDefaults();
   reflectPaper();
 }
 

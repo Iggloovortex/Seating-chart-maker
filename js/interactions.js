@@ -93,11 +93,13 @@ function fireTap(cell, mods = {}) {
   const [r, c] = parseKey(cell.dataset.key);
   const { additive, shift } = mods;
 
-  // Shift+click: range-select from the anchor (enters select mode if needed).
+  // Shift+click: seat (or unseat) the rectangle from the anchor AND select it.
+  // Direction follows the clicked square: empty -> seat the range, seated ->
+  // empty the range. Enters select mode so the selection bar shows.
   if (shift) {
     enterSelectHandler();
-    if (anchor) selectRange(anchor.r, anchor.c, r, c);
-    else { toggleSelection(r, c); anchor = { r, c }; }
+    const a = anchor || { r, c };
+    seatRange(a.r, a.c, r, c, !isEnabled(r, c));
     return;
   }
 

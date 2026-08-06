@@ -30,20 +30,29 @@ const DEFAULTS = {
 };
 
 function makeCell() {
+  // Newly created seats inherit the current default colors (see state.defaults);
+  // the edit pane then overrides them per cell.
   return {
     enabled: false,
     labels: [],                 // [{ text, color }]
     icon: null,                 // icon id from icons.js
-    iconColor: DEFAULTS.iconColor,
+    iconColor: state.defaults.iconColor,
     rotation: 0,                // 0 | 90 | 180 | 270
-    fill: DEFAULTS.fill,
-    border: DEFAULTS.border,
+    fill: state.defaults.fill,
+    border: state.defaults.border,
   };
 }
 
 const state = {
   version: 1,
   title: '',                    // chart title, shown on page and in output
+  // Default colors applied to newly set seats / icons / labels.
+  defaults: {
+    fill: DEFAULTS.fill,
+    border: DEFAULTS.border,
+    iconColor: DEFAULTS.iconColor,
+    labelColor: DEFAULTS.labelColor,
+  },
   grid: { cols: 6, rows: 5 },
   cells: new Map(),             // key "r,c" -> cell
   rowWeights: [],               // per-row size weight (empty => DEFAULTS.rowWeight)
@@ -121,6 +130,9 @@ function setPaper(paper) { state.paper = paper; emit(); }
 
 function setTitle(title) { state.title = title || ''; emit(); }
 
+/** Set a default color (fill | border | iconColor | labelColor) for future cells. */
+function setDefault(key, color) { state.defaults[key] = color; emit(); }
+
 // ---------------------------------------------------------------- bulk edit
 
 /** Apply a shared patch to every cell key, emitting once. */
@@ -173,6 +185,20 @@ function selectRange(r1, c1, r2, c2) {
   batch(() => {
     for (let r = rMin; r <= rMax; r++)
       for (let c = cMin; c <= cMax; c++) state.selection.add(keyOf(r, c));
+  });
+}
+
+/** Set the seat state of every square in the rectangle AND add them to the
+ *  selection (Shift+click both seats/unseats and selects). */
+function seatRange(r1, c1, r2, c2, enabled) {
+  const rMin = Math.min(r1, r2), rMax = Math.max(r1, r2);
+  const cMin = Math.min(c1, c2), cMax = Math.max(c1, c2);
+  batch(() => {
+    for (let r = rMin; r <= rMax; r++)
+      for (let c = cMin; c <= cMax; c++) {
+        getCell(r, c).enabled = enabled;
+        state.selection.add(keyOf(r, c));
+      }
   });
 }
 
@@ -242,6 +268,7 @@ function serialize() {
   return {
     version: state.version,
     title: state.title,
+    defaults: { ...state.defaults },
     grid: { ...state.grid },
     cells: [...state.cells.entries()].map(([k, v]) => [k, v]),
     rowWeights: [...state.rowWeights],
@@ -255,6 +282,12 @@ function deserialize(data) {
   if (!data || typeof data !== 'object') return false;
   batch(() => {
     state.title = typeof data.title === 'string' ? data.title : '';
+    state.defaults = {
+      fill: data.defaults?.fill || DEFAULTS.fill,
+      border: data.defaults?.border || DEFAULTS.border,
+      iconColor: data.defaults?.iconColor || DEFAULTS.iconColor,
+      labelColor: data.defaults?.labelColor || DEFAULTS.labelColor,
+    };
     state.grid = {
       cols: clampInt(data.grid?.cols, 1, 40, 6),
       rows: clampInt(data.grid?.rows, 1, 40, 5),

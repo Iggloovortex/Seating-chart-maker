@@ -127,6 +127,11 @@ body {
 .field__input--num { width: 68px; }
 .field--title .field__input { width: 180px; }
 @media (max-width: 600px) { .field--title .field__input { width: 130px; } }
+
+/* Default-colors group: a compact row of swatches */
+.toolbar__group--defaults { gap: 4px; align-items: center; }
+.toolbar__deflabel { align-self: center; margin-right: 2px; }
+.toolbar__group--defaults .field__input--color { width: 34px; min-height: 34px; }
 .field__input--color {
   width: 48px;
   padding: 4px;
