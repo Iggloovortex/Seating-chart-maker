@@ -112,6 +112,7 @@ function render(cell) {
       picker.appendChild(btn);
     }
     g.appendChild(picker);
+    g.appendChild(colorRow('Icon color', cell.iconColor, (v) => updateCell(current.r, current.c, { iconColor: v })));
   }));
 
   // --- Rotation (arrows for the direction the seat faces) -----------------
@@ -238,6 +239,7 @@ function renderBulk(keys) {
       picker.appendChild(btn);
     }
     g.appendChild(picker);
+    g.appendChild(colorRow('Icon color', first.iconColor, (v) => updateCells(keys, { iconColor: v })));
   }));
 
   // --- Facing (all) -------------------------------------------------------
@@ -330,7 +332,7 @@ function labelRow(line, index) {
   color.type = 'color';
   color.className = 'field__input field__input--color erow__color';
   color.value = line.color || DEFAULTS.labelColor;
-  color.addEventListener('input', () => {
+  bindColorInput(color, () => {
     const cell = getCell(current.r, current.c);
     cell.labels[index].color = color.value;
     updateCell(current.r, current.c, {});
@@ -362,9 +364,19 @@ function colorRow(label, value, onChange) {
   color.type = 'color';
   color.className = 'field__input field__input--color';
   color.value = value;
-  color.addEventListener('input', () => onChange(color.value));
+  bindColorInput(color, () => onChange(color.value));
   row.append(span, color);
   return row;
+}
+
+/** Wire a color input so it applies on live change AND when the picker closes
+ *  with the value unchanged. Native color inputs fire no event if you re-pick
+ *  the value already shown, so we also apply on blur — that lets the user keep
+ *  the same color without having to change to another and back. */
+function bindColorInput(input, apply) {
+  input.addEventListener('input', apply);
+  input.addEventListener('change', apply);
+  input.addEventListener('blur', apply);
 }
 
 function weightRow(label, value, onChange) {
