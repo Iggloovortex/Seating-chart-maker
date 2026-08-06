@@ -93,16 +93,19 @@ function fireTap(cell, mods = {}) {
   const [r, c] = parseKey(cell.dataset.key);
   const { additive, shift } = mods;
 
-  // Shift+click: seat (or unseat) the rectangle from the anchor AND select it.
-  // Direction follows the clicked square: empty -> seat the range, seated ->
-  // empty the range. Enters select mode so the selection bar shows.
+  // Shift+click works along a straight LINE (same row or same column), never a
+  // diagonal block:
+  //   - first Shift+click       -> seats/unseats that one square and anchors it
+  //   - in line with the anchor -> applies to the whole run between them
+  //   - off the line (diagonal) -> starts over, becoming the new anchor
+  // Direction follows the clicked square: empty -> seat, seated -> empty.
   if (shift) {
     enterSelectHandler();
-    const a = anchor || { r, c };
+    const inLine = anchor && (anchor.r === r || anchor.c === c);
+    const a = inLine ? anchor : { r, c };
     seatRange(a.r, a.c, r, c, !isEnabled(r, c));
-    // Keep the existing anchor so repeated Shift+clicks extend from the same
-    // origin; the first Shift+click (no anchor yet) establishes one.
-    if (!anchor) anchor = { r, c };
+    // Keep the anchor while extending along a line; a diagonal click re-anchors.
+    if (!inLine) anchor = { r, c };
     return;
   }
 

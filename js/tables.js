@@ -17,8 +17,17 @@ function initTables() {
     bar.hidden = !on;
     if (!on) clearSelection();
     stageHint.style.display = on ? 'none' : '';
-    const editBtn = document.getElementById('btn-edit-selected');
-    if (editBtn) editBtn.disabled = state.selection.size === 0;
+    syncSelectionButtons();
+  };
+
+  // Buttons that act on the current selection are disabled when it is empty.
+  const SELECTION_BUTTON_IDS = ['btn-edit-selected', 'btn-seat-all', 'btn-empty-all'];
+  const syncSelectionButtons = () => {
+    const none = state.selection.size === 0;
+    for (const id of SELECTION_BUTTON_IDS) {
+      const el = document.getElementById(id);
+      if (el) el.disabled = none;
+    }
   };
 
   selectBtn.addEventListener('click', () => setActive(!active));
@@ -56,18 +65,25 @@ function initTables() {
   // "Clear selection" clears AND leaves select mode.
   document.getElementById('btn-select-clear').addEventListener('click', () => setActive(false));
 
+  // Seat / empty every selected square (moved here from the bulk edit pane).
+  document.getElementById('btn-seat-all').addEventListener('click', () => {
+    if (state.selection.size) updateCells([...state.selection], { enabled: true });
+  });
+  document.getElementById('btn-empty-all').addEventListener('click', () => {
+    if (state.selection.size) updateCells([...state.selection], { enabled: false });
+  });
+
   // Bulk-edit every selected square at once.
   const editBtn = document.getElementById('btn-edit-selected');
   editBtn.addEventListener('click', () => {
     if (state.selection.size) openBulkEditor([...state.selection]);
   });
 
-  // Keep the selection counter + Edit button state in sync.
+  // Keep the selection counter + selection-button states in sync.
   subscribe(() => {
     if (!active) return;
-    const n = state.selection.size;
-    countEl.textContent = `${n} selected`;
-    editBtn.disabled = n === 0;
+    countEl.textContent = `${state.selection.size} selected`;
+    syncSelectionButtons();
   });
   // Tables are removed via the ✕ button rendered on each shape (see grid.js).
 }

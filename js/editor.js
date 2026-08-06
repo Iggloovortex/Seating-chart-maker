@@ -179,16 +179,7 @@ function renderBulk(keys) {
   const [sr, sc] = keys[0].split(',').map(Number);
   const first = getCell(sr, sc);
 
-  // --- Seat on/off (all) ---------------------------------------------------
-  bodyEl.appendChild(group('Seat (all selected)', (g) => {
-    const seg = document.createElement('div');
-    seg.className = 'seg';
-    seg.append(
-      segBtn('Seat all', false, () => updateCells(keys, { enabled: true })),
-      segBtn('Empty all', false, () => updateCells(keys, { enabled: false })),
-    );
-    g.appendChild(seg);
-  }));
+  // Seat all / Empty all live in the select bar, not here.
 
   // --- Label line colors (text stays individual) --------------------------
   bodyEl.appendChild(group('Label line colors', (g) => {
