@@ -457,6 +457,44 @@ body {
 .table-shape--round { border-radius: 999px; }
 .table-shape--square { border-radius: 10px; }
 
+/* Corner grab handle for moving the selection */
+.move-handle {
+  position: absolute;
+  z-index: 4;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;   /* centred on the selection's top-left corner */
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  cursor: grab;
+  touch-action: none;        /* let the drag win over scrolling */
+  box-shadow: 0 1px 4px rgba(0,0,0,.35);
+}
+.move-handle:active { cursor: grabbing; }
+@media (pointer: coarse) { .move-handle { width: 32px; height: 32px; margin: -16px 0 0 -16px; } }
+
+/* Dashed landing box shown while dragging the handle */
+.move-preview {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  border: 2px dashed var(--accent);
+  border-radius: 8px;
+  background: rgba(47, 111, 235, .12);
+}
+.move-preview--blocked {
+  border-color: var(--danger);
+  background: rgba(192, 57, 43, .12);
+}
+
 /* Delete button on each table (the shape itself is pointer-events:none) */
 .table-remove {
   position: absolute;

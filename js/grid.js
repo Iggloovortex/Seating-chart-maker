@@ -50,6 +50,85 @@ function renderGrid() {
   }
 
   renderTables();
+  renderMoveHandle();
+}
+
+/** Corner grab handle for dragging the whole selection to a new spot. Shown at
+ *  the top-left of the selection's bounding box while in select mode. */
+function renderMoveHandle() {
+  if (typeof isSelectMode === 'function' && !isSelectMode()) return;
+  const box = selectionBounds();
+  if (!box) return;
+
+  const first = chart.querySelector(`.cell[data-key="${CSS.escape(keyOf(box.minR, box.minC))}"]`);
+  const last = chart.querySelector(`.cell[data-key="${CSS.escape(keyOf(box.maxR, box.maxC))}"]`);
+  if (!first || !last) return;
+
+  const chartRect = chart.getBoundingClientRect();
+  const a = first.getBoundingClientRect();
+  const z = last.getBoundingClientRect();
+  const left = a.left - chartRect.left;
+  const top = a.top - chartRect.top;
+  const width = z.right - a.left;
+  const height = z.bottom - a.top;
+
+  const handle = document.createElement('button');
+  handle.type = 'button';
+  handle.className = 'move-handle';
+  handle.title = 'Drag to move the selection';
+  handle.setAttribute('aria-label', 'Move selection');
+  handle.textContent = '✥';
+  handle.style.left = `${left}px`;
+  handle.style.top = `${top}px`;
+  chart.appendChild(handle);
+
+  attachMoveDrag(handle, { left, top, width, height, box, cellW: a.width, cellH: a.height });
+}
+
+/** Drag the handle to shift the selection; a dashed preview shows the landing
+ *  spot and the move is applied on release (silently ignored if off-grid). */
+function attachMoveDrag(handle, geo) {
+  let drag = null;
+
+  handle.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handle.setPointerCapture(e.pointerId);
+    // Step includes the grid gap, and is measured live so zoom is accounted for.
+    const gap = parseFloat(getComputedStyle(chart).gap) || 0;
+    drag = { x: e.clientX, y: e.clientY, dr: 0, dc: 0, stepX: geo.cellW + gap, stepY: geo.cellH + gap };
+
+    const preview = document.createElement('div');
+    preview.className = 'move-preview';
+    preview.style.left = `${geo.left}px`;
+    preview.style.top = `${geo.top}px`;
+    preview.style.width = `${geo.width}px`;
+    preview.style.height = `${geo.height}px`;
+    chart.appendChild(preview);
+    drag.preview = preview;
+  });
+
+  handle.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    drag.dc = Math.round((e.clientX - drag.x) / drag.stepX);
+    drag.dr = Math.round((e.clientY - drag.y) / drag.stepY);
+    drag.preview.style.left = `${geo.left + drag.dc * drag.stepX}px`;
+    drag.preview.style.top = `${geo.top + drag.dr * drag.stepY}px`;
+    // Flag a landing spot that would fall off the grid.
+    const fits = geo.box.minR + drag.dr >= 0 && geo.box.minC + drag.dc >= 0 &&
+                 geo.box.maxR + drag.dr < state.grid.rows && geo.box.maxC + drag.dc < state.grid.cols;
+    drag.preview.classList.toggle('move-preview--blocked', !fits);
+  });
+
+  const finish = () => {
+    if (!drag) return;
+    const { dr, dc } = drag;
+    drag.preview.remove();
+    drag = null;
+    moveSelection(dr, dc); // false (no change) when it would leave the grid
+  };
+  handle.addEventListener('pointerup', finish);
+  handle.addEventListener('pointercancel', finish);
 }
 
 function buildCell(r, c) {
@@ -160,6 +239,7 @@ function renderTables() {
 
 /** Re-measure table overlays after layout changes (zoom, resize). */
 function refreshTables() {
-  chart.querySelectorAll('.table-shape, .table-remove').forEach((n) => n.remove());
+  chart.querySelectorAll('.table-shape, .table-remove, .move-handle').forEach((n) => n.remove());
   renderTables();
+  renderMoveHandle();
 }

@@ -171,6 +171,44 @@ function render(cell) {
     g.appendChild(note);
   }));
 
+  // --- Copy / paste formatting --------------------------------------------
+  bodyEl.appendChild(group('Formatting', (g) => {
+    const row = document.createElement('div');
+    row.className = 'erow';
+
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'btn';
+    copy.style.flex = '1';
+    copy.textContent = 'Copy formatting';
+    copy.addEventListener('click', () => {
+      copyFormatFrom(current.r, current.c);
+      render(peekCell(current.r, current.c));
+    });
+
+    const paste = document.createElement('button');
+    paste.type = 'button';
+    paste.className = 'btn';
+    paste.style.flex = '1';
+    paste.textContent = 'Paste formatting';
+    paste.disabled = !hasFormatClipboard();
+    paste.addEventListener('click', () => {
+      pasteFormatTo([keyOf(current.r, current.c)]);
+      render(peekCell(current.r, current.c));
+    });
+
+    row.append(copy, paste);
+    g.appendChild(row);
+
+    const note = document.createElement('p');
+    note.className = 'egroup__title';
+    note.style.textTransform = 'none';
+    note.style.fontWeight = '400';
+    note.style.marginTop = '6px';
+    note.textContent = 'Copies colors, icon, facing and chair size — not label text.';
+    g.appendChild(note);
+  }));
+
   // --- Footer -------------------------------------------------------------
   const foot = document.createElement('div');
   foot.className = 'editor__foot';
@@ -278,6 +316,18 @@ function renderBulk(keys) {
   bodyEl.appendChild(group('Colors (all selected)', (g) => {
     g.appendChild(colorRow('Space (fill)', first.fill, (v) => updateCells(keys, { fill: v })));
     g.appendChild(colorRow('Border', first.border, (v) => updateCells(keys, { border: v })));
+  }));
+
+  // --- Paste copied formatting onto the whole selection --------------------
+  bodyEl.appendChild(group('Formatting', (g) => {
+    const paste = document.createElement('button');
+    paste.type = 'button';
+    paste.className = 'btn';
+    paste.style.width = '100%';
+    paste.textContent = 'Paste formatting to all';
+    paste.disabled = !hasFormatClipboard();
+    paste.addEventListener('click', () => { pasteFormatTo(keys); renderBulk(keys); });
+    g.appendChild(paste);
   }));
 
   // --- Footer -------------------------------------------------------------

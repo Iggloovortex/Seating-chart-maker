@@ -231,6 +231,107 @@ function maxLabelLines(keys) {
   return max;
 }
 
+// ---------------------------------------------------------------- format copy
+
+// Formatting only — never label text, which is content rather than format.
+let formatClipboard = null;
+
+function hasFormatClipboard() { return !!formatClipboard; }
+
+/** Copy a square's formatting: colors, icon, facing, chair size, and the color
+ *  of each label line (text is not copied). */
+function copyFormatFrom(r, c) {
+  const cell = peekCell(r, c);
+  if (!cell) return false;
+  formatClipboard = {
+    fill: cell.fill,
+    border: cell.border,
+    icon: cell.icon,
+    iconColor: cell.iconColor,
+    rotation: cell.rotation,
+    chairScale: cell.chairScale,
+    lineColors: (cell.labels || []).map((l) => l.color),
+  };
+  emit();
+  return true;
+}
+
+/** Apply the copied formatting to every listed square, leaving label text as
+ *  it is; a line only takes a copied color when that square already has it. */
+function pasteFormatTo(keys) {
+  if (!formatClipboard || !keys.length) return false;
+  const f = formatClipboard;
+  batch(() => {
+    for (const k of keys) {
+      const [r, c] = parseKey(k);
+      const cell = getCell(r, c);
+      cell.fill = f.fill;
+      cell.border = f.border;
+      cell.icon = f.icon;
+      cell.iconColor = f.iconColor;
+      cell.rotation = f.rotation;
+      cell.chairScale = f.chairScale;
+      f.lineColors.forEach((color, i) => { if (cell.labels[i]) cell.labels[i].color = color; });
+    }
+  });
+  return true;
+}
+
+// ---------------------------------------------------------------- move
+
+/** Shift every selected square (and any table wholly inside the selection) by
+ *  `dr, dc`. Returns false and changes nothing when the move would leave the
+ *  grid, so the caller can silently ignore it and let the user try again. */
+function moveSelection(dr, dc) {
+  if (!dr && !dc) return false;
+  const keys = [...state.selection];
+  if (!keys.length) return false;
+
+  for (const k of keys) {
+    const [r, c] = parseKey(k);
+    if (!inBounds(r + dr, c + dc)) return false; // off-grid: silent no-op
+  }
+
+  // Capture before deleting, so moves that overlap their own source still work.
+  const moved = new Map();
+  for (const k of keys) {
+    const [r, c] = parseKey(k);
+    const cell = state.cells.get(k);
+    if (cell) moved.set(keyOf(r + dr, c + dc), cell);
+  }
+  const selected = new Set(keys);
+
+  batch(() => {
+    for (const k of keys) state.cells.delete(k);
+    for (const [k, cell] of moved) state.cells.set(k, cell);
+    for (const t of state.tables) {
+      if (t.cellKeys.every((k) => selected.has(k))) {
+        t.cellKeys = t.cellKeys.map((k) => {
+          const [r, c] = parseKey(k);
+          return keyOf(r + dr, c + dc);
+        });
+      }
+    }
+    state.selection = new Set(keys.map((k) => {
+      const [r, c] = parseKey(k);
+      return keyOf(r + dr, c + dc);
+    }));
+  });
+  return true;
+}
+
+/** Bounding box of the current selection, or null when nothing is selected. */
+function selectionBounds() {
+  if (!state.selection.size) return null;
+  let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
+  for (const k of state.selection) {
+    const [r, c] = parseKey(k);
+    minR = Math.min(minR, r); maxR = Math.max(maxR, r);
+    minC = Math.min(minC, c); maxC = Math.max(maxC, c);
+  }
+  return { minR, maxR, minC, maxC };
+}
+
 // ---------------------------------------------------------------- selection
 
 function toggleSelection(r, c) {

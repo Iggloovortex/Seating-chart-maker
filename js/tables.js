@@ -18,16 +18,22 @@ function initTables() {
     if (!on) clearSelection();
     stageHint.style.display = on ? 'none' : '';
     syncSelectionButtons();
+    emit(); // re-render so the move handle appears/disappears with the mode
   };
 
   // Buttons that act on the current selection are disabled when it is empty.
   const SELECTION_BUTTON_IDS = ['btn-edit-selected', 'btn-seat-all', 'btn-empty-all'];
   const syncSelectionButtons = () => {
-    const none = state.selection.size === 0;
+    const n = state.selection.size;
     for (const id of SELECTION_BUTTON_IDS) {
       const el = document.getElementById(id);
-      if (el) el.disabled = none;
+      if (el) el.disabled = n === 0;
     }
+    // Copying formatting needs exactly one source square; pasting needs a copy.
+    const copyBtn = document.getElementById('btn-copy-format');
+    const pasteBtn = document.getElementById('btn-paste-format');
+    if (copyBtn) copyBtn.disabled = n !== 1;
+    if (pasteBtn) pasteBtn.disabled = n === 0 || !hasFormatClipboard();
   };
 
   selectBtn.addEventListener('click', () => setActive(!active));
@@ -85,6 +91,16 @@ function initTables() {
   });
   document.getElementById('btn-empty-all').addEventListener('click', () => {
     if (state.selection.size) updateCells([...state.selection], { enabled: false });
+  });
+
+  // Copy formatting from a single selected square, paste onto the selection.
+  document.getElementById('btn-copy-format').addEventListener('click', () => {
+    if (state.selection.size !== 1) return;
+    const [r, c] = parseKey([...state.selection][0]);
+    copyFormatFrom(r, c);
+  });
+  document.getElementById('btn-paste-format').addEventListener('click', () => {
+    if (state.selection.size) pasteFormatTo([...state.selection]);
   });
 
   // Bulk-edit every selected square at once.
