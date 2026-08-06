@@ -231,36 +231,37 @@ function maxLabelLines(keys) {
   return max;
 }
 
-// ---------------------------------------------------------------- format copy
+// ---------------------------------------------------------------- copy square
 
-// Formatting only — never label text, which is content rather than format.
-let formatClipboard = null;
+// A whole square: colors, icon, facing, chair size AND its label lines (text
+// included), so pasting clones the square rather than just its formatting.
+let squareClipboard = null;
 
-function hasFormatClipboard() { return !!formatClipboard; }
+function hasSquareClipboard() { return !!squareClipboard; }
 
-/** Copy a square's formatting: colors, icon, facing, chair size, and the color
- *  of each label line (text is not copied). */
-function copyFormatFrom(r, c) {
+/** Copy a square: colors, icon, facing, chair size and every label line with
+ *  its text and color. */
+function copySquareFrom(r, c) {
   const cell = peekCell(r, c);
   if (!cell) return false;
-  formatClipboard = {
+  squareClipboard = {
     fill: cell.fill,
     border: cell.border,
     icon: cell.icon,
     iconColor: cell.iconColor,
     rotation: cell.rotation,
     chairScale: cell.chairScale,
-    lineColors: (cell.labels || []).map((l) => l.color),
+    labels: (cell.labels || []).map((l) => ({ text: l.text, color: l.color })),
   };
   emit();
   return true;
 }
 
-/** Apply the copied formatting to every listed square, leaving label text as
- *  it is; a line only takes a copied color when that square already has it. */
-function pasteFormatTo(keys) {
-  if (!formatClipboard || !keys.length) return false;
-  const f = formatClipboard;
+/** Clone the copied square onto every listed square, label lines and all. The
+ *  target's own labels are replaced, so it ends up matching the source. */
+function pasteSquareTo(keys) {
+  if (!squareClipboard || !keys.length) return false;
+  const f = squareClipboard;
   batch(() => {
     for (const k of keys) {
       const [r, c] = parseKey(k);
@@ -271,7 +272,8 @@ function pasteFormatTo(keys) {
       cell.iconColor = f.iconColor;
       cell.rotation = f.rotation;
       cell.chairScale = f.chairScale;
-      f.lineColors.forEach((color, i) => { if (cell.labels[i]) cell.labels[i].color = color; });
+      // Fresh objects per target so squares never share label instances.
+      cell.labels = f.labels.map((l) => ({ text: l.text, color: l.color }));
     }
   });
   return true;

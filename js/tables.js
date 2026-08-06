@@ -33,7 +33,7 @@ function initTables() {
     const copyBtn = document.getElementById('btn-copy-format');
     const pasteBtn = document.getElementById('btn-paste-format');
     if (copyBtn) copyBtn.disabled = n !== 1;
-    if (pasteBtn) pasteBtn.disabled = n === 0 || !hasFormatClipboard();
+    if (pasteBtn) pasteBtn.disabled = n === 0 || !hasSquareClipboard();
   };
 
   selectBtn.addEventListener('click', () => setActive(!active));
@@ -97,10 +97,10 @@ function initTables() {
   document.getElementById('btn-copy-format').addEventListener('click', () => {
     if (state.selection.size !== 1) return;
     const [r, c] = parseKey([...state.selection][0]);
-    copyFormatFrom(r, c);
+    copySquareFrom(r, c);
   });
   document.getElementById('btn-paste-format').addEventListener('click', () => {
-    if (state.selection.size) pasteFormatTo([...state.selection]);
+    if (state.selection.size) pasteSquareTo([...state.selection]);
   });
 
   // Bulk-edit every selected square at once.

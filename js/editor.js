@@ -171,8 +171,8 @@ function render(cell) {
     g.appendChild(note);
   }));
 
-  // --- Copy / paste formatting --------------------------------------------
-  bodyEl.appendChild(group('Formatting', (g) => {
+  // --- Copy / paste the whole square ---------------------------------------
+  bodyEl.appendChild(group('Copy square', (g) => {
     const row = document.createElement('div');
     row.className = 'erow';
 
@@ -180,9 +180,9 @@ function render(cell) {
     copy.type = 'button';
     copy.className = 'btn';
     copy.style.flex = '1';
-    copy.textContent = 'Copy formatting';
+    copy.textContent = 'Copy square';
     copy.addEventListener('click', () => {
-      copyFormatFrom(current.r, current.c);
+      copySquareFrom(current.r, current.c);
       render(peekCell(current.r, current.c));
     });
 
@@ -190,10 +190,10 @@ function render(cell) {
     paste.type = 'button';
     paste.className = 'btn';
     paste.style.flex = '1';
-    paste.textContent = 'Paste formatting';
-    paste.disabled = !hasFormatClipboard();
+    paste.textContent = 'Paste square';
+    paste.disabled = !hasSquareClipboard();
     paste.addEventListener('click', () => {
-      pasteFormatTo([keyOf(current.r, current.c)]);
+      pasteSquareTo([keyOf(current.r, current.c)]);
       render(peekCell(current.r, current.c));
     });
 
@@ -205,7 +205,7 @@ function render(cell) {
     note.style.textTransform = 'none';
     note.style.fontWeight = '400';
     note.style.marginTop = '6px';
-    note.textContent = 'Copies colors, icon, facing and chair size — not label text.';
+    note.textContent = 'Copies colors, icon, facing, chair size and every label line, text included.';
     g.appendChild(note);
   }));
 
@@ -318,15 +318,15 @@ function renderBulk(keys) {
     g.appendChild(colorRow('Border', first.border, (v) => updateCells(keys, { border: v })));
   }));
 
-  // --- Paste copied formatting onto the whole selection --------------------
-  bodyEl.appendChild(group('Formatting', (g) => {
+  // --- Paste the copied square onto the whole selection --------------------
+  bodyEl.appendChild(group('Copy square', (g) => {
     const paste = document.createElement('button');
     paste.type = 'button';
     paste.className = 'btn';
     paste.style.width = '100%';
-    paste.textContent = 'Paste formatting to all';
-    paste.disabled = !hasFormatClipboard();
-    paste.addEventListener('click', () => { pasteFormatTo(keys); renderBulk(keys); });
+    paste.textContent = 'Paste square to all';
+    paste.disabled = !hasSquareClipboard();
+    paste.addEventListener('click', () => { pasteSquareTo(keys); renderBulk(keys); });
     g.appendChild(paste);
   }));
 
