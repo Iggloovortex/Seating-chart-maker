@@ -26,6 +26,17 @@ function initTables() {
   // Ctrl/Cmd+click on a square (outside select mode) turns select mode on.
   onEnterSelect(() => { if (!active) setActive(true); });
 
+  // Deselecting the last square (manually) leaves select mode too.
+  onSelectionEmptied(() => setActive(false));
+
+  // Escape clears the selection and leaves select mode (unless the edit pane,
+  // which handles its own Escape, is open).
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !active) return;
+    if (!document.getElementById('editor').hidden) return;
+    setActive(false);
+  });
+
   // Select-all helpers.
   document.getElementById('btn-select-enabled').addEventListener('click', () => {
     if (!active) setActive(true);
@@ -42,7 +53,8 @@ function initTables() {
   document.getElementById('btn-table-square').addEventListener('click', () => {
     addTable('square', colorInput.value);
   });
-  document.getElementById('btn-select-clear').addEventListener('click', () => clearSelection());
+  // "Clear selection" clears AND leaves select mode.
+  document.getElementById('btn-select-clear').addEventListener('click', () => setActive(false));
 
   // Bulk-edit every selected square at once.
   const editBtn = document.getElementById('btn-edit-selected');

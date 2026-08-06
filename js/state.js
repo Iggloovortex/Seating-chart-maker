@@ -166,6 +166,16 @@ function toggleSelection(r, c) {
 }
 function clearSelection() { state.selection.clear(); emit(); }
 
+/** Add every square in the rectangle between two cells to the selection. */
+function selectRange(r1, c1, r2, c2) {
+  const rMin = Math.min(r1, r2), rMax = Math.max(r1, r2);
+  const cMin = Math.min(c1, c2), cMax = Math.max(c1, c2);
+  batch(() => {
+    for (let r = rMin; r <= rMax; r++)
+      for (let c = cMin; c <= cMax; c++) state.selection.add(keyOf(r, c));
+  });
+}
+
 /** Select every seated (enabled) square. */
 function selectAllEnabled() {
   batch(() => {
