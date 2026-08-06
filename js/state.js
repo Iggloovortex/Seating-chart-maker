@@ -127,20 +127,38 @@ function toggleEnabled(r, c) {
   emit();
 }
 
-/** Giving an empty square content implies it is a seat, so setting an icon or
- *  label text fills it in. Skipped when the caller sets `enabled` itself, so
- *  "Empty all" can clear squares that still carry an icon or labels. */
-function seatIfContent(cell) {
-  if (cell.enabled) return;
-  const hasText = (cell.labels || []).some((l) => l.text && l.text.trim());
-  if (cell.icon || hasText) cell.enabled = true;
+/** A square has content once it carries an icon or real label text. */
+function hasContent(cell) {
+  return !!(cell.icon || (cell.labels || []).some((l) => l.text && l.text.trim()));
+}
+
+/** Giving an EMPTY square content implies it is a seat, so setting an icon or
+ *  label text fills it in. Only the no-content -> content transition seats, so
+ *  a square deliberately unseated while holding content stays unseated through
+ *  unrelated edits. Callers that set `enabled` themselves skip this entirely,
+ *  which keeps "Empty all" and the pane's Empty button working. */
+function seatOnNewContent(cell, hadContent) {
+  if (!cell.enabled && !hadContent && hasContent(cell)) cell.enabled = true;
 }
 
 function updateCell(r, c, patch) {
   const cell = getCell(r, c);
+  const had = hasContent(cell);
   Object.assign(cell, patch);
-  if (!('enabled' in patch)) seatIfContent(cell);
+  if (!('enabled' in patch)) seatOnNewContent(cell, had);
   emit();
+}
+
+/** Set one label line's text on a single square, seating it if this is the
+ *  content that brings the square to life. */
+function setLineText(r, c, index, text) {
+  const cell = getCell(r, c);
+  const had = hasContent(cell);
+  if (!cell.labels[index]) return false;
+  cell.labels[index].text = text;
+  seatOnNewContent(cell, had);
+  emit();
+  return true;
 }
 
 function setRowWeight(r, w) {
@@ -169,8 +187,9 @@ function updateCells(keys, patch) {
     for (const k of keys) {
       const [r, c] = parseKey(k);
       const cell = getCell(r, c);
+      const had = hasContent(cell);
       Object.assign(cell, patch);
-      if (!('enabled' in patch)) seatIfContent(cell);
+      if (!('enabled' in patch)) seatOnNewContent(cell, had);
     }
   });
 }
@@ -194,11 +213,12 @@ function setLineTextForCells(keys, index, text) {
     for (const k of keys) {
       const [r, c] = parseKey(k);
       const cell = getCell(r, c);
+      const had = hasContent(cell);
       while (cell.labels.length <= index) {
         cell.labels.push({ text: '', color: defaultLabelColor(cell.labels.length) });
       }
       cell.labels[index].text = text;
-      seatIfContent(cell); // label text fills an empty square
+      seatOnNewContent(cell, had); // label text fills an empty square
     }
   });
 }

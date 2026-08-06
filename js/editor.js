@@ -420,9 +420,9 @@ function labelRow(line, index) {
   text.placeholder = `Line ${index + 1}`;
   text.value = line.text || '';
   text.addEventListener('input', () => {
-    const cell = getCell(current.r, current.c);
-    cell.labels[index].text = text.value;
-    updateCell(current.r, current.c, {}); // emit → live grid update
+    // Goes through state so it can seat the square when this is its first
+    // content (and emit for the live grid update).
+    setLineText(current.r, current.c, index, text.value);
   });
 
   const color = document.createElement('input');
