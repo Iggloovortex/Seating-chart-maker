@@ -208,7 +208,9 @@ body {
   min-height: 0;
   overflow: auto;
   display: grid;
-  place-items: center;
+  /* Anchor content to the top so zooming in (which scales .chart) never pushes
+     the title up out of view — a centered item can't be scrolled back to. */
+  place-items: start center;
   padding: 20px;
   -webkit-overflow-scrolling: touch;
 }
@@ -269,7 +271,9 @@ body {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   transform: scale(var(--zoom, 1));
-  transform-origin: center center;
+  /* Grow downward from the top when zooming, so the title above stays put and
+     the scaled overflow stays scrollable. */
+  transform-origin: top center;
   touch-action: manipulation;
 }
 

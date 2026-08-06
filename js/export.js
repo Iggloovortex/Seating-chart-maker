@@ -34,49 +34,53 @@ async function renderToCanvas(dpi = 300) {
   const areaH = pxH - margin * 2 - titleBand;
 
   // Empty-space sizing (output only): every SEATED square renders at one uniform
-  // size; row-height / column-width weights resize only the EMPTY cells. Because
-  // seats stay full size while empty cells shrink or grow, the seats offset —
-  // exactly what row/column sizing is for here. All weights = 1 reproduces a
-  // plain uniform grid. The live editing grid is unaffected (config view).
-  const rowHasSeat = (r) => {
-    for (let c = 0; c < cols; c++) { const d = peekCell(r, c); if (d && d.enabled) return true; }
-    return false;
-  };
-  // Size of each cell in "units" (a seat is 1 wide; an empty cell uses its weight).
-  const cellUnitsW = (r, c) => (isEnabled(r, c) ? 1 : colWeight(c));
-  // A row's band height in units: 1 if it has any seat, else the row's weight
-  // (so fully-empty spacer rows can be made thin/tall).
-  const rowUnitsH = (r) => (rowHasSeat(r) ? 1 : rowWeight(r));
-  // A row's total width in units (sum of its cells' unit widths).
-  const rowUnitsW = (r) => {
-    let sum = 0;
-    for (let c = 0; c < cols; c++) sum += cellUnitsW(r, c);
-    return sum;
-  };
+  // size, while each EMPTY square shrinks/grows to its column-width × row-height
+  // weights. This lets an individual empty square become a small walkway between
+  // seats/desks — not just a fully-empty row or column. The output is built cell
+  // by cell from the top-left: x accumulates across each row, y down each column,
+  // so seats stay uniform and small empty cells offset their neighbours. All
+  // weights = 1 reproduces a plain uniform grid. The editing grid is unaffected.
+  const wUnits = (r, c) => (isEnabled(r, c) ? 1 : colWeight(c)); // cell width in units
+  const hUnits = (r, c) => (isEnabled(r, c) ? 1 : rowWeight(r)); // cell height in units
 
+  // Fit to the page using the widest row and the tallest column (in units).
   let maxRowUnitsW = 1;
-  for (let r = 0; r < rows; r++) maxRowUnitsW = Math.max(maxRowUnitsW, rowUnitsW(r));
-  let totalUnitsH = 0;
-  for (let r = 0; r < rows; r++) totalUnitsH += rowUnitsH(r);
-  totalUnitsH = totalUnitsH || 1;
-
-  const unit = Math.min(areaW / maxRowUnitsW, areaH / totalUnitsH);
-  const gridW = maxRowUnitsW * unit;
-  const originX = margin + (areaW - gridW) / 2; // block centered horizontally
-  const originY = margin + titleBand;           // top-anchored, beneath the title
-
-  // Precompute each cell's rectangle by walking rows top→bottom, cells left→right.
-  const rects = new Map(); // "r,c" -> { x, y, w, h }
-  let yCursor = originY;
   for (let r = 0; r < rows; r++) {
-    const bandH = rowUnitsH(r) * unit;
-    let xCursor = originX; // rows left-aligned to a common origin, so offsets read left→right
+    let s = 0;
+    for (let c = 0; c < cols; c++) s += wUnits(r, c);
+    maxRowUnitsW = Math.max(maxRowUnitsW, s);
+  }
+  let maxColUnitsH = 1;
+  for (let c = 0; c < cols; c++) {
+    let s = 0;
+    for (let r = 0; r < rows; r++) s += hUnits(r, c);
+    maxColUnitsH = Math.max(maxColUnitsH, s);
+  }
+
+  const unit = Math.min(areaW / maxRowUnitsW, areaH / maxColUnitsH);
+  const originX = margin + (areaW - maxRowUnitsW * unit) / 2; // block centered horizontally
+  const originY = margin + titleBand;                         // top-anchored, beneath the title
+
+  // Cell rectangles: x accumulates left→right within each row; y accumulates
+  // top→bottom within each column (independent walks, so a small empty square
+  // offsets everything after it in its row and column).
+  const rects = new Map(); // "r,c" -> { x, y, w, h }
+  for (let r = 0; r < rows; r++) {
+    let x = originX;
     for (let c = 0; c < cols; c++) {
-      const w = cellUnitsW(r, c) * unit;
-      rects.set(keyOf(r, c), { x: xCursor, y: yCursor, w, h: bandH });
-      xCursor += w;
+      const w = wUnits(r, c) * unit;
+      rects.set(keyOf(r, c), { x, y: 0, w, h: 0 });
+      x += w;
     }
-    yCursor += bandH;
+  }
+  for (let c = 0; c < cols; c++) {
+    let y = originY;
+    for (let r = 0; r < rows; r++) {
+      const rect = rects.get(keyOf(r, c));
+      rect.y = y;
+      rect.h = hUnits(r, c) * unit;
+      y += rect.h;
+    }
   }
 
   // Title at the top, centered.
