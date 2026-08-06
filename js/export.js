@@ -215,7 +215,20 @@ function drawDesk(ctx, rectOf, { r, c, data }, deskSet, imgCache) {
 function drawChair(ctx, rect, data, imgCache) {
   const scale = data.chairScale || 0.7;
   const size = Math.min(rect.w, rect.h) * scale;
-  const cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;
+
+  // Sit flush against the edge the chair faces, so it tucks up to the desk or
+  // table in that direction instead of floating in the middle of its square.
+  // The other axis stays centred. A hair of inset keeps the two borders from
+  // merging into one thick line.
+  const inset = size * 0.04;
+  let cx = rect.x + rect.w / 2;
+  let cy = rect.y + rect.h / 2;
+  switch (data.rotation || 0) {
+    case 0:   cy = rect.y + size / 2 + inset; break;              // faces up
+    case 90:  cx = rect.x + rect.w - size / 2 - inset; break;     // faces right
+    case 180: cy = rect.y + rect.h - size / 2 - inset; break;     // faces down
+    case 270: cx = rect.x + size / 2 + inset; break;              // faces left
+  }
   const x = cx - size / 2, y = cy - size / 2;
 
   roundRect(ctx, x, y, size, size, size * 0.18);
