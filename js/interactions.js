@@ -31,11 +31,13 @@ function onEnterSelect(fn) { enterSelectHandler = fn; }
 let selectionEmptiedHandler = () => {};
 function onSelectionEmptied(fn) { selectionEmptiedHandler = fn; }
 
-// Anchor for Shift+click range selection (the last clicked cell).
+// Shift+click sizes a rectangle from `anchor` out to `corner`. Keeping the far
+// corner lets a repeat click on the same square be recognised as the commit.
 let anchor = null;
+let corner = null;
 
-/** Forget the range anchor, so the next Shift+click starts a fresh run. */
-function resetSelectAnchor() { anchor = null; }
+/** Forget the range, so the next Shift+click starts a fresh run. */
+function resetSelectAnchor() { anchor = null; corner = null; }
 
 function initInteractions(chartEl) {
   let pointer = null; // { id, x, y, cell, timer, longFired }
@@ -100,20 +102,32 @@ function fireTap(cell, mods = {}) {
   const [r, c] = parseKey(cell.dataset.key);
   const { additive, shift } = mods;
 
-  // Shift+click works along a straight LINE (same row or same column), never a
-  // diagonal block:
-  //   - first Shift+click       -> seats/unseats that one square and anchors it
-  //   - in line with the anchor -> applies to the whole run between them
-  //   - off the line (diagonal) -> starts over, becoming the new anchor
-  // Direction follows the clicked square: empty -> seat, seated -> empty.
+  // Shift+click sizes a rectangle from a fixed anchor, and only commits seating
+  // when the same rectangle is clicked twice:
+  //   - no run yet          -> anchor here, select this square, no seat change
+  //   - a different corner  -> re-size the rect (inside shrinks, outside grows)
+  //   - the same corner     -> COMMIT: seat the rect, or empty it if it is
+  //                            already fully seated
+  // The rect always replaces the selection, so squares outside it are dropped.
   if (shift) {
     enterSelectHandler();
-    const inLine = anchor && (anchor.r === r || anchor.c === c);
-    // A first Shift+click — or one off the anchor's line — starts a new run.
-    if (!inLine) anchor = { r, c };
-    // seatRange replaces the selection, so whatever the line covers becomes the
-    // whole selection and anything outside it is dropped.
-    seatRange(anchor.r, anchor.c, r, c, !isEnabled(r, c));
+
+    if (!anchor) {
+      anchor = { r, c };
+      corner = { r, c };
+      setSelectionRange(r, c, r, c);
+      return;
+    }
+
+    if (corner && corner.r === r && corner.c === c) {
+      // Same rectangle again — commit. A rect with any gap fills in; only an
+      // already-complete rect empties.
+      seatRange(anchor.r, anchor.c, r, c, !allSeatedInRange(anchor.r, anchor.c, r, c));
+      return;
+    }
+
+    corner = { r, c };
+    setSelectionRange(anchor.r, anchor.c, r, c);
     return;
   }
 
@@ -126,7 +140,10 @@ function fireTap(cell, mods = {}) {
   } else {
     toggleEnabled(r, c);
   }
+  // A plain click starts a run here, so a following Shift+click sizes a rect
+  // from this square (and a Shift+click back on it commits).
   anchor = { r, c };
+  corner = { r, c };
 }
 
 function fireEdit(cell) {

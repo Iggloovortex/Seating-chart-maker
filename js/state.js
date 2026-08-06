@@ -342,14 +342,28 @@ function toggleSelection(r, c) {
 }
 function clearSelection() { state.selection.clear(); emit(); }
 
-/** Add every square in the rectangle between two cells to the selection. */
-function selectRange(r1, c1, r2, c2) {
+/** Make the rectangle between two cells THE selection, without touching seats.
+ *  Used while Shift+click is sizing a rectangle: every click re-sizes the
+ *  selection, and only a repeat click on the same corner commits seating. */
+function setSelectionRange(r1, c1, r2, c2) {
   const rMin = Math.min(r1, r2), rMax = Math.max(r1, r2);
   const cMin = Math.min(c1, c2), cMax = Math.max(c1, c2);
   batch(() => {
+    state.selection.clear();
     for (let r = rMin; r <= rMax; r++)
       for (let c = cMin; c <= cMax; c++) state.selection.add(keyOf(r, c));
   });
+}
+
+/** True when every square in the rectangle is already seated. Drives the
+ *  Shift+click commit direction: a rect with any gap fills in, and only an
+ *  already-complete rect empties. */
+function allSeatedInRange(r1, c1, r2, c2) {
+  const rMin = Math.min(r1, r2), rMax = Math.max(r1, r2);
+  const cMin = Math.min(c1, c2), cMax = Math.max(c1, c2);
+  for (let r = rMin; r <= rMax; r++)
+    for (let c = cMin; c <= cMax; c++) if (!isEnabled(r, c)) return false;
+  return true;
 }
 
 /** Set the seat state of every square in the rectangle and make it THE
