@@ -76,7 +76,7 @@ function render(cell) {
     add.textContent = '+ Add label line';
     add.addEventListener('click', () => {
       const c = getCell(current.r, current.c);
-      c.labels.push({ text: '', color: state.defaults.labelColor });
+      c.labels.push({ text: '', color: defaultLabelColor(c.labels.length) });
       updateCell(current.r, current.c, {}); // emit
       render(peekCell(current.r, current.c));
       // focus the newly added input

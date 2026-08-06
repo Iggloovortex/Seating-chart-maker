@@ -100,6 +100,9 @@ function fireTap(cell, mods = {}) {
     enterSelectHandler();
     const a = anchor || { r, c };
     seatRange(a.r, a.c, r, c, !isEnabled(r, c));
+    // Keep the existing anchor so repeated Shift+clicks extend from the same
+    // origin; the first Shift+click (no anchor yet) establishes one.
+    if (!anchor) anchor = { r, c };
     return;
   }
 

@@ -24,10 +24,16 @@ const DEFAULTS = {
   fill: '#dbe7ff',
   border: '#2f6feb',
   labelColor: '#1f2933',
+  labelColor2: '#52606d',   // second label line (two lines are the norm)
   iconColor: '#1f2933',
   rowWeight: 1,
   colWeight: 1,
 };
+
+/** Default color for label line `index` (line 2 and beyond use labelColor2). */
+function defaultLabelColor(index) {
+  return index >= 1 ? state.defaults.labelColor2 : state.defaults.labelColor;
+}
 
 function makeCell() {
   // Newly created seats inherit the current default colors (see state.defaults);
@@ -52,6 +58,7 @@ const state = {
     border: DEFAULTS.border,
     iconColor: DEFAULTS.iconColor,
     labelColor: DEFAULTS.labelColor,
+    labelColor2: DEFAULTS.labelColor2,
   },
   grid: { cols: 6, rows: 5 },
   cells: new Map(),             // key "r,c" -> cell
@@ -287,6 +294,7 @@ function deserialize(data) {
       border: data.defaults?.border || DEFAULTS.border,
       iconColor: data.defaults?.iconColor || DEFAULTS.iconColor,
       labelColor: data.defaults?.labelColor || DEFAULTS.labelColor,
+      labelColor2: data.defaults?.labelColor2 || DEFAULTS.labelColor2,
     };
     state.grid = {
       cols: clampInt(data.grid?.cols, 1, 40, 6),

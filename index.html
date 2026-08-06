@@ -53,6 +53,9 @@
         <span class="toolbar__title">Seating Chart Maker</span>
       </div>
 
+      <!-- Middle column: entries on top, button bar underneath -->
+      <div class="toolbar__main">
+       <div class="toolbar__row toolbar__row--entries">
       <div class="toolbar__group toolbar__group--title" role="group" aria-label="Chart title">
         <label class="field field--title">
           <span class="field__label">Title</span>
@@ -94,14 +97,9 @@
         </label>
       </div>
 
-      <div class="toolbar__group toolbar__group--defaults" role="group" aria-label="Default colors">
-        <span class="field__label toolbar__deflabel">Defaults</span>
-        <input id="def-fill" type="color" class="field__input field__input--color" title="Default seat fill" aria-label="Default seat fill" />
-        <input id="def-border" type="color" class="field__input field__input--color" title="Default seat border" aria-label="Default seat border" />
-        <input id="def-icon" type="color" class="field__input field__input--color" title="Default icon color" aria-label="Default icon color" />
-        <input id="def-label" type="color" class="field__input field__input--color" title="Default label color" aria-label="Default label color" />
-      </div>
+       </div>
 
+       <div class="toolbar__row toolbar__row--actions">
       <div class="toolbar__group toolbar__group--actions">
         <button id="btn-select" class="btn btn--toggle" type="button" aria-pressed="false" title="Toggle table-select mode">Select</button>
         <button id="btn-preview" class="btn" type="button">Preview</button>
@@ -112,6 +110,33 @@
         <button id="btn-open-file" class="btn" type="button" title="Open a .seatchart file">Open</button>
         <button id="btn-clear" class="btn btn--ghost" type="button" title="Clear the chart">Clear</button>
         <input id="file-input" type="file" accept=".seatchart,application/json" hidden />
+      </div>
+       </div>
+      </div>
+
+      <!-- Default colors: spans both toolbar rows on the right -->
+      <div class="defaults" role="group" aria-label="Default colors">
+        <label class="defaults__item">
+          <span class="defaults__label">Fill</span>
+          <input id="def-fill" type="color" class="defaults__swatch" aria-label="Default seat fill" />
+        </label>
+        <label class="defaults__item">
+          <span class="defaults__label">Border</span>
+          <input id="def-border" type="color" class="defaults__swatch" aria-label="Default seat border" />
+        </label>
+        <label class="defaults__item">
+          <span class="defaults__label">Icon</span>
+          <input id="def-icon" type="color" class="defaults__swatch" aria-label="Default icon color" />
+        </label>
+        <label class="defaults__item">
+          <span class="defaults__label">Labels</span>
+          <input id="def-label" type="color" class="defaults__swatch" aria-label="Default label color, line 1" />
+        </label>
+        <span class="defaults__caption">Default Colors</span>
+        <label class="defaults__item">
+          <span class="defaults__label defaults__label--sub">Line 2</span>
+          <input id="def-label2" type="color" class="defaults__swatch" aria-label="Default label color, line 2" />
+        </label>
       </div>
     </header>
 

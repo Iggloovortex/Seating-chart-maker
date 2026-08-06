@@ -128,10 +128,86 @@ body {
 .field--title .field__input { width: 180px; }
 @media (max-width: 600px) { .field--title .field__input { width: 130px; } }
 
-/* Default-colors group: a compact row of swatches */
-.toolbar__group--defaults { gap: 4px; align-items: center; }
-.toolbar__deflabel { align-self: center; margin-right: 2px; }
-.toolbar__group--defaults .field__input--color { width: 34px; min-height: 34px; }
+/* Middle column: entry fields on top, button bar underneath (right-aligned so
+   the buttons sit under the title/cols/rows/paper entries). */
+.toolbar__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.toolbar__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 14px;
+}
+.toolbar__row--entries { justify-content: flex-end; }
+.toolbar__row--actions { justify-content: flex-end; }
+
+/* Default Colors block — spans both toolbar rows on the right.
+   4 columns of button-sized swatches with their names above; the second row
+   carries the section caption and the Line 2 swatch under "Labels". */
+.defaults {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  align-items: end;
+  gap: 6px 10px;
+  padding-left: 14px;
+  border-left: 1px solid var(--line);
+}
+.defaults__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.defaults__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.defaults__label--sub { font-size: 11px; font-style: italic; }
+.defaults__swatch {
+  /* button-sized, per the mockup */
+  width: 52px;
+  height: var(--tap);
+  padding: 3px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.defaults__swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Caption sits on the second row, spanning the first three columns. */
+.defaults__caption {
+  grid-column: 1 / 4;
+  justify-self: end;
+  align-self: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  /* Stack: brand, then entries + buttons, then the defaults block. */
+  .toolbar { flex-direction: column; align-items: stretch; }
+  .toolbar__brand { margin-right: 0; align-self: flex-start; }
+  .toolbar__row--entries,
+  .toolbar__row--actions { justify-content: flex-start; }
+  .defaults {
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding-top: 8px;
+    width: 100%;
+  }
+  .defaults__caption { grid-column: 1 / 4; justify-self: start; }
+  .defaults__swatch { width: 100%; min-width: 44px; }
+}
 .field__input--color {
   width: 48px;
   padding: 4px;
