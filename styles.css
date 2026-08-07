@@ -457,10 +457,11 @@ body {
 .table-shape--round { border-radius: 999px; }
 .table-shape--square { border-radius: 10px; }
 
-/* Corner grab handle for moving the selection */
+/* Corner grab handle for moving the selection. Sits above the insert guides so
+   a + button at the grid corner can never swallow the drag. */
 .move-handle {
   position: absolute;
-  z-index: 4;
+  z-index: 8;
   width: 26px;
   height: 26px;
   margin: -13px 0 0 -13px;   /* centred on the selection's top-left corner */
@@ -740,3 +741,105 @@ body {
   .btn { padding: 8px 11px; }
   .field__input--num { width: 58px; }
 }
+
+/* ===================== Toolbar left rail: brand + file icons ===================== */
+.toolbar__side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-right: auto;
+}
+.toolbar__brand { margin-right: 0; }
+
+.iconbar { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.iconbtn {
+  width: var(--tap);
+  height: var(--tap);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background .12s, border-color .12s, transform .04s;
+}
+.iconbtn:hover { background: var(--line); }
+.iconbtn:active { transform: translateY(1px); }
+.iconbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.iconbtn__svg { width: 22px; height: 22px; flex: 0 0 auto; }
+
+/* Colour per action so they are told apart at a glance */
+.iconbtn--new   { color: #546e7a; }
+.iconbtn--save  { color: #2e7d32; }
+.iconbtn--open  { color: #ef6c00; }
+.iconbtn--share { color: #6a1b9a; }
+.iconbtn--print { color: #1565c0; }
+.iconbtn--ok    { color: #fff; background: #2e7d32; border-color: #2e7d32; }
+
+@media (prefers-color-scheme: dark) {
+  .iconbtn--new   { color: #b0bec5; }
+  .iconbtn--save  { color: #81c784; }
+  .iconbtn--open  { color: #ffb74d; }
+  .iconbtn--share { color: #ce93d8; }
+  .iconbtn--print { color: #90caf9; }
+}
+
+/* Button that pairs an icon with a label (Select) */
+.btn--withicon { display: inline-flex; align-items: center; gap: 6px; }
+.btn--withicon .iconbtn__svg { width: 18px; height: 18px; }
+
+/* Rotate-orientation button; the icon flips when the page is portrait */
+.btn-rotate .iconbtn__svg { width: 20px; height: 20px; color: var(--accent); }
+.btn-rotate--portrait .iconbtn__svg { transform: rotate(90deg); }
+
+/* ===================== Row / column insert guides ===================== */
+.insert-guide {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;          /* only the + buttons take clicks */
+}
+.insert-guide--row {
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 3px solid var(--line-strong);
+  transform: translateY(-1.5px);
+}
+.insert-guide--col {
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 3px solid var(--line-strong);
+  transform: translateX(-1.5px);
+}
+
+.insert-add {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid var(--line-strong);
+  border-radius: 999px;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+}
+.insert-add:hover { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+
+.insert-guide--row .insert-add { top: -11px; }
+.insert-guide--row .insert-add--start { left: -11px; }
+.insert-guide--row .insert-add--end { right: -11px; }
+.insert-guide--col .insert-add { left: -11px; }
+.insert-guide--col .insert-add--start { top: -11px; }
+.insert-guide--col .insert-add--end { bottom: -11px; }

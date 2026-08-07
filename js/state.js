@@ -76,7 +76,9 @@ const state = {
   colWeights: [],               // per-col size weight
   tables: [],                   // [{ id, cellKeys:[], shape:'round'|'square', color }]
   paper: 'letter',              // preset id or { w, h, unit }
+  landscape: true,              // paper orientation; false swaps width/height
   selection: new Set(),         // keys highlighted in select mode
+  showTrueSizes: false,         // preview weighted row/col sizes in the grid
 };
 
 const keyOf = (r, c) => `${r},${c}`;
@@ -173,6 +175,23 @@ function rowWeight(r) { return state.rowWeights[r] || DEFAULTS.rowWeight; }
 function colWeight(c) { return state.colWeights[c] || DEFAULTS.colWeight; }
 
 function setPaper(paper) { state.paper = paper; emit(); }
+
+/** Show the weighted row/column sizes in the editing grid (a view option, so
+ *  it is not saved with the chart). */
+function toggleTrueSizes() { state.showTrueSizes = !state.showTrueSizes; emit(); }
+
+/** Put every row and column back to the default size. */
+function resetLineSizes() {
+  batch(() => {
+    state.rowWeights = [];
+    state.colWeights = [];
+    state.rowWeights.length = state.grid.rows;
+    state.colWeights.length = state.grid.cols;
+  });
+}
+
+/** Flip the page between landscape and portrait. */
+function toggleOrientation() { state.landscape = !state.landscape; emit(); }
 
 function setTitle(title) { state.title = title || ''; emit(); }
 
@@ -370,6 +389,44 @@ function selectionBounds() {
   return { minR, maxR, minC, maxC };
 }
 
+// ---------------------------------------------------------------- insert
+
+/** Shift every cell, table and selection key at or past `index` along one axis,
+ *  then grow the grid. Shared by row and column insertion. */
+function insertLine(axis, index) {
+  const isRow = axis === 'row';
+  const limit = isRow ? state.grid.rows : state.grid.cols;
+  if (index < 0 || index > limit || limit >= 40) return false;
+
+  const shift = (k) => {
+    const [r, c] = parseKey(k);
+    if (isRow) return r >= index ? keyOf(r + 1, c) : k;
+    return c >= index ? keyOf(r, c + 1) : k;
+  };
+
+  const moved = new Map();
+  for (const [k, cell] of state.cells) moved.set(shift(k), cell);
+  const sel = new Set([...state.selection].map(shift));
+
+  batch(() => {
+    state.cells = moved;
+    state.selection = sel;
+    for (const t of state.tables) t.cellKeys = t.cellKeys.map(shift);
+    const weights = isRow ? state.rowWeights : state.colWeights;
+    weights.splice(index, 0, undefined);          // the new line takes the default
+    if (isRow) state.grid = { ...state.grid, rows: state.grid.rows + 1 };
+    else state.grid = { ...state.grid, cols: state.grid.cols + 1 };
+    state.rowWeights.length = state.grid.rows;
+    state.colWeights.length = state.grid.cols;
+  });
+  return true;
+}
+
+/** Insert an empty row above row `index` (index === rows appends at the end). */
+function insertRow(index) { return insertLine('row', index); }
+/** Insert an empty column left of column `index` (index === cols appends). */
+function insertCol(index) { return insertLine('col', index); }
+
 // ---------------------------------------------------------------- selection
 
 function toggleSelection(r, c) {
@@ -519,6 +576,7 @@ function serialize() {
     colWeights: [...state.colWeights],
     tables: state.tables.map((t) => ({ ...t, cellKeys: [...t.cellKeys] })),
     paper: state.paper,
+    landscape: state.landscape,
   };
 }
 
@@ -549,6 +607,7 @@ function deserialize(data) {
       ? data.tables.map((t) => ({ id: t.id, shape: t.shape, color: t.color, cellKeys: [...(t.cellKeys || [])] }))
       : [];
     state.paper = data.paper || 'letter';
+    state.landscape = data.landscape !== false;
     state.selection = new Set();
     pruneTables();
   });

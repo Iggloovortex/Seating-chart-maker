@@ -37,9 +37,16 @@ function renderGrid() {
   const { cols, rows } = state.grid;
 
   // All cells share one square size, so the grid stays uniform as content grows.
+  // With "true sizes" on, the tracks take their row/column weights instead, so
+  // thinned walkways show in the grid the way they will in the output.
   const size = uniformCellSize();
-  chart.style.gridTemplateColumns = `repeat(${cols}, ${size}px)`;
-  chart.style.gridTemplateRows = `repeat(${rows}, ${size}px)`;
+  const track = (weight) => `${Math.max(8, Math.round(size * weight))}px`;
+  chart.style.gridTemplateColumns = state.showTrueSizes
+    ? Array.from({ length: cols }, (_, c) => track(colWeight(c))).join(' ')
+    : `repeat(${cols}, ${size}px)`;
+  chart.style.gridTemplateRows = state.showTrueSizes
+    ? Array.from({ length: rows }, (_, r) => track(rowWeight(r))).join(' ')
+    : `repeat(${rows}, ${size}px)`;
 
   chart.replaceChildren();
 
@@ -51,6 +58,106 @@ function renderGrid() {
 
   renderTables();
   renderMoveHandle();
+  buildInsertGuides();
+}
+
+// ---------------------------------------------------------------- insert guides
+//
+// Hovering near a grid line reveals a thin rule along it with a + at each end;
+// clicking either + inserts a row or column there. Only the line nearest the
+// pointer shows, and only while the pointer is close to it.
+
+const INSERT_REACH = 14;     // px from a grid line that reveals its guide
+let movingSelection = false; // true while the selection is being dragged
+let rowGuide = null, colGuide = null;
+
+function makeGuide(axis) {
+  const el = document.createElement('div');
+  el.className = `insert-guide insert-guide--${axis}`;
+  el.hidden = true;
+  for (const end of ['start', 'end']) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `insert-add insert-add--${end}`;
+    btn.textContent = '+';
+    const what = axis === 'row' ? 'row' : 'column';
+    btn.title = `Insert ${what} here`;
+    btn.setAttribute('aria-label', btn.title);
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const at = Number(el.dataset.index);
+      if (axis === 'row') insertRow(at); else insertCol(at);
+    });
+    el.appendChild(btn);
+  }
+  chart.appendChild(el);
+  return el;
+}
+
+function buildInsertGuides() {
+  rowGuide = makeGuide('row');
+  colGuide = makeGuide('col');
+}
+
+/** Boundary offsets (relative to .chart) for each grid line, plus the span the
+ *  guide should cover. Boundary i sits before row/col i; the last is the far edge. */
+function boundaries(axis) {
+  const { rows, cols } = state.grid;
+  const n = axis === 'row' ? rows : cols;
+  const chartRect = chart.getBoundingClientRect();
+  const out = [];
+  for (let i = 0; i <= n; i++) {
+    const at = Math.min(i, n - 1);
+    const el = chart.querySelector(`.cell[data-key="${CSS.escape(axis === 'row' ? keyOf(at, 0) : keyOf(0, at))}"]`);
+    if (!el) return [];
+    const r = el.getBoundingClientRect();
+    const lead = axis === 'row' ? r.top - chartRect.top : r.left - chartRect.left;
+    const tail = axis === 'row' ? r.bottom - chartRect.top : r.right - chartRect.left;
+    out.push(i < n ? lead : tail);
+  }
+  return out;
+}
+
+/** Show the guide for whichever grid line the pointer is closest to. */
+function updateInsertGuides(e) {
+  if (!rowGuide || !colGuide || movingSelection) return;
+  const chartRect = chart.getBoundingClientRect();
+  const x = e.clientX - chartRect.left;
+  const y = e.clientY - chartRect.top;
+  const zoom = parseFloat(getComputedStyle(chart).getPropertyValue('--zoom')) || 1;
+  const reach = INSERT_REACH * zoom;
+
+  const place = (guide, axis, along, across) => {
+    const bs = boundaries(axis);
+    let best = -1, bestD = Infinity;
+    bs.forEach((pos, i) => { const d = Math.abs(along - pos); if (d < bestD) { bestD = d; best = i; } });
+    // Only offer a line the pointer is near, and while it is beside the grid.
+    const width = axis === 'row' ? chart.clientWidth : chart.clientHeight;
+    const inRange = bestD <= reach && across >= -reach && across <= width + reach;
+    guide.hidden = !inRange;
+    if (!inRange) return;
+    guide.dataset.index = String(best);
+    if (axis === 'row') guide.style.top = `${bs[best]}px`;
+    else guide.style.left = `${bs[best]}px`;
+  };
+
+  place(rowGuide, 'row', y, x);
+  place(colGuide, 'col', x, y);
+}
+
+function hideInsertGuides() {
+  if (rowGuide) rowGuide.hidden = true;
+  if (colGuide) colGuide.hidden = true;
+}
+
+/** Wire the hover behaviour once; the stage is bigger than the chart so the
+ *  guides can also be reached from just outside its edges. */
+function initInsertGuides(stageEl) {
+  stageEl.addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'touch') return;   // touch has no hover to key off
+    updateInsertGuides(e);
+  });
+  stageEl.addEventListener('pointerleave', hideInsertGuides);
 }
 
 /** Corner grab handle for dragging the whole selection to a new spot. Shown at
@@ -93,6 +200,7 @@ function attachMoveDrag(handle, geo) {
   handle.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     e.stopPropagation();
+    hideInsertGuides();          // keep + buttons out of the drag's way
     handle.setPointerCapture(e.pointerId);
     // Step includes the grid gap, and is measured live so zoom is accounted for.
     const gap = parseFloat(getComputedStyle(chart).gap) || 0;
@@ -106,6 +214,7 @@ function attachMoveDrag(handle, geo) {
     preview.style.height = `${geo.height}px`;
     chart.appendChild(preview);
     drag.preview = preview;
+    movingSelection = true;
   });
 
   handle.addEventListener('pointermove', (e) => {
@@ -125,6 +234,7 @@ function attachMoveDrag(handle, geo) {
     const { dr, dc } = drag;
     drag.preview.remove();
     drag = null;
+    movingSelection = false;
     moveSelection(dr, dc); // false (no change) when it would leave the grid
   };
   handle.addEventListener('pointerup', finish);
@@ -243,3 +353,4 @@ function refreshTables() {
   renderTables();
   renderMoveHandle();
 }
+

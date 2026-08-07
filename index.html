@@ -42,15 +42,67 @@
       <symbol id="ic-star" viewBox="0 0 24 24">
         <path d="M12 3l2.5 5.3 5.5.8-4 4 1 5.6L12 16l-5 2.7 1-5.6-4-4 5.5-.8L12 3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
       </symbol>
+      <!-- UI icons (toolbar). Stroked with currentColor so CSS can colour them. -->
+      <symbol id="ui-new" viewBox="0 0 24 24">
+        <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M14 3v5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="ui-save" viewBox="0 0 24 24">
+        <path d="M5 3h11l3 3v15H5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M8 3v6h8V3M8 21v-6h8v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="ui-open" viewBox="0 0 24 24">
+        <path d="M3 6a1 1 0 0 1 1-1h5l2 2h8a1 1 0 0 1 1 1v2H3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M3 10h18l-2 9H5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="ui-share" viewBox="0 0 24 24">
+        <circle cx="18" cy="5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/>
+        <circle cx="6" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/>
+        <circle cx="18" cy="19" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M8.4 10.8l7.2-4.2M8.4 13.2l7.2 4.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="ui-print" viewBox="0 0 24 24">
+        <path d="M7 9V3h10v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M5 9h14a2 2 0 0 1 2 2v6h-4v4H7v-4H3v-6a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="ui-select" viewBox="0 0 24 24">
+        <rect x="3.5" y="3.5" width="17" height="17" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M7.5 12.5l3 3 6-6.5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="ui-rotate" viewBox="0 0 24 24">
+        <path d="M20 11a8 8 0 1 0-2.3 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M20 4v7h-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
     </defs>
   </svg>
 
   <div class="app">
     <!-- ===================== Toolbar ===================== -->
     <header class="toolbar">
-      <div class="toolbar__brand">
-        <span class="toolbar__logo" aria-hidden="true">🪑</span>
-        <span class="toolbar__title">Seating Chart Maker</span>
+      <div class="toolbar__side">
+        <div class="toolbar__brand">
+          <span class="toolbar__logo" aria-hidden="true">🪑</span>
+          <span class="toolbar__title">Seating Chart Maker</span>
+        </div>
+        <!-- File actions: icon-only, under the title -->
+        <div class="iconbar" role="group" aria-label="File actions">
+          <button id="btn-clear" class="iconbtn iconbtn--new" type="button" title="New — clear the chart" aria-label="New chart">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-new"/></svg>
+          </button>
+          <button id="btn-save-file" class="iconbtn iconbtn--save" type="button" title="Save File — download a .seatchart file" aria-label="Save file">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-save"/></svg>
+          </button>
+          <button id="btn-open-file" class="iconbtn iconbtn--open" type="button" title="Open a .seatchart file" aria-label="Open file">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-open"/></svg>
+          </button>
+          <button id="btn-copy-link" class="iconbtn iconbtn--share" type="button" title="Share — copy a link that reopens this layout" aria-label="Share link">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-share"/></svg>
+          </button>
+          <button id="btn-print" class="iconbtn iconbtn--print" type="button" title="Print / PDF" aria-label="Print or save as PDF">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-print"/></svg>
+          </button>
+          <input id="file-input" type="file" accept=".seatchart,application/json" hidden />
+        </div>
       </div>
 
       <!-- Middle column: entries on top, button bar underneath -->
@@ -80,6 +132,9 @@
           <span class="field__label">Paper</span>
           <select id="paper-size" class="field__input"></select>
         </label>
+        <button class="btn btn--icon btn-rotate" type="button" title="Rotate page orientation">
+          <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-rotate"/></svg>
+        </button>
         <label class="field field--custom-paper" hidden>
           <span class="field__label">W</span>
           <input id="paper-w" class="field__input field__input--num" type="number" min="1" step="0.1" value="11" inputmode="decimal" />
@@ -101,16 +156,13 @@
 
        <div class="toolbar__row toolbar__row--actions">
       <div class="toolbar__group toolbar__group--actions">
-        <button id="btn-select" class="btn btn--toggle" type="button" aria-pressed="false" title="Toggle table-select mode">Select</button>
-        <button id="btn-preview" class="btn" type="button">Preview</button>
-        <button id="btn-png" class="btn btn--primary" type="button">PNG</button>
-        <button id="btn-print" class="btn" type="button">Print / PDF</button>
-        <span class="toolbar__sep" aria-hidden="true"></span>
-        <button id="btn-save-file" class="btn" type="button" title="Download a .seatchart file">Save</button>
-        <button id="btn-open-file" class="btn" type="button" title="Open a .seatchart file">Open</button>
-        <button id="btn-copy-link" class="btn" type="button" title="Copy a link that reopens this layout">Copy link</button>
-        <button id="btn-clear" class="btn btn--ghost" type="button" title="Clear the chart">Clear</button>
-        <input id="file-input" type="file" accept=".seatchart,application/json" hidden />
+        <button id="btn-select" class="btn btn--toggle btn--withicon" type="button" aria-pressed="false" title="Toggle select mode">
+          <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-select"/></svg>
+          <span>Select</span>
+        </button>
+        <button id="btn-true-size" class="btn btn--toggle" type="button" aria-pressed="false" title="Show weighted row/column sizes in the grid">True size</button>
+        <button id="btn-reset-sizes" class="btn" type="button" title="Reset every row and column to the default size">Reset sizes</button>
+        <button id="btn-preview" class="btn btn--primary" type="button" title="Preview and export">Export</button>
       </div>
        </div>
       </div>
@@ -209,7 +261,7 @@
     <div class="modal__backdrop" data-close-preview></div>
     <section class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="preview-title">
       <header class="modal__head">
-        <h2 class="modal__title" id="preview-title">Preview</h2>
+        <h2 class="modal__title" id="preview-title">Preview &amp; Export</h2>
         <button class="btn btn--icon" type="button" data-close-preview aria-label="Close">✕</button>
       </header>
       <div class="modal__body">
@@ -219,8 +271,12 @@
       </div>
       <footer class="modal__foot">
         <button class="btn" type="button" data-close-preview>Close</button>
-        <button id="btn-preview-png" class="btn btn--primary" type="button">Download PNG</button>
+        <button class="btn btn--icon btn-rotate" type="button" title="Rotate page orientation">
+          <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-rotate"/></svg>
+        </button>
+        <button id="btn-preview-save" class="btn" type="button" title="Download a .seatchart file">Save File</button>
         <button id="btn-preview-print" class="btn" type="button">Print / PDF</button>
+        <button id="btn-preview-png" class="btn btn--primary" type="button">Download PNG</button>
       </footer>
     </section>
   </div>

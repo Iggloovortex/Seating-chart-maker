@@ -13,16 +13,39 @@ const PAPER_PRESETS = {
 
 const MM_PER_IN = 25.4;
 
-/** Resolve the active paper to inches: { w, h }. */
+/** Resolve the active paper to inches: { w, h }. Presets are stored landscape,
+ *  so portrait simply swaps the two. */
 function paperInches() {
   const p = state.paper;
+  let w, h;
   if (typeof p === 'string') {
     const preset = PAPER_PRESETS[p] || PAPER_PRESETS.letter;
-    return { w: preset.w, h: preset.h };
+    w = preset.w; h = preset.h;
+  } else {
+    const factor = p.unit === 'mm' ? 1 / MM_PER_IN : 1;   // custom { w, h, unit }
+    w = (p.w || 11) * factor; h = (p.h || 8.5) * factor;
   }
-  // custom { w, h, unit }
-  const factor = p.unit === 'mm' ? 1 / MM_PER_IN : 1;
-  return { w: (p.w || 11) * factor, h: (p.h || 8.5) * factor };
+  return state.landscape ? { w, h } : { w: h, h: w };
+}
+
+/** Label for the current orientation, used on the rotate buttons. */
+function orientationLabel() {
+  return state.landscape ? 'Landscape' : 'Portrait';
+}
+
+/** Point every rotate button at toggleOrientation and keep their titles fresh. */
+function initOrientationControls() {
+  const buttons = [...document.querySelectorAll('.btn-rotate')];
+  for (const btn of buttons) btn.addEventListener('click', () => toggleOrientation());
+  const sync = () => {
+    for (const btn of buttons) {
+      btn.title = `Page is ${orientationLabel()} — click to rotate`;
+      btn.setAttribute('aria-label', btn.title);
+      btn.classList.toggle('btn-rotate--portrait', !state.landscape);
+    }
+  };
+  subscribe(sync);
+  sync();
 }
 
 /** Aspect ratio (w / h) for laying out the preview box. */

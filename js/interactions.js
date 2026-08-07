@@ -140,10 +140,16 @@ function fireTap(cell, mods = {}) {
   } else {
     toggleEnabled(r, c);
   }
-  // A plain click starts a run here, so a following Shift+click sizes a rect
-  // from this square (and a Shift+click back on it commits).
-  anchor = { r, c };
-  corner = { r, c };
+  // Only clicks made IN select mode start a range. Outside select mode there is
+  // no anchor at all, so the first Shift+click always begins a fresh rectangle
+  // instead of stretching from whichever square happened to be clicked last.
+  if (selectMode) {
+    anchor = { r, c };
+    corner = { r, c };
+  } else {
+    anchor = null;
+    corner = null;
+  }
 }
 
 function fireEdit(cell) {

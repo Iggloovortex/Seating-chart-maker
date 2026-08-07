@@ -52,15 +52,28 @@ function reflectDefaults() {
 
 // ---- Paper, tables ---------------------------------------------------------
 initPaperControls();
+initOrientationControls();
 initTables();
+initInsertGuides(document.getElementById('stage'));
+
+// Grid view options
+const trueSizeBtn = document.getElementById('btn-true-size');
+trueSizeBtn.addEventListener('click', () => toggleTrueSizes());
+subscribe(() => trueSizeBtn.setAttribute('aria-pressed', String(state.showTrueSizes)));
+document.getElementById('btn-reset-sizes').addEventListener('click', () => resetLineSizes());
 
 // ---- Toolbar actions -------------------------------------------------------
 document.getElementById('btn-preview').addEventListener('click', showPreview);
-document.getElementById('btn-png').addEventListener('click', downloadPng);
+// Keep an open preview in step with orientation changes.
+subscribe(() => { if (!document.getElementById('preview').hidden) showPreview(); });
 document.getElementById('btn-print').addEventListener('click', printChart);
 
 document.getElementById('btn-preview-png').addEventListener('click', downloadPng);
 document.getElementById('btn-preview-print').addEventListener('click', printChart);
+document.getElementById('btn-preview-save').addEventListener('click', () => {
+  const name = prompt('Save as (file name):', 'seating-chart');
+  if (name !== null) exportFile(name || 'seating-chart');
+});
 document.querySelectorAll('[data-close-preview]').forEach((el) =>
   el.addEventListener('click', closePreview)
 );
@@ -94,9 +107,13 @@ linkBtn.addEventListener('click', async () => {
   const link = await buildShareLink();
   const ok = await copyText(link);
   if (ok) {
-    const original = linkBtn.textContent;
-    linkBtn.textContent = 'Copied!';
-    setTimeout(() => { linkBtn.textContent = original; }, 1500);
+    // Icon-only button, so confirm with a flash rather than swapping its text.
+    linkBtn.classList.add('iconbtn--ok');
+    linkBtn.title = 'Link copied';
+    setTimeout(() => {
+      linkBtn.classList.remove('iconbtn--ok');
+      linkBtn.title = 'Share — copy a link that reopens this layout';
+    }, 1500);
   } else {
     // Clipboard blocked (file:// is not a secure context): let them copy it.
     prompt('Copy this link to reopen the layout:', link);
