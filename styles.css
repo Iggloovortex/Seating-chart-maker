@@ -827,9 +827,42 @@ body {
 .btn--withicon { display: inline-flex; align-items: center; gap: 6px; }
 .btn--withicon .iconbtn__svg { width: 18px; height: 18px; }
 
-/* Rotate-orientation button; the icon flips when the page is portrait */
-.btn-rotate .iconbtn__svg { width: 20px; height: 20px; color: var(--accent); }
-.btn-rotate--portrait .iconbtn__svg { transform: rotate(90deg); }
+/* Rotate-orientation button: a spiral with the orientation's initial inside. */
+.btn-rotate .iconbtn__svg { width: 26px; height: 26px; color: var(--accent); }
+.btn-rotate__letter {
+  font: 700 10px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  fill: currentColor;
+}
+/* In the Export window it spells the orientation out instead of drawing it. */
+.btn-rotate--text { min-width: 6.5em; }
+
+/* Transient confirmation under a button — e.g. "Link copied" under Share.
+   Timed to match the button's own colour flash, so the two clear together. */
+.toast {
+  position: fixed;
+  transform: translateX(-50%);
+  z-index: 60;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #2e7d32;             /* same green as the button's .iconbtn--ok flash */
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  animation: toast-life 1.5s ease forwards;
+}
+@keyframes toast-life {
+  0%   { opacity: 0; transform: translate(-50%, -6px); }
+  14%  { opacity: 1; transform: translate(-50%, 0); }
+  62%  { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast { animation: toast-fade 1.5s steps(1, end) forwards; }
+  @keyframes toast-fade { 0% { opacity: 1; } 100% { opacity: 0; } }
+}
 
 /* ===================== Row / column insert guides ===================== */
 .insert-guide {

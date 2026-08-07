@@ -2,16 +2,31 @@
 // Landscape orientation (width > height), matching the README's "landscape letter" default.
 
 
-// Dimensions in inches (landscape).
+// Dimensions in inches, stored landscape (width > height). Portrait swaps them.
 const PAPER_PRESETS = {
-  letter:  { label: 'Letter (11×8.5")',  w: 11,    h: 8.5 },
-  legal:   { label: 'Legal (14×8.5")',   w: 14,    h: 8.5 },
-  tabloid: { label: 'Tabloid (17×11")',  w: 17,    h: 11 },
-  a4:      { label: 'A4 (11.69×8.27")',  w: 11.69, h: 8.27 },
-  a3:      { label: 'A3 (16.54×11.69")', w: 16.54, h: 11.69 },
+  letter:  { name: 'Letter',  w: 11,    h: 8.5 },
+  legal:   { name: 'Legal',   w: 14,    h: 8.5 },
+  tabloid: { name: 'Tabloid', w: 17,    h: 11 },
+  a4:      { name: 'A4',      w: 11.69, h: 8.27 },
+  a3:      { name: 'A3',      w: 16.54, h: 11.69 },
 };
 
 const MM_PER_IN = 25.4;
+
+/** Preset name plus its dimensions the way round the page currently sits, so
+ *  the dropdown reads "Letter (11×8.5")" landscape and "Letter (8.5×11")" portrait. */
+function presetLabel(id) {
+  const p = PAPER_PRESETS[id];
+  const [a, b] = state.landscape ? [p.w, p.h] : [p.h, p.w];
+  return `${p.name} (${a}×${b}")`;
+}
+
+/** A custom page's stored w/h read out for the current orientation, and the
+ *  inverse — what to store for a w/h typed while in that orientation. Both are
+ *  the same swap, so one helper covers reading and writing. */
+function orientedWH(w, h) {
+  return state.landscape ? { w, h } : { w: h, h: w };
+}
 
 /** Resolve the active paper to inches: { w, h }. Presets are stored landscape,
  *  so portrait simply swaps the two. */
@@ -33,7 +48,9 @@ function orientationLabel() {
   return state.landscape ? 'Landscape' : 'Portrait';
 }
 
-/** Point every rotate button at toggleOrientation and keep their titles fresh. */
+/** Point every rotate button at toggleOrientation, and keep everything that
+ *  spells out the orientation in step with it: the buttons, the Paper label,
+ *  the preset dimensions in the dropdown and the custom width/height boxes. */
 function initOrientationControls() {
   const buttons = [...document.querySelectorAll('.btn-rotate')];
   for (const btn of buttons) btn.addEventListener('click', () => toggleOrientation());
@@ -41,11 +58,41 @@ function initOrientationControls() {
     for (const btn of buttons) {
       btn.title = `Page is ${orientationLabel()} — click to rotate`;
       btn.setAttribute('aria-label', btn.title);
-      btn.classList.toggle('btn-rotate--portrait', !state.landscape);
+      // The Export window says it in words; the toolbar carries the spiral icon
+      // with the orientation's initial inside it.
+      if (btn.classList.contains('btn-rotate--text')) btn.textContent = orientationLabel();
+      const letter = btn.querySelector('.btn-rotate__letter');
+      if (letter) letter.textContent = state.landscape ? 'L' : 'P';
     }
+    const label = document.getElementById('paper-label');
+    if (label) label.textContent = `Paper (${orientationLabel()})`;
+    refreshPaperOptions();
+    reflectCustomSize();
   };
   subscribe(sync);
   sync();
+}
+
+/** Re-label the preset options in place so their dimensions follow the
+ *  orientation, without disturbing which one is chosen. */
+function refreshPaperOptions() {
+  const select = document.getElementById('paper-size');
+  if (!select) return;
+  for (const opt of select.options) {
+    if (PAPER_PRESETS[opt.value]) opt.textContent = presetLabel(opt.value);
+  }
+}
+
+/** Show a custom page's width and height the way round it currently prints. */
+function reflectCustomSize() {
+  const p = state.paper;
+  if (!p || typeof p !== 'object') return;
+  const wIn = document.getElementById('paper-w');
+  const hIn = document.getElementById('paper-h');
+  if (!wIn || !hIn) return;
+  const { w, h } = orientedWH(p.w, p.h);
+  wIn.value = w;
+  hIn.value = h;
 }
 
 /** Aspect ratio (w / h) for laying out the preview box. */
@@ -64,8 +111,8 @@ function initPaperControls() {
 
   // Populate presets + custom option.
   select.replaceChildren();
-  for (const [id, p] of Object.entries(PAPER_PRESETS)) {
-    select.appendChild(new Option(p.label, id));
+  for (const id of Object.keys(PAPER_PRESETS)) {
+    select.appendChild(new Option(presetLabel(id), id));
   }
   select.appendChild(new Option('Custom…', 'custom'));
 
@@ -76,7 +123,10 @@ function initPaperControls() {
 
   const apply = () => {
     if (select.value === 'custom') {
-      setPaper({ w: parseFloat(wIn.value) || 11, h: parseFloat(hIn.value) || 8.5, unit: unitIn.value });
+      // The boxes read out the page as it prints; store it the canonical way
+      // round (landscape) so rotating keeps swapping cleanly.
+      const typed = orientedWH(parseFloat(wIn.value) || 11, parseFloat(hIn.value) || 8.5);
+      setPaper({ w: typed.w, h: typed.h, unit: unitIn.value });
     } else {
       setPaper(select.value);
     }
@@ -91,6 +141,7 @@ function initPaperControls() {
 
 /** Push current state.paper into the controls. */
 function reflectPaper() {
+  refreshPaperOptions();
   reflect(
     document.getElementById('paper-size'),
     document.getElementById('paper-w'),
@@ -106,8 +157,9 @@ function reflect(select, wIn, hIn, unitIn, syncCustomVisibility) {
     select.value = p;
   } else if (p && typeof p === 'object') {
     select.value = 'custom';
-    wIn.value = p.w;
-    hIn.value = p.h;
+    const { w, h } = orientedWH(p.w, p.h);   // shown the way round it prints
+    wIn.value = w;
+    hIn.value = h;
     unitIn.value = p.unit || 'in';
   } else {
     select.value = 'letter';

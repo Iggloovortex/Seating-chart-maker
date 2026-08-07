@@ -101,19 +101,37 @@ fileInput.addEventListener('change', async () => {
   fileInput.value = '';
 });
 
+// How long the copy confirmation stays up. The toast's fade-out is timed to the
+// same span in CSS, so the label and the green flash leave together.
+const CONFIRM_MS = 1500;
+
+/** A small message that appears under `anchor` and fades away on its own. */
+function showToast(anchor, text) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.setAttribute('role', 'status');
+  el.textContent = text;
+  document.body.appendChild(el);
+  const box = anchor.getBoundingClientRect();
+  el.style.left = `${box.left + box.width / 2}px`;
+  el.style.top = `${box.bottom + 8}px`;
+  setTimeout(() => el.remove(), CONFIRM_MS);
+}
+
 // Copy a link that reopens this layout. Briefly confirms on the button itself.
 const linkBtn = document.getElementById('btn-copy-link');
 linkBtn.addEventListener('click', async () => {
   const link = await buildShareLink();
   const ok = await copyText(link);
   if (ok) {
-    // Icon-only button, so confirm with a flash rather than swapping its text.
+    // Icon-only button, so confirm with a flash plus a label beneath it.
     linkBtn.classList.add('iconbtn--ok');
     linkBtn.title = 'Link copied';
+    showToast(linkBtn, 'Link copied');
     setTimeout(() => {
       linkBtn.classList.remove('iconbtn--ok');
       linkBtn.title = 'Share — copy a link that reopens this layout';
-    }, 1500);
+    }, CONFIRM_MS);
   } else {
     // Clipboard blocked (file:// is not a secure context): let them copy it.
     prompt('Copy this link to reopen the layout:', link);
