@@ -28,7 +28,6 @@ const DEFAULTS = {
   iconColor: '#1f2933',
   rowWeight: 1,
   colWeight: 1,
-  chairScale: 0.7,          // chairs draw smaller than a desk by default
 };
 
 /** A square acts as a "chair" when its icon is the chair: it is furniture
@@ -51,7 +50,6 @@ function makeCell() {
     labels: [],                 // [{ text, color }]
     icon: null,                 // icon id from icons.js
     iconColor: state.defaults.iconColor,
-    chairScale: DEFAULTS.chairScale, // size of the chair within its square
 
     rotation: 0,                // 0 | 90 | 180 | 270
     fill: state.defaults.fill,
@@ -304,7 +302,6 @@ function copySquareFrom(r, c) {
     icon: cell.icon,
     iconColor: cell.iconColor,
     rotation: cell.rotation,
-    chairScale: cell.chairScale,
     labels: (cell.labels || []).map((l) => ({ text: l.text, color: l.color })),
   };
   emit();
@@ -326,7 +323,6 @@ function pasteSquareTo(keys) {
       cell.icon = f.icon;
       cell.iconColor = f.iconColor;
       cell.rotation = f.rotation;
-      cell.chairScale = f.chairScale;
       // Fresh objects per target so squares never share label instances.
       cell.labels = f.labels.map((l) => ({ text: l.text, color: l.color }));
     }

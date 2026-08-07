@@ -2,7 +2,11 @@
 // paper (landscape). Powers Preview, PNG download, and Print / Save-as-PDF.
 
 
-const MAX_DIM = 4000; // cap canvas pixels for memory safety
+const MAX_DIM = 4000;      // cap canvas pixels for memory safety
+const CHAIR_SCALE = 0.7;   // a chair's share of its square — furniture, not a desk
+
+/** Which neighbouring square each rotation faces, as [rowStep, colStep]. */
+const FACING_STEP = { 0: [-1, 0], 90: [0, 1], 180: [1, 0], 270: [0, -1] };
 
 /** Render the current chart onto a fresh canvas. Returns a Promise<canvas>. */
 async function renderToCanvas(dpi = 300) {
@@ -88,7 +92,7 @@ async function renderToCanvas(dpi = 300) {
 
   // 2) Connected desks — chairs draw as small furniture instead.
   for (const d of desks) {
-    if (isChairCell(d.data)) drawChair(ctx, rectOf(d.r, d.c), d.data, imgCache);
+    if (isChairCell(d.data)) drawChair(ctx, rectOf, d, imgCache);
     else drawDesk(ctx, rectOf, d, deskSet, imgCache);
   }
 
@@ -125,25 +129,36 @@ function drawDesk(ctx, rectOf, { r, c, data }, deskSet, imgCache) {
   drawContent(ctx, x + w / 2, y + h / 2, w, h, data, imgCache, false);
 }
 
-/** A chair: standalone furniture drawn at `chairScale` of its square, centered.
- *  Because it is scaled rather than filling the cell, it still reads correctly
- *  when its row/column has been thinned into a walkway. */
-function drawChair(ctx, rect, data, imgCache) {
-  const scale = data.chairScale || 0.7;
-  const size = Math.min(rect.w, rect.h) * scale;
+/** A chair: standalone furniture drawn at a fixed fraction of its square. It is
+ *  scaled rather than filling the cell, so a chair standing in a thinned
+ *  row/column shrinks with it and stays inside the walkway. */
+function drawChair(ctx, rectOf, { r, c, data }, imgCache) {
+  const rect = rectOf(r, c);
+  const size = Math.min(rect.w, rect.h) * CHAIR_SCALE;
 
   // Sit flush against the edge the chair faces, so it tucks up to the desk or
-  // table in that direction instead of floating in the middle of its square.
-  // The other axis stays centred. A hair of inset keeps the two borders from
-  // merging into one thick line.
+  // table in that direction instead of floating in the middle of its square. A
+  // hair of inset keeps the two borders from merging into one thick line.
   const inset = size * 0.04;
   let cx = rect.x + rect.w / 2;
   let cy = rect.y + rect.h / 2;
-  switch (data.rotation || 0) {
+  const rot = data.rotation || 0;
+  switch (rot) {
     case 0:   cy = rect.y + size / 2 + inset; break;              // faces up
     case 90:  cx = rect.x + rect.w - size / 2 - inset; break;     // faces right
     case 180: cy = rect.y + rect.h - size / 2 - inset; break;     // faces down
     case 270: cx = rect.x + size / 2 + inset; break;              // faces left
+  }
+
+  // Across the other axis, line the chair up with the square it is pulled up
+  // to rather than with its own. Thinning a walkway shifts every square after
+  // it along that row or column, so a chair's own cell often no longer sits
+  // under the middle of the desk it belongs to.
+  const [dr, dc] = FACING_STEP[rot] || FACING_STEP[0];
+  const faced = isEnabled(r + dr, c + dc) ? rectOf(r + dr, c + dc) : null;
+  if (faced) {
+    if (dr) cx = faced.x + faced.w / 2;   // facing up/down → align horizontally
+    else    cy = faced.y + faced.h / 2;   // facing left/right → align vertically
   }
   const x = cx - size / 2, y = cy - size / 2;
 
@@ -173,11 +188,11 @@ function drawTableSeat(ctx, rectOf, { r, c, data, fp }, imgCache) {
   dx /= len; dy /= len;
 
   const base = Math.min(rect.w, rect.h);
-  // Chairs — explicit (chair icon) or implicit (a bare ring seat) — honour their
-  // own scale; labelled/iconed seats use the standard gathered size.
+  // Chairs — explicit (chair icon) or implicit (a bare ring seat) — draw at the
+  // chair size; labelled/iconed seats use the standard gathered size.
   const labelled = (data.labels || []).some((l) => l.text && l.text.trim());
   const isChair = data.icon === 'chair' || (!data.icon && !labelled);
-  const size = base * (isChair ? (data.chairScale || 0.7) : 0.62);
+  const size = base * (isChair ? CHAIR_SCALE : 0.62);
   const shift = base * 0.18;           // nudge toward the table
   const cx = seatCx + dx * shift, cy = seatCy + dy * shift;
   const x = cx - size / 2, y = cy - size / 2;
@@ -303,17 +318,46 @@ function fitText(ctx, text, maxW) {
 
 // ---------------------------------------------------------------- actions
 
+// A pasteable data: URL has to carry the whole image inline, so it is rendered
+// at screen resolution rather than print resolution to stay a sane length.
+const IMAGE_LINK_DPI = 150;
+
+/** The chart as a PNG blob. */
+async function chartPngBlob(dpi = 300) {
+  const canvas = await renderToCanvas(dpi);
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+}
+
 async function downloadPng() {
-  const canvas = await renderToCanvas(300);
-  canvas.toBlob((blob) => {
-    if (!blob) return;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'seating-chart.png';
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }, 'image/png');
+  const blob = await chartPngBlob(300);
+  if (!blob) return false;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'seating-chart.png';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return true;
+}
+
+/** Put the rendered chart on the clipboard as an image. Needs a secure context,
+ *  so it fails over file:// — the caller offers Download instead. */
+async function copyPngToClipboard() {
+  try {
+    const blob = await chartPngBlob(300);
+    if (!blob || !navigator.clipboard?.write) return false;
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Copy a data: URL of the rendered chart — a link that opens the image itself,
+ *  with nothing hosted anywhere. */
+async function copyPngLink() {
+  const canvas = await renderToCanvas(IMAGE_LINK_DPI);
+  return copyText(canvas.toDataURL('image/png'));
 }
 
 async function showPreview() {

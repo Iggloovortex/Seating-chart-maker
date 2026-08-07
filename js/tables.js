@@ -14,6 +14,10 @@ function initTables() {
     active = on;
     setSelectMode(on);
     selectBtn.setAttribute('aria-pressed', String(on));
+    // Icon-only button: the box itself says whether select mode is on.
+    document.getElementById('select-icon')
+      .setAttribute('href', on ? '#ui-select' : '#ui-select-off');
+    selectBtn.title = on ? 'Select mode — on' : 'Select mode — off';
     bar.hidden = !on;
     if (!on) clearSelection();
     stageHint.style.display = on ? 'none' : '';

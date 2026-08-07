@@ -61,6 +61,8 @@ function initOrientationControls() {
       // The Export window says it in words; the toolbar carries the spiral icon
       // with the orientation's initial inside it.
       if (btn.classList.contains('btn-rotate--text')) btn.textContent = orientationLabel();
+      const ring = btn.querySelector('.btn-rotate__ring');
+      if (ring) ring.setAttribute('href', state.landscape ? '#ui-orient-l' : '#ui-orient-p');
       const letter = btn.querySelector('.btn-rotate__letter');
       if (letter) letter.textContent = state.landscape ? 'L' : 'P';
     }

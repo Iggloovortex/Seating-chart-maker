@@ -827,10 +827,11 @@ body {
 .btn--withicon { display: inline-flex; align-items: center; gap: 6px; }
 .btn--withicon .iconbtn__svg { width: 18px; height: 18px; }
 
-/* Rotate-orientation button: a spiral with the orientation's initial inside. */
-.btn-rotate .iconbtn__svg { width: 26px; height: 26px; color: var(--accent); }
+/* Rotate-orientation button: a broken ring with the orientation's initial in
+   the middle. Drawn in the text colour so it stays legible in either scheme. */
+.btn-rotate .iconbtn__svg { width: 26px; height: 26px; color: var(--ink); }
 .btn-rotate__letter {
-  font: 700 10px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: 700 12px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   fill: currentColor;
 }
 /* In the Export window it spells the orientation out instead of drawing it. */
@@ -844,7 +845,6 @@ body {
   z-index: 60;
   padding: 6px 12px;
   border-radius: 999px;
-  background: #2e7d32;             /* same green as the button's .iconbtn--ok flash */
   color: #fff;
   font-size: 13px;
   font-weight: 600;
@@ -859,9 +859,26 @@ body {
   62%  { opacity: 1; transform: translate(-50%, 0); }
   100% { opacity: 0; transform: translate(-50%, 0); }
 }
+/* Green for a copied link, matching .iconbtn--ok / .btn--ok; blue for the image
+   actions, so the two confirmations are told apart at a glance. */
+.toast--ok    { background: #2e7d32; }
+.toast--image { background: #1565c0; }
 @media (prefers-reduced-motion: reduce) {
   .toast { animation: toast-fade 1.5s steps(1, end) forwards; }
   @keyframes toast-fade { 0% { opacity: 1; } 100% { opacity: 0; } }
+}
+
+/* Confirmation flash for a full-size button (the icon rail uses .iconbtn--ok).
+   Each matches its toast: green confirms a copied link, blue an image action. */
+.btn--ok, .btn--ok:hover {
+  background: #2e7d32;
+  border-color: #2e7d32;
+  color: #fff;
+}
+.btn--ok-image, .btn--ok-image:hover {
+  background: #1565c0;
+  border-color: #1565c0;
+  color: #fff;
 }
 
 /* ===================== Row / column insert guides ===================== */
@@ -912,3 +929,60 @@ body {
 .insert-guide--col .insert-add { left: -11px; }
 .insert-guide--col .insert-add--start { top: -11px; }
 .insert-guide--col .insert-add--end { bottom: -11px; }
+
+/* A line shown purely as context while its menu item is hovered carries no +,
+   and takes the accent colour so it reads through the open menu beside it. */
+.insert-guide--preview .insert-add { display: none; }
+.insert-guide--preview.insert-guide--row { border-top-color: var(--accent); }
+.insert-guide--preview.insert-guide--col { border-left-color: var(--accent); }
+
+/* At a grid corner the row and column lines cross, so a single + stands there
+   and its menu asks which one you meant. */
+.insert-corner {
+  position: absolute;
+  z-index: 7;
+  transform: translate(-50%, -50%);
+}
+.insert-menu {
+  position: absolute;
+  z-index: 9;
+  margin: 14px 0 0 14px;         /* clear of the + it belongs to */
+}
+.insert-menu--left { transform: translateX(-100%); margin-left: -14px; }
+.insert-menu--up   { margin-top: -14px; }
+.insert-menu--up:not(.insert-menu--left)  { transform: translateY(-100%); }
+.insert-menu--up.insert-menu--left { transform: translate(-100%, -100%); }
+
+/* ===================== Small pop-up menus ===================== */
+.menu-anchor { position: relative; display: inline-flex; }
+.popmenu {
+  position: absolute;
+  z-index: 40;
+  min-width: 12em;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+/* In the Export footer the menu opens upward, above its button. */
+.menu-anchor .popmenu { bottom: calc(100% + 6px); right: 0; }
+.popmenu__item {
+  appearance: none;
+  padding: 9px 12px;
+  min-height: var(--tap);
+  text-align: left;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.popmenu__item:hover,
+.popmenu__item:focus-visible { background: var(--accent); color: var(--accent-ink); }
+.popmenu__item:disabled { opacity: .5; cursor: default; }

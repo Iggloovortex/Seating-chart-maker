@@ -68,8 +68,39 @@ document.getElementById('btn-preview').addEventListener('click', showPreview);
 subscribe(() => { if (!document.getElementById('preview').hidden) showPreview(); });
 document.getElementById('btn-print').addEventListener('click', printChart);
 
-document.getElementById('btn-preview-png').addEventListener('click', downloadPng);
 document.getElementById('btn-preview-print').addEventListener('click', printChart);
+
+// ---- Save Image: one button, a small menu of three ways to take the image ---
+const imageBtn = document.getElementById('btn-preview-png');
+const imageMenu = document.getElementById('image-menu');
+const setImageMenu = (open) => {
+  imageMenu.hidden = !open;
+  imageBtn.setAttribute('aria-expanded', String(open));
+};
+imageBtn.addEventListener('click', (e) => { e.stopPropagation(); setImageMenu(imageMenu.hidden); });
+document.addEventListener('pointerdown', (e) => {
+  if (!imageMenu.hidden && !e.target.closest('.menu-anchor')) setImageMenu(false);
+});
+
+// Each action confirms the same way Share does, in the image tone.
+const IMAGE_ACTIONS = {
+  copy:     { run: copyPngToClipboard, done: 'Image copied',
+              fail: 'Copying images needs the page served over http(s) — use Download Image.' },
+  link:     { run: copyPngLink, done: 'Image link copied',
+              fail: 'Clipboard unavailable here — use Download Image.' },
+  download: { run: downloadPng, done: 'Image downloaded' },
+};
+for (const item of imageMenu.querySelectorAll('[data-image]')) {
+  item.addEventListener('click', async () => {
+    const action = IMAGE_ACTIONS[item.dataset.image];
+    setImageMenu(false);
+    item.disabled = true;
+    const ok = await action.run();
+    item.disabled = false;
+    if (ok) confirmOn(imageBtn, action.done, { tone: 'image', flash: 'btn--ok-image' });
+    else alert(action.fail);
+  });
+}
 document.getElementById('btn-preview-save').addEventListener('click', () => {
   const name = prompt('Save as (file name):', 'seating-chart');
   if (name !== null) exportFile(name || 'seating-chart');
@@ -105,38 +136,44 @@ fileInput.addEventListener('change', async () => {
 // same span in CSS, so the label and the green flash leave together.
 const CONFIRM_MS = 1500;
 
-/** A small message that appears under `anchor` and fades away on its own. */
-function showToast(anchor, text) {
+/** A small message that appears under `anchor` and fades away on its own.
+ *  `tone` picks its colour — green for a copied link, blue for image actions. */
+function showToast(anchor, text, tone = 'ok') {
   const el = document.createElement('div');
-  el.className = 'toast';
+  el.className = `toast toast--${tone}`;
   el.setAttribute('role', 'status');
   el.textContent = text;
   document.body.appendChild(el);
   const box = anchor.getBoundingClientRect();
   el.style.left = `${box.left + box.width / 2}px`;
-  el.style.top = `${box.bottom + 8}px`;
+  // Buttons low on the screen get the toast above them instead of off-screen.
+  const below = box.bottom + 8;
+  if (below + 40 > window.innerHeight) el.style.top = `${box.top - 38}px`;
+  else el.style.top = `${below}px`;
   setTimeout(() => el.remove(), CONFIRM_MS);
 }
 
+/** Flash a button and float a confirmation under it, then put both back. */
+function confirmOn(btn, text, { tone = 'ok', flash = 'iconbtn--ok' } = {}) {
+  const title = btn.title;
+  btn.classList.add(flash);
+  btn.title = text;
+  showToast(btn, text, tone);
+  setTimeout(() => { btn.classList.remove(flash); btn.title = title; }, CONFIRM_MS);
+}
+
 // Copy a link that reopens this layout. Briefly confirms on the button itself.
-const linkBtn = document.getElementById('btn-copy-link');
-linkBtn.addEventListener('click', async () => {
+async function copyShareLink(btn, flash) {
   const link = await buildShareLink();
-  const ok = await copyText(link);
-  if (ok) {
-    // Icon-only button, so confirm with a flash plus a label beneath it.
-    linkBtn.classList.add('iconbtn--ok');
-    linkBtn.title = 'Link copied';
-    showToast(linkBtn, 'Link copied');
-    setTimeout(() => {
-      linkBtn.classList.remove('iconbtn--ok');
-      linkBtn.title = 'Share — copy a link that reopens this layout';
-    }, CONFIRM_MS);
-  } else {
-    // Clipboard blocked (file:// is not a secure context): let them copy it.
-    prompt('Copy this link to reopen the layout:', link);
-  }
-});
+  if (await copyText(link)) confirmOn(btn, 'Link copied', { flash });
+  // Clipboard blocked (file:// is not a secure context): let them copy it.
+  else prompt('Copy this link to reopen the layout:', link);
+}
+
+const linkBtn = document.getElementById('btn-copy-link');
+linkBtn.addEventListener('click', () => copyShareLink(linkBtn, 'iconbtn--ok'));
+document.getElementById('btn-preview-share')
+  .addEventListener('click', (e) => copyShareLink(e.currentTarget, 'btn--ok'));
 
 document.getElementById('btn-clear').addEventListener('click', () => {
   if (confirm('Clear the whole chart? This cannot be undone.')) clearAll();

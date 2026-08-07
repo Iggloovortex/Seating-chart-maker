@@ -69,16 +69,22 @@
         <rect x="3.5" y="3.5" width="17" height="17" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/>
         <path d="M7.5 12.5l3 3 6-6.5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
       </symbol>
-      <!-- Orientation: a spiral winding inward, arrow-tipped. Its middle is left
-           clear so the button can drop a P or an L into it. -->
-      <symbol id="ui-rotate" viewBox="0 0 24 24">
-        <!-- Each half turn is an arc whose chord is its diameter, with the centre
-             stepped left each time — that is what makes the radius shrink and
-             the turns read as a spiral rather than as concentric rings. -->
-        <path d="M23 12A9.95 9.95 0 0 1 3.1 12 7.95 7.95 0 0 1 19 12 7.4 7.4 0 0 1 11.6 19.4"
-              fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
-        <path d="M13.6 18 11.6 19.4l2 1.4" fill="none" stroke="currentColor"
-              stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+      <symbol id="ui-select-off" viewBox="0 0 24 24">
+        <rect x="3.5" y="3.5" width="17" height="17" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      </symbol>
+      <!-- Orientation: a broken ring with a solid arrowhead at the open end, its
+           middle left clear for the button's L or P. The two are mirror images —
+           the landscape arrow sweeps clockwise off the top-right, the portrait
+           one anticlockwise off the bottom-right. -->
+      <symbol id="ui-orient-l" viewBox="0 0 24 24">
+        <path d="M18.43 17.4A8.4 8.4 0 1 1 16.2 4.73" fill="none" stroke="currentColor"
+              stroke-width="2.6" stroke-linecap="round"/>
+        <path d="M19.84 6.83 13.88 6.74 16.78 1.72Z" fill="currentColor"/>
+      </symbol>
+      <symbol id="ui-orient-p" viewBox="0 0 24 24">
+        <path d="M18.43 6.6A8.4 8.4 0 1 0 16.2 19.27" fill="none" stroke="currentColor"
+              stroke-width="2.6" stroke-linecap="round"/>
+        <path d="M19.84 17.17 13.88 17.26 16.78 22.28Z" fill="currentColor"/>
       </symbol>
     </defs>
   </svg>
@@ -141,8 +147,8 @@
         </label>
         <button class="btn btn--icon btn-rotate" type="button" title="Rotate page orientation">
           <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true">
-            <use href="#ui-rotate"/>
-            <text class="btn-rotate__letter" x="12" y="11.4" dominant-baseline="central" text-anchor="middle">L</text>
+            <use class="btn-rotate__ring" href="#ui-orient-l"/>
+            <text class="btn-rotate__letter" x="12" y="12" dominant-baseline="central" text-anchor="middle">L</text>
           </svg>
         </button>
         <label class="field field--custom-paper" hidden>
@@ -166,9 +172,8 @@
 
        <div class="toolbar__row toolbar__row--actions">
       <div class="toolbar__group toolbar__group--actions">
-        <button id="btn-select" class="btn btn--toggle btn--withicon" type="button" aria-pressed="false" title="Toggle select mode">
-          <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-select"/></svg>
-          <span>Select</span>
+        <button id="btn-select" class="btn btn--icon btn--toggle" type="button" aria-pressed="false" title="Select mode" aria-label="Select mode">
+          <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use id="select-icon" href="#ui-select-off"/></svg>
         </button>
         <button id="btn-true-size" class="btn btn--toggle" type="button" aria-pressed="false" title="Show weighted row/column sizes in the grid">True size</button>
         <button id="btn-reset-sizes" class="btn" type="button" title="Reset every row and column to the default size">Reset sizes</button>
@@ -280,11 +285,21 @@
         </div>
       </div>
       <footer class="modal__foot">
-        <button class="btn" type="button" data-close-preview>Close</button>
         <button class="btn btn-rotate btn-rotate--text" type="button" title="Rotate page orientation">Landscape</button>
         <button id="btn-preview-save" class="btn" type="button" title="Download a .seatchart file">Save File</button>
+        <button id="btn-preview-share" class="btn" type="button" title="Copy a link that reopens this layout">Share Link</button>
         <button id="btn-preview-print" class="btn" type="button">Print / PDF</button>
-        <button id="btn-preview-png" class="btn btn--primary" type="button">Download PNG</button>
+        <!-- Save Image opens a small menu; the menu is anchored to this wrapper. -->
+        <div class="menu-anchor">
+          <button id="btn-preview-png" class="btn btn--primary" type="button"
+                  aria-haspopup="true" aria-expanded="false" title="Copy or download the rendered chart">Save Image ▾</button>
+          <div id="image-menu" class="popmenu" role="menu" hidden>
+            <button class="popmenu__item" type="button" role="menuitem" data-image="copy">Copy Image</button>
+            <button class="popmenu__item" type="button" role="menuitem" data-image="link">Copy Link to Image</button>
+            <button class="popmenu__item" type="button" role="menuitem" data-image="download">Download Image</button>
+          </div>
+        </div>
+        <button class="btn" type="button" data-close-preview>Close</button>
       </footer>
     </section>
   </div>

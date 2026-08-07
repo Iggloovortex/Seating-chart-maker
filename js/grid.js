@@ -85,13 +85,17 @@ function trueSizeRects(size) {
 
 // ---------------------------------------------------------------- insert guides
 //
-// Hovering near a grid line reveals a thin rule along it with a + at each end;
-// clicking either + inserts a row or column there. Only the line nearest the
-// pointer shows, and only while the pointer is close to it.
+// Inserts are offered from the OUTER border of the grid only — never from the
+// seam between two squares in the middle, where a stray + would sit on top of
+// the chart you are editing. Running the pointer down the left or right edge
+// reveals a rule along the nearest row line with a + at each end; along the top
+// or bottom edge it does the same for columns. At a corner both lines meet, so
+// a single + appears instead and asks which one you meant.
 
-const INSERT_REACH = 14;     // px from a grid line that reveals its guide
+const INSERT_REACH = 14;     // px from the border that reveals a guide
 let movingSelection = false; // true while the selection is being dragged
-let rowGuide = null, colGuide = null;
+let rowGuide = null, colGuide = null, cornerBtn = null, cornerMenu = null;
+let cornerMenuOpen = false;
 
 function makeGuide(axis) {
   const el = document.createElement('div');
@@ -116,67 +120,166 @@ function makeGuide(axis) {
   return el;
 }
 
+/** The corner +: one button standing where a row line and a column line cross,
+ *  with a two-item menu behind it. Hovering an item previews that line. */
+function makeCorner() {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'insert-add insert-corner';
+  btn.textContent = '+';
+  btn.title = 'Insert a row or a column here';
+  btn.setAttribute('aria-label', btn.title);
+  btn.setAttribute('aria-haspopup', 'true');
+  btn.hidden = true;
+  btn.addEventListener('click', (e) => { e.stopPropagation(); openCornerMenu(); });
+  chart.appendChild(btn);
+
+  cornerMenu = document.createElement('div');
+  cornerMenu.className = 'popmenu insert-menu';
+  cornerMenu.setAttribute('role', 'menu');
+  cornerMenu.hidden = true;
+  for (const axis of ['row', 'col']) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'popmenu__item';
+    item.setAttribute('role', 'menuitem');
+    item.dataset.axis = axis;
+    item.textContent = axis === 'row' ? 'Insert row' : 'Insert column';
+    item.addEventListener('pointerenter', () => previewInsertLine(axis));
+    item.addEventListener('pointerleave', () => previewInsertLine(null));
+    item.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const at = Number(axis === 'row' ? btn.dataset.rowIndex : btn.dataset.colIndex);
+      closeCornerMenu();
+      if (axis === 'row') insertRow(at); else insertCol(at);
+    });
+    cornerMenu.appendChild(item);
+  }
+  chart.appendChild(cornerMenu);
+  return btn;
+}
+
 function buildInsertGuides() {
   rowGuide = makeGuide('row');
   colGuide = makeGuide('col');
+  cornerBtn = makeCorner();
+  cornerMenuOpen = false;   // a re-render throws the old menu away
 }
 
-/** Boundary offsets (relative to .chart) for each grid line, plus the span the
- *  guide should cover. Boundary i sits before row/col i; the last is the far edge. */
+/** Offset of each grid line, in the chart's own layout pixels. Boundary i sits
+ *  before row/column i and the last one is the far edge — each centred in the
+ *  gap between the squares rather than on one square's border. */
 function boundaries(axis) {
   const { rows, cols } = state.grid;
   const n = axis === 'row' ? rows : cols;
   const chartRect = chart.getBoundingClientRect();
+  const zoom = chartZoom();
+  const half = (parseFloat(getComputedStyle(chart).gap) || 0) / 2;
   const out = [];
   for (let i = 0; i <= n; i++) {
     const at = Math.min(i, n - 1);
     const el = chart.querySelector(`.cell[data-key="${CSS.escape(axis === 'row' ? keyOf(at, 0) : keyOf(0, at))}"]`);
     if (!el) return [];
     const r = el.getBoundingClientRect();
-    const lead = axis === 'row' ? r.top - chartRect.top : r.left - chartRect.left;
-    const tail = axis === 'row' ? r.bottom - chartRect.top : r.right - chartRect.left;
-    out.push(i < n ? lead : tail);
+    const lead = (axis === 'row' ? r.top - chartRect.top : r.left - chartRect.left) / zoom;
+    const tail = (axis === 'row' ? r.bottom - chartRect.top : r.right - chartRect.left) / zoom;
+    out.push(i < n ? lead - half : tail + half);
   }
   return out;
 }
 
-/** Show the guide for whichever grid line the pointer is closest to. Only ONE
- *  axis shows at a time: at a grid corner a row and a column boundary coincide,
- *  and their + buttons would otherwise land on top of each other. */
-function updateInsertGuides(e) {
-  if (!rowGuide || !colGuide || movingSelection) return;
-  const chartRect = chart.getBoundingClientRect();
-  const x = e.clientX - chartRect.left;
-  const y = e.clientY - chartRect.top;
-  const zoom = parseFloat(getComputedStyle(chart).getPropertyValue('--zoom')) || 1;
-  const reach = INSERT_REACH * zoom;
+function chartZoom() {
+  return parseFloat(getComputedStyle(chart).getPropertyValue('--zoom')) || 1;
+}
 
-  // Nearest boundary on each axis, and how far the pointer is from it.
-  const nearest = (axis, along, across) => {
-    const bs = boundaries(axis);
-    if (!bs.length) return null;
+/** Reveal whichever insert the pointer is reaching for, or nothing. */
+function updateInsertGuides(e) {
+  if (!rowGuide || !colGuide || movingSelection || cornerMenuOpen) return;
+  const chartRect = chart.getBoundingClientRect();
+  const zoom = chartZoom();
+  const x = (e.clientX - chartRect.left) / zoom;
+  const y = (e.clientY - chartRect.top) / zoom;
+
+  const rowBs = boundaries('row');
+  const colBs = boundaries('col');
+  if (!rowBs.length || !colBs.length) return;
+  const left = colBs[0], right = colBs[colBs.length - 1];
+  const top = rowBs[0], bottom = rowBs[rowBs.length - 1];
+
+  const nearest = (bs, along) => {
     let best = 0, bestD = Infinity;
     bs.forEach((pos, i) => { const d = Math.abs(along - pos); if (d < bestD) { bestD = d; best = i; } });
-    const span = axis === 'row' ? chart.clientWidth : chart.clientHeight;
-    const beside = across >= -reach && across <= span + reach;
-    return bestD <= reach && beside ? { index: best, pos: bs[best], dist: bestD } : null;
+    return bestD <= INSERT_REACH ? { index: best, pos: bs[best] } : null;
   };
+  const near = (v, a, b) => Math.min(Math.abs(v - a), Math.abs(v - b)) <= INSERT_REACH;
 
-  const row = nearest('row', y, x);
-  const col = nearest('col', x, y);
-  // Whichever line the pointer is closer to wins; ties go to the row.
-  const showRow = row && (!col || row.dist <= col.dist);
-  const showCol = col && !showRow;
+  // A row line is offered only from the grid's left or right border, a column
+  // line only from its top or bottom one.
+  const inside = x >= left - INSERT_REACH && x <= right + INSERT_REACH &&
+                 y >= top - INSERT_REACH && y <= bottom + INSERT_REACH;
+  const row = inside && near(x, left, right) ? nearest(rowBs, y) : null;
+  const col = inside && near(y, top, bottom) ? nearest(colBs, x) : null;
 
-  rowGuide.hidden = !showRow;
-  colGuide.hidden = !showCol;
-  if (showRow) { rowGuide.dataset.index = String(row.index); rowGuide.style.top = `${row.pos}px`; }
-  if (showCol) { colGuide.dataset.index = String(col.index); colGuide.style.left = `${col.pos}px`; }
+  hideInsertGuides();
+  if (row && col) {
+    // The two lines cross here, so ask rather than guess.
+    cornerBtn.dataset.rowIndex = String(row.index);
+    cornerBtn.dataset.colIndex = String(col.index);
+    cornerBtn.dataset.rowPos = String(row.pos);
+    cornerBtn.dataset.colPos = String(col.pos);
+    cornerBtn.style.left = `${col.pos}px`;
+    cornerBtn.style.top = `${row.pos}px`;
+    cornerBtn.hidden = false;
+  } else if (row) {
+    placeGuide(rowGuide, 'top', row);
+  } else if (col) {
+    placeGuide(colGuide, 'left', col);
+  }
+}
+
+function placeGuide(guide, side, at) {
+  guide.dataset.index = String(at.index);
+  guide.style[side] = `${at.pos}px`;
+  guide.classList.remove('insert-guide--preview');
+  guide.hidden = false;
+}
+
+/** Show one line, +-less, while its menu item is hovered — context only. */
+function previewInsertLine(axis) {
+  rowGuide.hidden = true;
+  colGuide.hidden = true;
+  if (!axis) return;
+  const guide = axis === 'row' ? rowGuide : colGuide;
+  const side = axis === 'row' ? 'top' : 'left';
+  guide.style[side] = `${cornerBtn.dataset[axis === 'row' ? 'rowPos' : 'colPos']}px`;
+  guide.classList.add('insert-guide--preview');
+  guide.hidden = false;
+}
+
+function openCornerMenu() {
+  const rowPos = parseFloat(cornerBtn.dataset.rowPos);
+  const colPos = parseFloat(cornerBtn.dataset.colPos);
+  // Open away from whichever corner it is, so the menu stays over the chart.
+  cornerMenu.style.left = `${colPos}px`;
+  cornerMenu.style.top = `${rowPos}px`;
+  cornerMenu.classList.toggle('insert-menu--left', colPos > chart.clientWidth / 2);
+  cornerMenu.classList.toggle('insert-menu--up', rowPos > chart.clientHeight / 2);
+  cornerMenu.hidden = false;
+  cornerMenuOpen = true;
+  cornerBtn.setAttribute('aria-expanded', 'true');
+}
+
+function closeCornerMenu() {
+  cornerMenuOpen = false;
+  if (cornerMenu) cornerMenu.hidden = true;
+  if (cornerBtn) cornerBtn.setAttribute('aria-expanded', 'false');
+  hideInsertGuides();
 }
 
 function hideInsertGuides() {
-  if (rowGuide) rowGuide.hidden = true;
-  if (colGuide) colGuide.hidden = true;
+  if (rowGuide) { rowGuide.hidden = true; rowGuide.classList.remove('insert-guide--preview'); }
+  if (colGuide) { colGuide.hidden = true; colGuide.classList.remove('insert-guide--preview'); }
+  if (cornerBtn && !cornerMenuOpen) cornerBtn.hidden = true;
 }
 
 /** Wire the hover behaviour once; the stage is bigger than the chart so the
@@ -184,12 +287,19 @@ function hideInsertGuides() {
 function initInsertGuides(stageEl) {
   stageEl.addEventListener('pointermove', (e) => {
     if (e.pointerType === 'touch') return;   // touch has no hover to key off
-    // While the pointer is on a guide, leave it be — otherwise reaching for a
-    // + would recompute and slide the button out from under the cursor.
-    if (e.target.closest && e.target.closest('.insert-guide')) return;
+    // While the pointer is on a guide, its + or the corner menu, leave things
+    // be — otherwise reaching for a button would recompute and slide it away.
+    if (e.target.closest && e.target.closest('.insert-guide, .insert-corner, .insert-menu')) return;
     updateInsertGuides(e);
   });
-  stageEl.addEventListener('pointerleave', hideInsertGuides);
+  stageEl.addEventListener('pointerleave', () => { if (!cornerMenuOpen) hideInsertGuides(); });
+  // The menu is modal-ish: anything else you click dismisses it.
+  document.addEventListener('pointerdown', (e) => {
+    if (!cornerMenuOpen) return;
+    if (e.target.closest && e.target.closest('.insert-menu, .insert-corner')) return;
+    closeCornerMenu();
+  }, true);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCornerMenu(); });
 }
 
 /** Corner grab handle for dragging the whole selection to a new spot. Shown at
@@ -313,10 +423,7 @@ function buildCell(r, c, rects) {
       if (svg) {
         svg.style.color = data.iconColor || '#1f2933'; // drives currentColor in the icon
         // Chairs preview at their chair size, matching the scaled-down output.
-        if (data.icon === 'chair') {
-          const scale = data.chairScale || 0.7;
-          svg.style.width = `${Math.round(60 * scale)}%`;
-        }
+        if (data.icon === 'chair') svg.style.width = `${Math.round(60 * CHAIR_SCALE)}%`;
         content.appendChild(svg);
       }
     }
