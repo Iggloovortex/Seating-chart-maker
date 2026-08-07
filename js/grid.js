@@ -32,33 +32,55 @@ function uniformCellSize() {
   return Math.round(Math.max(CELL_BASE, neededW, neededH));
 }
 
+const CHART_PAD = 4;   // .chart padding, in px
+const CELL_GAP = 4;    // .chart gap, in px
+
 /** Full re-render of the grid. Called on any state change. */
 function renderGrid() {
   const { cols, rows } = state.grid;
 
   // All cells share one square size, so the grid stays uniform as content grows.
-  // With "true sizes" on, the tracks take their row/column weights instead, so
-  // thinned walkways show in the grid the way they will in the output.
   const size = uniformCellSize();
-  const track = (weight) => `${Math.max(8, Math.round(size * weight))}px`;
-  chart.style.gridTemplateColumns = state.showTrueSizes
-    ? Array.from({ length: cols }, (_, c) => track(colWeight(c))).join(' ')
-    : `repeat(${cols}, ${size}px)`;
-  chart.style.gridTemplateRows = state.showTrueSizes
-    ? Array.from({ length: rows }, (_, r) => track(rowWeight(r))).join(' ')
-    : `repeat(${rows}, ${size}px)`;
+
+  // With "true sizes" on, the squares are laid out by the OUTPUT's rules
+  // (js/layout.js): desks keep the full uniform size and only empty squares and
+  // chairs take their row/column weights. That layout has per-row column
+  // offsets, which CSS Grid cannot express — so those cells are absolutely
+  // positioned instead, and the grid falls back to plain tracks otherwise.
+  const rects = state.showTrueSizes ? trueSizeRects(size) : null;
+  chart.classList.toggle('chart--true', !!rects);
+  if (rects) {
+    chart.style.gridTemplateColumns = '';
+    chart.style.gridTemplateRows = '';
+    chart.style.width = `${rects.extent.w * size + CHART_PAD * 2}px`;
+    chart.style.height = `${rects.extent.h * size + CHART_PAD * 2}px`;
+  } else {
+    chart.style.width = '';
+    chart.style.height = '';
+    chart.style.gridTemplateColumns = `repeat(${cols}, ${size}px)`;
+    chart.style.gridTemplateRows = `repeat(${rows}, ${size}px)`;
+  }
 
   chart.replaceChildren();
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      chart.appendChild(buildCell(r, c));
+      chart.appendChild(buildCell(r, c, rects));
     }
   }
 
   renderTables();
   renderMoveHandle();
   buildInsertGuides();
+}
+
+/** Output-accurate rectangles for the true-size preview, at the grid's own unit
+ *  size. Carries the overall extent so the chart can be sized to fit them. */
+function trueSizeRects(size) {
+  const rules = layoutRules();
+  const rects = layoutRects(rules, size, 0, 0);
+  rects.extent = layoutExtent(rules);
+  return rects;
 }
 
 // ---------------------------------------------------------------- insert guides
@@ -251,7 +273,7 @@ function attachMoveDrag(handle, geo) {
   handle.addEventListener('pointercancel', finish);
 }
 
-function buildCell(r, c) {
+function buildCell(r, c, rects) {
   const key = keyOf(r, c);
   const data = peekCell(r, c);
   const el = document.createElement('div');
@@ -262,7 +284,20 @@ function buildCell(r, c) {
   el.setAttribute('role', 'gridcell');
   el.tabIndex = -1;
 
-  if (state.selection.has(key)) el.classList.add('cell--selected');
+  // True-size mode positions each square itself. Half a gap of inset on every
+  // side reproduces the grid's seams while keeping the true footprint.
+  if (rects) {
+    const box = rects.get(key);
+    el.style.left = `${CHART_PAD + box.x + CELL_GAP / 2}px`;
+    el.style.top = `${CHART_PAD + box.y + CELL_GAP / 2}px`;
+    el.style.width = `${Math.max(2, box.w - CELL_GAP)}px`;
+    el.style.height = `${Math.max(2, box.h - CELL_GAP)}px`;
+  }
+
+  if (state.selection.has(key)) {
+    el.classList.add('cell--selected');
+    el.appendChild(checkBadge());
+  }
 
   if (data && data.enabled) {
     el.classList.add('cell--on');
@@ -306,6 +341,23 @@ function buildCell(r, c) {
   }
 
   return el;
+}
+
+/** Ticked-checkbox marker for a selected square. The badge itself is small, but
+ *  it sits inside a transparent padded corner so it never crowds the square's
+ *  edge or the content underneath. Decorative — the outline and the cell's
+ *  aria-selected carry the meaning. */
+function checkBadge() {
+  const wrap = document.createElement('span');
+  wrap.className = 'cell__check';
+  wrap.setAttribute('aria-hidden', 'true');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', '#ui-select');
+  svg.appendChild(use);
+  wrap.appendChild(svg);
+  return wrap;
 }
 
 function ariaLabel(r, c, data) {

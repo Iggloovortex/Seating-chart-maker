@@ -404,6 +404,42 @@ body {
   outline-offset: -3px;
 }
 
+/* Ticked checkbox in the square's top-right corner. The padding is transparent
+   and generous, so the mark sits comfortably in from both edges instead of
+   being jammed into the corner — and it never eats into the visible square. */
+.cell__check {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 5px;
+  line-height: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.cell__check svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+  color: var(--accent);
+  /* A soft halo so the tick stays legible over a dark fill or a table. */
+  background: rgba(255, 255, 255, .85);
+  border-radius: 4px;
+}
+@media (pointer: coarse) {
+  .cell__check svg { width: 17px; height: 17px; }
+}
+
+/* "True sizes": squares are positioned by js/grid.js to match the output
+   exactly, so the grid's own tracks step aside. */
+.chart--true { display: block; }
+.chart--true .cell {
+  position: absolute;
+  /* The whole point is letting a walkway square shrink below the comfortable
+     tap size, so the usual minimums do not apply here. */
+  min-width: 0;
+  min-height: 0;
+}
+
 .cell__content {
   display: flex;
   flex-direction: column;

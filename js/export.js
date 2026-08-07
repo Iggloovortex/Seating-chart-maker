@@ -33,92 +33,19 @@ async function renderToCanvas(dpi = 300) {
   const areaW = pxW - margin * 2;
   const areaH = pxH - margin * 2 - titleBand;
 
-  // Empty-space sizing (output only): every SEATED square renders at one uniform
-  // size, while each EMPTY square shrinks/grows to its column-width × row-height
-  // weights. This lets an individual empty square become a small walkway between
-  // seats/desks — not just a fully-empty row or column. The output is built cell
-  // by cell from the top-left: x accumulates across each row, y down each column,
-  // so seats stay uniform and small empty cells offset their neighbours. All
-  // weights = 1 reproduces a plain uniform grid. The editing grid is unaffected.
-  // Table footprints and their surrounding ring, needed before layout so that
-  // chair-like squares can be sized by weight.
-  const footprints = state.tables.map((t) => ({ t, fp: footprintOf(t.cellKeys) }));
-
-  const insideAnyFootprint = (r, c) =>
-    footprints.some(({ fp }) => r >= fp.minR && r <= fp.maxR && c >= fp.minC && c <= fp.maxC);
-
-  const seatTableOf = (r, c) => {
-    let best = null, bestDist = Infinity;
-    for (const f of footprints) {
-      const { fp } = f;
-      const inRing = r >= fp.minR - 1 && r <= fp.maxR + 1 && c >= fp.minC - 1 && c <= fp.maxC + 1;
-      const inside = r >= fp.minR && r <= fp.maxR && c >= fp.minC && c <= fp.maxC;
-      if (inRing && !inside) {
-        const dr = (fp.minR + fp.maxR) / 2, dc = (fp.minC + fp.maxC) / 2;
-        const dist = Math.max(Math.abs(r - dr), Math.abs(c - dc));
-        if (dist < bestDist) { bestDist = dist; best = f; }
-      }
-    }
-    return best;
-  };
-
-  // A square counts as a chair when it carries the chair icon, or when it is a
-  // bare seat around a table (no icon, no labels) — those already render as an
-  // empty chair, so they are furniture too.
-  const chairLike = (r, c) => {
-    const d = peekCell(r, c);
-    if (!d || !d.enabled) return false;
-    if (d.icon === 'chair') return true;
-    const bare = !d.icon && !(d.labels || []).some((l) => l.text && l.text.trim());
-    return bare && !!seatTableOf(r, c);
-  };
-
-  // Desks claim a full unit; empty squares — and chairs, which are furniture
-  // rather than desks — take their row/column weight, so a chair dropped into a
-  // thinned walkway column stays inside the walkway instead of widening it.
-  const sizedByWeight = (r, c) => !isEnabled(r, c) || chairLike(r, c);
-  const wUnits = (r, c) => (sizedByWeight(r, c) ? colWeight(c) : 1); // cell width in units
-  const hUnits = (r, c) => (sizedByWeight(r, c) ? rowWeight(r) : 1); // cell height in units
+  // Empty-space sizing: every SEATED square renders at one uniform size, while
+  // each EMPTY square (and each chair) shrinks/grows to its column-width ×
+  // row-height weights. See js/layout.js — the grid's "true sizes" preview uses
+  // the very same rules, so what is shown there is what prints here.
+  const rules = layoutRules();
+  const { insideAnyFootprint, seatTableOf } = rules;
 
   // Fit to the page using the widest row and the tallest column (in units).
-  let maxRowUnitsW = 1;
-  for (let r = 0; r < rows; r++) {
-    let s = 0;
-    for (let c = 0; c < cols; c++) s += wUnits(r, c);
-    maxRowUnitsW = Math.max(maxRowUnitsW, s);
-  }
-  let maxColUnitsH = 1;
-  for (let c = 0; c < cols; c++) {
-    let s = 0;
-    for (let r = 0; r < rows; r++) s += hUnits(r, c);
-    maxColUnitsH = Math.max(maxColUnitsH, s);
-  }
-
-  const unit = Math.min(areaW / maxRowUnitsW, areaH / maxColUnitsH);
-  const originX = margin + (areaW - maxRowUnitsW * unit) / 2; // block centered horizontally
-  const originY = margin + titleBand;                         // top-anchored, beneath the title
-
-  // Cell rectangles: x accumulates left→right within each row; y accumulates
-  // top→bottom within each column (independent walks, so a small empty square
-  // offsets everything after it in its row and column).
-  const rects = new Map(); // "r,c" -> { x, y, w, h }
-  for (let r = 0; r < rows; r++) {
-    let x = originX;
-    for (let c = 0; c < cols; c++) {
-      const w = wUnits(r, c) * unit;
-      rects.set(keyOf(r, c), { x, y: 0, w, h: 0 });
-      x += w;
-    }
-  }
-  for (let c = 0; c < cols; c++) {
-    let y = originY;
-    for (let r = 0; r < rows; r++) {
-      const rect = rects.get(keyOf(r, c));
-      rect.y = y;
-      rect.h = hUnits(r, c) * unit;
-      y += rect.h;
-    }
-  }
+  const extent = layoutExtent(rules);
+  const unit = Math.min(areaW / extent.w, areaH / extent.h);
+  const originX = margin + (areaW - extent.w * unit) / 2; // block centered horizontally
+  const originY = margin + titleBand;                     // top-anchored, beneath the title
+  const rects = layoutRects(rules, unit, originX, originY);
 
   // Title at the top, centered.
   if (title) {
@@ -176,17 +103,6 @@ async function renderToCanvas(dpi = 300) {
   }
 
   return canvas;
-}
-
-/** Bounding box of a set of "r,c" keys. */
-function footprintOf(cellKeys) {
-  let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
-  for (const k of cellKeys) {
-    const [r, c] = parseKey(k);
-    minR = Math.min(minR, r); maxR = Math.max(maxR, r);
-    minC = Math.min(minC, c); maxC = Math.max(maxC, c);
-  }
-  return { minR, maxR, minC, maxC };
 }
 
 /** An individual desk: fills its whole cell so neighbours touch; borders only on
