@@ -118,7 +118,9 @@ function boundaries(axis) {
   return out;
 }
 
-/** Show the guide for whichever grid line the pointer is closest to. */
+/** Show the guide for whichever grid line the pointer is closest to. Only ONE
+ *  axis shows at a time: at a grid corner a row and a column boundary coincide,
+ *  and their + buttons would otherwise land on top of each other. */
 function updateInsertGuides(e) {
   if (!rowGuide || !colGuide || movingSelection) return;
   const chartRect = chart.getBoundingClientRect();
@@ -127,22 +129,27 @@ function updateInsertGuides(e) {
   const zoom = parseFloat(getComputedStyle(chart).getPropertyValue('--zoom')) || 1;
   const reach = INSERT_REACH * zoom;
 
-  const place = (guide, axis, along, across) => {
+  // Nearest boundary on each axis, and how far the pointer is from it.
+  const nearest = (axis, along, across) => {
     const bs = boundaries(axis);
-    let best = -1, bestD = Infinity;
+    if (!bs.length) return null;
+    let best = 0, bestD = Infinity;
     bs.forEach((pos, i) => { const d = Math.abs(along - pos); if (d < bestD) { bestD = d; best = i; } });
-    // Only offer a line the pointer is near, and while it is beside the grid.
-    const width = axis === 'row' ? chart.clientWidth : chart.clientHeight;
-    const inRange = bestD <= reach && across >= -reach && across <= width + reach;
-    guide.hidden = !inRange;
-    if (!inRange) return;
-    guide.dataset.index = String(best);
-    if (axis === 'row') guide.style.top = `${bs[best]}px`;
-    else guide.style.left = `${bs[best]}px`;
+    const span = axis === 'row' ? chart.clientWidth : chart.clientHeight;
+    const beside = across >= -reach && across <= span + reach;
+    return bestD <= reach && beside ? { index: best, pos: bs[best], dist: bestD } : null;
   };
 
-  place(rowGuide, 'row', y, x);
-  place(colGuide, 'col', x, y);
+  const row = nearest('row', y, x);
+  const col = nearest('col', x, y);
+  // Whichever line the pointer is closer to wins; ties go to the row.
+  const showRow = row && (!col || row.dist <= col.dist);
+  const showCol = col && !showRow;
+
+  rowGuide.hidden = !showRow;
+  colGuide.hidden = !showCol;
+  if (showRow) { rowGuide.dataset.index = String(row.index); rowGuide.style.top = `${row.pos}px`; }
+  if (showCol) { colGuide.dataset.index = String(col.index); colGuide.style.left = `${col.pos}px`; }
 }
 
 function hideInsertGuides() {
@@ -155,6 +162,9 @@ function hideInsertGuides() {
 function initInsertGuides(stageEl) {
   stageEl.addEventListener('pointermove', (e) => {
     if (e.pointerType === 'touch') return;   // touch has no hover to key off
+    // While the pointer is on a guide, leave it be — otherwise reaching for a
+    // + would recompute and slide the button out from under the cursor.
+    if (e.target.closest && e.target.closest('.insert-guide')) return;
     updateInsertGuides(e);
   });
   stageEl.addEventListener('pointerleave', hideInsertGuides);
