@@ -823,10 +823,6 @@ body {
   .iconbtn--print { color: #90caf9; }
 }
 
-/* Button that pairs an icon with a label (Select) */
-.btn--withicon { display: inline-flex; align-items: center; gap: 6px; }
-.btn--withicon .iconbtn__svg { width: 18px; height: 18px; }
-
 /* Rotate-orientation button: a broken ring with the orientation's initial in
    the middle. Drawn in the text colour so it stays legible in either scheme. */
 .btn-rotate .iconbtn__svg { width: 26px; height: 26px; color: var(--ink); }

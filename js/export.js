@@ -42,7 +42,7 @@ async function renderToCanvas(dpi = 300) {
   // row-height weights. See js/layout.js — the grid's "true sizes" preview uses
   // the very same rules, so what is shown there is what prints here.
   const rules = layoutRules();
-  const { insideAnyFootprint, seatTableOf } = rules;
+  const { insideAnyFootprint, seatTableOf, footprints } = rules;
 
   // Fit to the page using the widest row and the tallest column (in units).
   const extent = layoutExtent(rules);
@@ -84,6 +84,19 @@ async function renderToCanvas(dpi = 300) {
   // Chairs are standalone furniture, so they never merge into a desk block.
   const deskSet = new Set(desks.filter((d) => !isChairCell(d.data)).map((d) => keyOf(d.r, d.c)));
 
+  // Work out where every piece of content will sit BEFORE painting any of it,
+  // so one text size and one icon size can be chosen for the whole chart.
+  for (const d of desks) {
+    if (isChairCell(d.data)) d.geo = chairGeometry(rectOf, d);
+    else {
+      const { x, y, w, h } = rectOf(d.r, d.c);
+      d.geo = { cx: x + w / 2, cy: y + h / 2, w, h };
+    }
+  }
+  for (const s of seats) s.geo = seatGeometry(rectOf, s);
+  for (const v of covered) v.geo = coveredGeometry(rectOf, v, footprints);
+  const plan = planContent(ctx, [...desks, ...seats, ...covered]);
+
   // Preload icon images (async), keyed by "id|color" — including a chair for empty seats.
   const imgCache = await preloadIcons(desks, seats, covered);
 
@@ -92,26 +105,67 @@ async function renderToCanvas(dpi = 300) {
 
   // 2) Connected desks — chairs draw as small furniture instead.
   for (const d of desks) {
-    if (isChairCell(d.data)) drawChair(ctx, rectOf, d, imgCache);
-    else drawDesk(ctx, rectOf, d, deskSet, imgCache);
+    if (isChairCell(d.data)) drawChair(ctx, d, imgCache, plan);
+    else drawDesk(ctx, rectOf, d, deskSet, imgCache, plan);
   }
 
   // 3) Seats gathered around their table.
-  for (const s of seats) drawTableSeat(ctx, rectOf, s, imgCache);
+  for (const s of seats) drawTableSeat(ctx, s, imgCache, plan);
 
   // 4) Labels and icons of squares the table covers, painted last so they stay
   //    readable on top of the solid table.
-  for (const { r, c, data } of covered) {
-    const { x, y, w, h } = rectOf(r, c);
-    drawContent(ctx, x + w / 2, y + h / 2, w, h, data, imgCache, false);
+  for (const v of covered) {
+    drawContent(ctx, v.geo.cx, v.geo.cy, v.geo.w, v.geo.h, v.data, imgCache, false, plan, v.geo.clip);
   }
 
   return canvas;
 }
 
+// ------------------------------------------------------- content sizing
+//
+// Every square's text is drawn at ONE size and every icon at ONE size, chosen so
+// that the tightest square on the chart still shows its labels in full. Shrink
+// the text and the icons gain the room they gave up, so a chart of short labels
+// gets big icons and a chart of long ones stays readable.
+
+const BASE_LINE = 0.18;      // label line height, as a fraction of the square
+const FONT_OF_LINE = 0.82;   // glyph height within that line
+const LABEL_WIDTH = 0.92;    // share of the square a label may span
+const MIN_TEXT_SCALE = 0.4;  // past this, ellipsize rather than shrink further
+const MAX_ICON = 0.62;       // an icon never fills more than this much
+const MIN_ICON = 0.3;
+
+function labelsOf(data) {
+  return (data.labels || []).filter((l) => l.text);
+}
+
+function contentFont(size) {
+  return `600 ${size}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+}
+
+/** One text scale and one icon size for the whole chart. */
+function planContent(ctx, items) {
+  let scale = 1, maxLines = 0;
+  for (const { data, geo } of items) {
+    const labels = labelsOf(data);
+    if (!labels.length) continue;
+    maxLines = Math.max(maxLines, labels.length);
+    const s = Math.min(geo.w, geo.h);
+    ctx.font = contentFont(s * BASE_LINE * FONT_OF_LINE);
+    let widest = 0;
+    for (const l of labels) widest = Math.max(widest, ctx.measureText(l.text).width);
+    if (widest > 0) scale = Math.min(scale, (geo.w * LABEL_WIDTH) / widest);
+  }
+  const textScale = Math.max(MIN_TEXT_SCALE, Math.min(1, scale));
+  const lineFrac = BASE_LINE * textScale;
+  // Whatever vertical room the labels no longer need goes to the icon.
+  const iconFrac = Math.max(MIN_ICON, Math.min(MAX_ICON, 0.94 - maxLines * lineFrac));
+  return { lineFrac, iconFrac };
+}
+
 /** An individual desk: fills its whole cell so neighbours touch; borders only on
  *  edges not shared with another desk (so a run of desks reads as one block). */
-function drawDesk(ctx, rectOf, { r, c, data }, deskSet, imgCache) {
+function drawDesk(ctx, rectOf, { r, c, data }, deskSet, imgCache, plan) {
   const { x, y, w, h } = rectOf(r, c);
   ctx.fillStyle = data.fill || '#dbe7ff';
   ctx.fillRect(x, y, w, h);
@@ -126,13 +180,12 @@ function drawDesk(ctx, rectOf, { r, c, data }, deskSet, imgCache) {
   if (!has(r, c - 1)) { ctx.moveTo(x, y); ctx.lineTo(x, y + h); }           // left
   ctx.stroke();
 
-  drawContent(ctx, x + w / 2, y + h / 2, w, h, data, imgCache, false);
+  drawContent(ctx, x + w / 2, y + h / 2, w, h, data, imgCache, false, plan);
 }
 
-/** A chair: standalone furniture drawn at a fixed fraction of its square. It is
- *  scaled rather than filling the cell, so a chair standing in a thinned
- *  row/column shrinks with it and stays inside the walkway. */
-function drawChair(ctx, rectOf, { r, c, data }, imgCache) {
+/** Where a chair sits and how big it is. Split out from drawChair so the layout
+ *  can be measured before anything is painted. */
+function chairGeometry(rectOf, { r, c, data }) {
   const rect = rectOf(r, c);
   const size = Math.min(rect.w, rect.h) * CHAIR_SCALE;
 
@@ -160,21 +213,26 @@ function drawChair(ctx, rectOf, { r, c, data }, imgCache) {
     if (dr) cx = faced.x + faced.w / 2;   // facing up/down → align horizontally
     else    cy = faced.y + faced.h / 2;   // facing left/right → align vertically
   }
-  const x = cx - size / 2, y = cy - size / 2;
-
-  roundRect(ctx, x, y, size, size, size * 0.18);
-  ctx.fillStyle = data.fill || '#dbe7ff';
-  ctx.fill();
-  ctx.lineWidth = Math.max(1, size * 0.05);
-  ctx.strokeStyle = data.border || '#2f6feb';
-  ctx.stroke();
-
-  drawContent(ctx, cx, cy, size, size, data, imgCache, false);
+  return { cx, cy, w: size, h: size };
 }
 
-/** A seat around a table: smaller and shifted toward the table centre. Empty
- *  seats (no label, no icon) render as an empty chair. */
-function drawTableSeat(ctx, rectOf, { r, c, data, fp }, imgCache) {
+/** A chair: standalone furniture drawn at a fixed fraction of its square, so a
+ *  chair standing in a thinned row/column shrinks with it and stays inside the
+ *  walkway. */
+function drawChair(ctx, item, imgCache, plan) {
+  const { cx, cy, w: size } = item.geo;
+  roundRect(ctx, cx - size / 2, cy - size / 2, size, size, size * 0.18);
+  ctx.fillStyle = item.data.fill || '#dbe7ff';
+  ctx.fill();
+  ctx.lineWidth = Math.max(1, size * 0.05);
+  ctx.strokeStyle = item.data.border || '#2f6feb';
+  ctx.stroke();
+  drawContent(ctx, cx, cy, size, size, item.data, imgCache, false, plan);
+}
+
+/** Where a seat around a table sits: smaller than a desk and shifted toward the
+ *  table centre. Split out from drawTableSeat so it can be measured first. */
+function seatGeometry(rectOf, { r, c, data, fp }) {
   const rect = rectOf(r, c);
   const tl = rectOf(fp.minR, fp.minC);
   const br = rectOf(fp.maxR, fp.maxC);
@@ -194,36 +252,73 @@ function drawTableSeat(ctx, rectOf, { r, c, data, fp }, imgCache) {
   const isChair = data.icon === 'chair' || (!data.icon && !labelled);
   const size = base * (isChair ? CHAIR_SCALE : 0.62);
   const shift = base * 0.18;           // nudge toward the table
-  const cx = seatCx + dx * shift, cy = seatCy + dy * shift;
-  const x = cx - size / 2, y = cy - size / 2;
+  return { cx: seatCx + dx * shift, cy: seatCy + dy * shift, w: size, h: size };
+}
 
-  roundRect(ctx, x, y, size, size, size * 0.18);
-  ctx.fillStyle = data.fill || '#dbe7ff';
+/** Empty seats (no label, no icon) render as an empty chair. */
+function drawTableSeat(ctx, item, imgCache, plan) {
+  const { cx, cy, w: size } = item.geo;
+  roundRect(ctx, cx - size / 2, cy - size / 2, size, size, size * 0.18);
+  ctx.fillStyle = item.data.fill || '#dbe7ff';
   ctx.fill();
   ctx.lineWidth = Math.max(1, size * 0.05);
-  ctx.strokeStyle = data.border || '#2f6feb';
+  ctx.strokeStyle = item.data.border || '#2f6feb';
   ctx.stroke();
+  drawContent(ctx, cx, cy, size, size, item.data, imgCache, true, plan);
+}
 
-  drawContent(ctx, cx, cy, size, size, data, imgCache, true);
+/** A square the table covers. Its content is centred on the part of the square
+ *  the table shape actually reaches, and `clip` holds that shape's bounds so the
+ *  label stack can be kept inside it — text spilling past a dark table onto the
+ *  white page reads as though it had been cut off. */
+function coveredGeometry(rectOf, { r, c }, footprints) {
+  const cell = rectOf(r, c);
+  const owner = footprints.find(({ fp }) =>
+    r >= fp.minR && r <= fp.maxR && c >= fp.minC && c <= fp.maxC);
+  const geo = { cx: cell.x + cell.w / 2, cy: cell.y + cell.h / 2, w: cell.w, h: cell.h };
+  if (!owner) return geo;
+
+  const t = tableRect(owner.t, rectOf);
+  const clip = {
+    left: Math.max(cell.x, t.x), right: Math.min(cell.x + cell.w, t.x + t.w),
+    top: Math.max(cell.y, t.y), bottom: Math.min(cell.y + cell.h, t.y + t.h),
+  };
+  if (clip.right <= clip.left || clip.bottom <= clip.top) return geo;
+  geo.cx = (clip.left + clip.right) / 2;
+  geo.cy = (clip.top + clip.bottom) / 2;
+  geo.clip = clip;
+  return geo;
 }
 
 /** Draw a seat's icon (above) and label lines (each its own color), rotated.
  *  When `forceChair` and the seat is otherwise empty, draw a chair icon. */
-function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair) {
-  const labels = (data.labels || []).filter((l) => l.text);
+function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip) {
+  const labels = labelsOf(data);
   let iconId = data.icon;
   if (!iconId && labels.length === 0 && forceChair) iconId = 'chair';
   const hasIcon = !!iconId;
 
+  const s = Math.min(w, h);
+  // Labelled squares share the chart-wide sizes; an icon on its own has the
+  // whole square to itself and keeps its generous size.
+  const iconSize = s * (labels.length ? plan.iconFrac : 0.6);
+  const lineH = s * plan.lineFrac;
+  const totalH = (hasIcon ? iconSize : 0) + labels.length * lineH;
+
+  // Keep the stack inside `clip` when one is given (a table's drawn shape). The
+  // stack runs down the square, or across it once rotated a quarter turn.
+  const rot = data.rotation || 0;
+  if (clip) {
+    const half = totalH / 2;
+    if (rot === 90 || rot === 270) cx = within(cx, clip.left + half, clip.right - half);
+    else                          cy = within(cy, clip.top + half, clip.bottom - half);
+  }
+
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.rotate(((data.rotation || 0) * Math.PI) / 180);
+  ctx.rotate((rot * Math.PI) / 180);
 
-  const iconSize = Math.min(w, h) * (labels.length ? 0.42 : 0.6);
-  const lineH = Math.min(w, h) * 0.18;
-  const totalH = (hasIcon ? iconSize : 0) + labels.length * lineH;
   let cursorY = -totalH / 2;
-
   if (hasIcon) {
     const img = imgCache.get(`${iconId}|${iconColorOf(data)}`);
     if (img) ctx.drawImage(img, -iconSize / 2, cursorY, iconSize, iconSize);
@@ -232,26 +327,41 @@ function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair) {
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = `600 ${lineH * 0.82}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+  ctx.font = contentFont(lineH * FONT_OF_LINE);
   for (const line of labels) {
     ctx.fillStyle = line.color || '#1f2933';
-    ctx.fillText(fitText(ctx, line.text, w * 0.92), 0, cursorY + lineH / 2);
+    ctx.fillText(fitText(ctx, line.text, w * LABEL_WIDTH), 0, cursorY + lineH / 2);
     cursorY += lineH;
   }
 
   ctx.restore();
 }
 
-function drawTable(ctx, table, rectOf) {
+/** Clamp into [lo, hi]; when the band is narrower than what has to go in it,
+ *  centre on the band instead of jamming against one side. */
+function within(v, lo, hi) {
+  if (lo > hi) return (lo + hi) / 2;
+  return Math.min(hi, Math.max(lo, v));
+}
+
+/** The rectangle a table's shape is actually drawn in — inset from its cells so
+ *  the shape never touches the squares around it. */
+function tableRect(table, rectOf) {
   const rects = table.cellKeys.map((k) => { const [r, c] = parseKey(k); return rectOf(r, c); });
-  if (!rects.length) return;
+  if (!rects.length) return null;
   const left = Math.min(...rects.map((b) => b.x));
   const top = Math.min(...rects.map((b) => b.y));
   const right = Math.max(...rects.map((b) => b.x + b.w));
   const bottom = Math.max(...rects.map((b) => b.y + b.h));
   const inset = Math.min(right - left, bottom - top) * 0.06;
-  const x = left + inset, y = top + inset;
-  const w = right - left - inset * 2, h = bottom - top - inset * 2;
+  return { x: left + inset, y: top + inset,
+           w: right - left - inset * 2, h: bottom - top - inset * 2 };
+}
+
+function drawTable(ctx, table, rectOf) {
+  const box = tableRect(table, rectOf);
+  if (!box) return;
+  const { x, y, w, h } = box;
 
   ctx.fillStyle = table.color || '#8d6e63';
   if (table.shape === 'round') {

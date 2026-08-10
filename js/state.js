@@ -50,7 +50,6 @@ function makeCell() {
     labels: [],                 // [{ text, color }]
     icon: null,                 // icon id from icons.js
     iconColor: state.defaults.iconColor,
-
     rotation: 0,                // 0 | 90 | 180 | 270
     fill: state.defaults.fill,
     border: state.defaults.border,
@@ -488,21 +487,38 @@ function selectSeatedWhere(pred) {
   batch(() => {
     state.selection.clear();
     for (const [k, cell] of state.cells) {
-      if (cell.enabled && pred(cell)) state.selection.add(k);
+      const [r, c] = parseKey(k);
+      if (cell.enabled && pred(cell, r, c)) state.selection.add(k);
     }
   });
 }
 
 const hasLabelText = (cell) => (cell.labels || []).some((l) => l.text && l.text.trim());
 
+/** True when a square falls inside some table's footprint — the block its shape
+ *  is drawn over. Those squares belong to the table rather than standing alone. */
+function isUnderTable(r, c) {
+  return state.tables.some((t) => {
+    const fp = footprintOf(t.cellKeys);
+    return r >= fp.minR && r <= fp.maxR && c >= fp.minC && c <= fp.maxC;
+  });
+}
+
+/** Seated squares matching `pred` that are NOT part of a table. The "absence"
+ *  filters use this: a table seats everything under it, so those squares are all
+ *  unlabelled and icon-less and would otherwise swamp the result. */
+function selectSeatedWhereFree(pred) {
+  selectSeatedWhere((cell, r, c) => pred(cell) && !isUnderTable(r, c));
+}
+
 /** Seated squares that carry at least one non-empty label line. */
 function selectLabeled() { selectSeatedWhere(hasLabelText); }
-/** Seated squares with no label text at all. */
-function selectUnlabeled() { selectSeatedWhere((cell) => !hasLabelText(cell)); }
+/** Seated squares with no label text at all, table squares excepted. */
+function selectUnlabeled() { selectSeatedWhereFree((cell) => !hasLabelText(cell)); }
 /** Seated squares that have an icon. */
 function selectWithIcons() { selectSeatedWhere((cell) => !!cell.icon); }
-/** Seated squares with no icon. */
-function selectWithoutIcons() { selectSeatedWhere((cell) => !cell.icon); }
+/** Seated squares with no icon, table squares excepted. */
+function selectWithoutIcons() { selectSeatedWhereFree((cell) => !cell.icon); }
 
 /** Select every square in the grid. */
 function selectAllSquares() {
@@ -526,6 +542,13 @@ function addTable(shape, color) {
   if (cellKeys.length === 0) return null;
   const table = { id: `t${Date.now().toString(36)}`, cellKeys, shape, color };
   state.tables.push(table);
+  // A table seats everything under it: the shape covers its whole footprint, so
+  // every square in that block belongs to the table whether it was selected or
+  // not. Without this a gap in the selection would punch a hole in the table.
+  const fp = footprintOf(cellKeys);
+  for (let r = fp.minR; r <= fp.maxR; r++) {
+    for (let c = fp.minC; c <= fp.maxC; c++) getCell(r, c).enabled = true;
+  }
   state.selection.clear();
   emit();
   return table;
@@ -542,6 +565,13 @@ function pruneTables() {
 }
 
 // ---------------------------------------------------------------- reset
+
+/** Empty every square on the grid. Non-destructive, like any unseating: labels,
+ *  colors and icons stay on the squares and reappear when they are seated
+ *  again. Tables are left alone — use New to wipe the chart outright. */
+function clearGrid() {
+  batch(() => { for (const cell of state.cells.values()) cell.enabled = false; });
+}
 
 function clearAll() {
   // Wiping the chart also drops the Shift+click range anchor (defined in

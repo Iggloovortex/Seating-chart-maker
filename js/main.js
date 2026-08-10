@@ -62,6 +62,12 @@ trueSizeBtn.addEventListener('click', () => toggleTrueSizes());
 subscribe(() => trueSizeBtn.setAttribute('aria-pressed', String(state.showTrueSizes)));
 document.getElementById('btn-reset-sizes').addEventListener('click', () => resetLineSizes());
 
+// Clear Grid empties every square. Non-destructive — labels and colors stay put
+// — but it is a big sweep, so confirm first.
+document.getElementById('btn-empty-all').addEventListener('click', () => {
+  if (confirm('Empty every square on the grid? Labels and colors are kept.')) clearGrid();
+});
+
 // ---- Toolbar actions -------------------------------------------------------
 document.getElementById('btn-preview').addEventListener('click', showPreview);
 // Keep an open preview in step with orientation changes.
@@ -79,7 +85,7 @@ const setImageMenu = (open) => {
 };
 imageBtn.addEventListener('click', (e) => { e.stopPropagation(); setImageMenu(imageMenu.hidden); });
 document.addEventListener('pointerdown', (e) => {
-  if (!imageMenu.hidden && !e.target.closest('.menu-anchor')) setImageMenu(false);
+  if (!imageMenu.hidden && !(e.target.closest && e.target.closest('.menu-anchor'))) setImageMenu(false);
 });
 
 // Each action confirms the same way Share does, in the image tone.
@@ -88,7 +94,8 @@ const IMAGE_ACTIONS = {
               fail: 'Copying images needs the page served over http(s) — use Download Image.' },
   link:     { run: copyPngLink, done: 'Image link copied',
               fail: 'Clipboard unavailable here — use Download Image.' },
-  download: { run: downloadPng, done: 'Image downloaded' },
+  download: { run: downloadPng, done: 'Image downloaded',
+              fail: 'The image could not be created — try a smaller paper size.' },
 };
 for (const item of imageMenu.querySelectorAll('[data-image]')) {
   item.addEventListener('click', async () => {

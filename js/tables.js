@@ -26,7 +26,7 @@ function initTables() {
   };
 
   // Buttons that act on the current selection are disabled when it is empty.
-  const SELECTION_BUTTON_IDS = ['btn-edit-selected', 'btn-seat-all', 'btn-empty-all'];
+  const SELECTION_BUTTON_IDS = ['btn-edit-selected', 'btn-seat-all'];
   const syncSelectionButtons = () => {
     const n = state.selection.size;
     for (const id of SELECTION_BUTTON_IDS) {
@@ -92,9 +92,6 @@ function initTables() {
   // Seat / empty every selected square (moved here from the bulk edit pane).
   document.getElementById('btn-seat-all').addEventListener('click', () => {
     if (state.selection.size) updateCells([...state.selection], { enabled: true });
-  });
-  document.getElementById('btn-empty-all').addEventListener('click', () => {
-    if (state.selection.size) updateCells([...state.selection], { enabled: false });
   });
 
   // Copy formatting from a single selected square, paste onto the selection.

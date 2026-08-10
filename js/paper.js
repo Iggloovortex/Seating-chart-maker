@@ -51,6 +51,8 @@ function orientationLabel() {
 /** Point every rotate button at toggleOrientation, and keep everything that
  *  spells out the orientation in step with it: the buttons, the Paper label,
  *  the preset dimensions in the dropdown and the custom width/height boxes. */
+let lastLandscape = null;   // so the size readouts only redraw on a real flip
+
 function initOrientationControls() {
   const buttons = [...document.querySelectorAll('.btn-rotate')];
   for (const btn of buttons) btn.addEventListener('click', () => toggleOrientation());
@@ -68,8 +70,13 @@ function initOrientationControls() {
     }
     const label = document.getElementById('paper-label');
     if (label) label.textContent = `Paper (${orientationLabel()})`;
-    refreshPaperOptions();
-    reflectCustomSize();
+    // The dimensions only move when the orientation does. Rewriting them on
+    // every state change would also stamp over a half-typed custom size.
+    if (lastLandscape !== state.landscape) {
+      lastLandscape = state.landscape;
+      refreshPaperOptions();
+      reflectCustomSize();
+    }
   };
   subscribe(sync);
   sync();
