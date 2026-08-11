@@ -1,5 +1,9 @@
-// tables.js — the two picking modes. Select mode picks SQUARES (and builds
-// tables out of them); table mode picks TABLES and edits them.
+// tables.js — the two picking modes.
+//   Select mode  — picks SQUARES, for editing seats.
+//   Table mode   — everything to do with tables. It picks TABLES to recolour,
+//                  reshape or remove, AND picks bare squares to build the next
+//                  table out of, so table work never needs a trip to the other
+//                  bar. Which one a tap means is decided by what is under it.
 
 
 // Set by initTables so table mode can switch select mode off, and vice versa.
@@ -85,9 +89,6 @@ function initTables() {
     });
   }
 
-  // New tables take the default table colour; recolouring happens in table mode.
-  document.getElementById('btn-table-round').addEventListener('click', () => addTable('round'));
-  document.getElementById('btn-table-square').addEventListener('click', () => addTable('square'));
   // "Clear selection" clears AND leaves select mode.
   document.getElementById('btn-select-clear').addEventListener('click', () => setActive(false));
 
@@ -123,9 +124,10 @@ function initTables() {
 
 // ---------------------------------------------------------------- table mode
 //
-// The mirror of select mode, for tables instead of squares. A tap picks the
-// table under the pointer (see fireTap in js/interactions.js) and the bar edits
-// every picked table at once.
+// A tap on a square carrying a table picks that table; a tap on a bare square
+// selects the square (see fireTap in js/interactions.js). The bar then acts on
+// whichever half is populated — build a table from the squares, or edit the
+// tables — so both sides of table work live in one place.
 
 let tableActive = false;
 
@@ -138,8 +140,10 @@ function setTableActive(on) {
   const bar = document.getElementById('table-bar');
   btn.setAttribute('aria-pressed', String(on));
   bar.hidden = !on;
-  if (!on) clearTableSelection();
-  else emit();   // clearTableSelection already emits; otherwise force a re-render
+  // Leaving drops both halves of the selection; entering just forces a redraw so
+  // the picked-table rings appear.
+  if (!on) batch(() => { clearTableSelection(); clearSelection(); });
+  else emit();
 }
 
 function initTableMode() {
@@ -156,8 +160,16 @@ function initTableMode() {
 
   document.getElementById('btn-table-all').addEventListener('click', selectAllTables);
   document.getElementById('btn-table-clear').addEventListener('click', () => setTableActive(false));
-  document.getElementById('btn-table-to-round').addEventListener('click', () => updateTables(ids(), { shape: 'round' }));
-  document.getElementById('btn-table-to-square').addEventListener('click', () => updateTables(ids(), { shape: 'square' }));
+
+  // One pair of shape buttons covers both jobs, because you are only ever doing
+  // one of them: squares selected means "build a table out of these", tables
+  // picked means "make these that shape".
+  const shapeAction = (shape) => () => {
+    if (state.selection.size) addTable(shape);
+    else if (ids().length) updateTables(ids(), { shape });
+  };
+  document.getElementById('btn-table-round').addEventListener('click', shapeAction('round'));
+  document.getElementById('btn-table-square').addEventListener('click', shapeAction('square'));
   document.getElementById('btn-table-remove').addEventListener('click', () => {
     if (ids().length) removeTables(ids());
   });
@@ -167,15 +179,23 @@ function initTableMode() {
     if (e.key === 'Escape' && tableActive) setTableActive(false);
   });
 
-  // Buttons that act on the picked tables are dead while none are picked, and
-  // the swatch shows the colour they share (or the default when they differ).
-  const TABLE_BUTTON_IDS = ['btn-table-to-round', 'btn-table-to-square', 'btn-table-remove'];
+  // The bar reports both halves of the selection, and each control is live only
+  // when it has something to act on.
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
   subscribe(() => {
     if (!tableActive) return;
-    const n = state.tableSelection.size;
-    countEl.textContent = `${n} ${n === 1 ? 'table' : 'tables'} selected`;
-    for (const id of TABLE_BUTTON_IDS) document.getElementById(id).disabled = n === 0;
-    colorInput.disabled = n === 0;
+    const squares = state.selection.size;
+    const tables = state.tableSelection.size;
+    countEl.textContent = squares
+      ? `${plural(squares, 'square')} selected`
+      : `${plural(tables, 'table')} selected`;
+
+    // Shape buttons build from selected squares, or convert picked tables.
+    const canShape = squares > 0 || tables > 0;
+    document.getElementById('btn-table-round').disabled = !canShape;
+    document.getElementById('btn-table-square').disabled = !canShape;
+    document.getElementById('btn-table-remove').disabled = tables === 0;
+    colorInput.disabled = tables === 0;
     const picked = state.tables.filter((t) => state.tableSelection.has(t.id));
     const shared = picked.length && picked.every((t) => t.color === picked[0].color);
     colorInput.value = shared ? picked[0].color : state.defaults.tableColor;

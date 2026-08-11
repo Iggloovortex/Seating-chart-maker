@@ -230,9 +230,6 @@
         <span class="toolbar__sep" aria-hidden="true"></span>
         <button id="btn-copy-format" class="btn" type="button" title="Copy the selected square, labels and all">Copy square</button>
         <button id="btn-paste-format" class="btn" type="button" title="Clone the copied square onto every selected square">Paste square</button>
-        <span class="toolbar__sep" aria-hidden="true"></span>
-        <button id="btn-table-round" class="btn" type="button" title="Make a round table from the selected squares">Round table</button>
-        <button id="btn-table-square" class="btn" type="button" title="Make a square table from the selected squares">Square table</button>
         <button id="btn-select-clear" class="btn btn--ghost" type="button">Clear selection</button>
       </div>
     </div>
@@ -243,13 +240,15 @@
       <div class="selectbar__actions">
         <button id="btn-table-all" class="btn" type="button" title="Select every table">Select all tables</button>
         <span class="toolbar__sep" aria-hidden="true"></span>
+        <button id="btn-table-round" class="btn" type="button"
+                title="Squares selected: build a round table from them. Tables picked: make them round.">Round table</button>
+        <button id="btn-table-square" class="btn" type="button"
+                title="Squares selected: build a square table from them. Tables picked: make them square.">Square table</button>
+        <span class="toolbar__sep" aria-hidden="true"></span>
         <label class="field">
           <span class="field__label">Color</span>
           <input id="table-edit-color" class="field__input field__input--color" type="color" value="#8d6e63" />
         </label>
-        <button id="btn-table-to-round" class="btn" type="button" title="Make the selected tables round">Round</button>
-        <button id="btn-table-to-square" class="btn" type="button" title="Make the selected tables square">Square</button>
-        <span class="toolbar__sep" aria-hidden="true"></span>
         <button id="btn-table-remove" class="btn btn--empty" type="button" title="Remove the selected tables">Remove</button>
         <button id="btn-table-clear" class="btn btn--ghost" type="button">Clear selection</button>
       </div>

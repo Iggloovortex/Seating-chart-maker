@@ -108,12 +108,15 @@ function fireTap(cell, mods = {}) {
   const [r, c] = parseKey(cell.dataset.key);
   const { additive, shift } = mods;
 
-  // In table mode a tap picks the table drawn over the square. The shapes are
-  // pointer-events:none overlays, so the square underneath is what the pointer
-  // actually lands on and the table is found from its position.
+  // Table mode handles both halves of table work without swapping bars. A tap on
+  // a square that already carries a table picks the TABLE; a tap on a bare
+  // square selects the SQUARE, which is how the next table gets built. The
+  // shapes are pointer-events:none overlays, so the square underneath is what
+  // the pointer actually lands on and the table is found from its position.
   if (tableMode) {
     const table = tableAt(r, c);
     if (table) toggleTableSelection(table.id);
+    else toggleSelection(r, c);
     return;
   }
 
