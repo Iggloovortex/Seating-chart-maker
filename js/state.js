@@ -163,6 +163,33 @@ function setLineText(r, c, index, text) {
   return true;
 }
 
+/** Move a whole label line — its text and its colour together — to a new spot. */
+function moveLabelLine(r, c, from, to) {
+  const cell = getCell(r, c);
+  if (!reorderable(cell.labels, from, to)) return false;
+  const [line] = cell.labels.splice(from, 1);
+  cell.labels.splice(to, 0, line);
+  emit();
+  return true;
+}
+
+/** Move only a line's COLOUR. The texts stay where they are and the colours
+ *  shuffle underneath them, so a palette can be rearranged without retyping. */
+function moveLabelColor(r, c, from, to) {
+  const cell = getCell(r, c);
+  if (!reorderable(cell.labels, from, to)) return false;
+  const colors = cell.labels.map((l) => l.color);
+  const [moved] = colors.splice(from, 1);
+  colors.splice(to, 0, moved);
+  cell.labels.forEach((l, i) => { l.color = colors[i]; });
+  emit();
+  return true;
+}
+
+function reorderable(list, from, to) {
+  return from !== to && from >= 0 && to >= 0 && from < list.length && to < list.length;
+}
+
 function setRowWeight(r, w) {
   state.rowWeights[r] = w > 0 ? w : undefined;
   emit();

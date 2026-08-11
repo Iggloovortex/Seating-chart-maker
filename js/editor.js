@@ -378,6 +378,61 @@ function bulkLabelRow(keys, index) {
   return row;
 }
 
+function labelGrip(title) {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'erow__grip';
+  el.textContent = '\u2630';           // hamburger
+  el.title = title;
+  el.setAttribute('aria-label', title);
+  return el;
+}
+
+/** Drag a grip up or down the label list to reorder. `kind` decides what
+ *  travels: the whole line, or only its colour. Same pointer-drag shape as the
+ *  grid's move handle — press, track the nearest row, apply on release. */
+function attachLabelDrag(handle, index, kind) {
+  let drag = null;
+
+  handle.addEventListener('pointerdown', (e) => {
+    const list = document.getElementById('label-list');
+    const rows = list ? [...list.children] : [];
+    if (rows.length < 2) return;
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    drag = { rows, boxes: rows.map((el) => el.getBoundingClientRect()), target: index };
+    rows[index].classList.add(kind === 'color' ? 'erow--dragging-color' : 'erow--dragging');
+  });
+
+  handle.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    let best = 0, bestD = Infinity;
+    drag.boxes.forEach((b, i) => {
+      const d = Math.abs(e.clientY - (b.top + b.height / 2));
+      if (d < bestD) { bestD = d; best = i; }
+    });
+    if (best === drag.target) return;
+    drag.rows.forEach((el) => el.classList.remove('erow--drop'));
+    drag.target = best;
+    if (best !== index) drag.rows[best].classList.add('erow--drop');
+  });
+
+  const finish = () => {
+    if (!drag) return;
+    const to = drag.target;
+    drag.rows.forEach((el) =>
+      el.classList.remove('erow--dragging', 'erow--dragging-color', 'erow--drop'));
+    drag = null;
+    if (to === index || !current) return;
+    const moved = kind === 'color'
+      ? moveLabelColor(current.r, current.c, index, to)
+      : moveLabelLine(current.r, current.c, index, to);
+    if (moved) render(peekCell(current.r, current.c));
+  };
+  handle.addEventListener('pointerup', finish);
+  handle.addEventListener('pointercancel', finish);
+}
+
 /** First non-default color found on line `index` among the selected cells. */
 function seedLineColor(keys, index) {
   for (const k of keys) {
@@ -448,7 +503,15 @@ function labelRow(line, index) {
     render(peekCell(current.r, current.c));
   });
 
-  row.append(text, color, del);
+  // Two grips. The left one carries the whole line; the one beside the swatch
+  // carries only the colour, so a palette can be shuffled without retyping.
+  const grip = labelGrip('Drag to reorder this line');
+  const colorGrip = labelGrip('Drag to move this color to another line');
+  colorGrip.classList.add('erow__grip--color');
+  attachLabelDrag(grip, index, 'line');
+  attachLabelDrag(colorGrip, index, 'color');
+
+  row.append(grip, text, color, colorGrip, del);
   return row;
 }
 

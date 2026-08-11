@@ -487,6 +487,30 @@ body {
 /* The table bar reads as a different mode from the square one. */
 .selectbar--table { background: var(--surface); border-top: 2px solid var(--accent); }
 
+/* Label-line grips: the left one drags the whole line, the one beside the
+   swatch drags only that line's colour. */
+.erow__grip {
+  flex: 0 0 auto;
+  min-width: 28px;
+  min-height: 32px;
+  padding: 0 4px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: grab;
+  touch-action: none;            /* the drag owns the gesture */
+  user-select: none;
+}
+.erow__grip:hover { background: var(--surface-2); color: var(--ink); }
+.erow__grip:active { cursor: grabbing; }
+.erow__grip--color { color: var(--accent); }
+.erow--dragging { opacity: .55; }
+.erow--dragging-color .erow__color { outline: 2px solid var(--accent); outline-offset: 1px; }
+.erow--drop { outline: 2px dashed var(--accent); outline-offset: 2px; border-radius: 6px; }
+
 /* Table shape overlays (multi-square) */
 .table-shape {
   position: absolute;
