@@ -26,6 +26,7 @@ const DEFAULTS = {
   labelColor: '#1f2933',
   labelColor2: '#52606d',   // second label line (two lines are the norm)
   iconColor: '#1f2933',
+  tableColor: '#8d6e63',
   rowWeight: 1,
   colWeight: 1,
 };
@@ -66,6 +67,7 @@ const state = {
     iconColor: DEFAULTS.iconColor,
     labelColor: DEFAULTS.labelColor,
     labelColor2: DEFAULTS.labelColor2,
+    tableColor: DEFAULTS.tableColor,
   },
   grid: { cols: 6, rows: 5 },
   cells: new Map(),             // key "r,c" -> cell
@@ -75,6 +77,7 @@ const state = {
   paper: 'letter',              // preset id or { w, h, unit }
   landscape: true,              // paper orientation; false swaps width/height
   selection: new Set(),         // keys highlighted in select mode
+  tableSelection: new Set(),    // table ids highlighted in table mode
   showTrueSizes: false,         // preview weighted row/col sizes in the grid
 };
 
@@ -540,7 +543,8 @@ function pruneSelection() {
 function addTable(shape, color) {
   const cellKeys = [...state.selection];
   if (cellKeys.length === 0) return null;
-  const table = { id: `t${Date.now().toString(36)}`, cellKeys, shape, color };
+  const table = { id: `t${Date.now().toString(36)}`, cellKeys, shape,
+                  color: color || state.defaults.tableColor };
   state.tables.push(table);
   // A table seats everything under it: the shape covers its whole footprint, so
   // every square in that block belongs to the table whether it was selected or
@@ -555,7 +559,54 @@ function addTable(shape, color) {
 }
 function removeTable(id) {
   state.tables = state.tables.filter((t) => t.id !== id);
+  state.tableSelection.delete(id);
   emit();
+}
+
+// ------------------------------------------------- table selection (table mode)
+//
+// The mirror of the square selection, keyed by table id. Not saved with the
+// chart — like the square selection, it is a working state, not a property of
+// the layout.
+
+/** The table drawn over a square, if any. Later tables win, matching paint order. */
+function tableAt(r, c) {
+  let found = null;
+  for (const t of state.tables) {
+    const fp = footprintOf(t.cellKeys);
+    if (r >= fp.minR && r <= fp.maxR && c >= fp.minC && c <= fp.maxC) found = t;
+  }
+  return found;
+}
+
+function toggleTableSelection(id) {
+  if (state.tableSelection.has(id)) state.tableSelection.delete(id);
+  else state.tableSelection.add(id);
+  emit();
+}
+function selectAllTables() {
+  batch(() => {
+    state.tableSelection.clear();
+    for (const t of state.tables) state.tableSelection.add(t.id);
+  });
+}
+function clearTableSelection() {
+  state.tableSelection.clear();
+  emit();
+}
+function isTableSelected(id) { return state.tableSelection.has(id); }
+
+/** Apply a patch to every listed table. */
+function updateTables(ids, patch) {
+  batch(() => {
+    for (const t of state.tables) if (ids.includes(t.id)) Object.assign(t, patch);
+  });
+}
+function removeTables(ids) {
+  batch(() => {
+    state.tables = state.tables.filter((t) => !ids.includes(t.id));
+    for (const id of ids) state.tableSelection.delete(id);
+  });
 }
 function pruneTables() {
   for (const t of state.tables) {
@@ -582,6 +633,7 @@ function clearAll() {
     state.cells.clear();
     state.tables = [];
     state.selection.clear();
+    state.tableSelection.clear();
     state.rowWeights = [];
     state.colWeights = [];
     state.rowWeights.length = state.grid.rows;
@@ -616,6 +668,7 @@ function deserialize(data) {
       iconColor: data.defaults?.iconColor || DEFAULTS.iconColor,
       labelColor: data.defaults?.labelColor || DEFAULTS.labelColor,
       labelColor2: data.defaults?.labelColor2 || DEFAULTS.labelColor2,
+      tableColor: data.defaults?.tableColor || DEFAULTS.tableColor,
     };
     state.grid = {
       cols: clampInt(data.grid?.cols, 1, 40, 6),
@@ -635,6 +688,7 @@ function deserialize(data) {
     state.paper = data.paper || 'letter';
     state.landscape = data.landscape !== false;
     state.selection = new Set();
+    state.tableSelection = new Set();
     pruneTables();
   });
   return true;

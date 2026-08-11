@@ -493,6 +493,7 @@ function renderTables() {
     const inset = 6; // transparent spacing so the shape never touches borders
     const shape = document.createElement('div');
     shape.className = `table-shape table-shape--${table.shape}`;
+    if (state.tableSelection.has(table.id)) shape.classList.add('table-shape--picked');
     shape.style.left = `${left + inset}px`;
     shape.style.top = `${top + inset}px`;
     shape.style.width = `${right - left - inset * 2}px`;

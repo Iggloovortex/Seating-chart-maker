@@ -172,6 +172,7 @@
 
        <div class="toolbar__row toolbar__row--actions">
       <div class="toolbar__group toolbar__group--actions">
+        <button id="btn-table-mode" class="btn btn--toggle" type="button" aria-pressed="false" title="Table mode — pick and edit tables">Table</button>
         <button id="btn-select" class="btn btn--icon btn--toggle" type="button" aria-pressed="false" title="Select mode" aria-label="Select mode">
           <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use id="select-icon" href="#ui-select-off"/></svg>
         </button>
@@ -201,6 +202,10 @@
           <span class="defaults__label">Labels</span>
           <input id="def-label" type="color" class="defaults__swatch" aria-label="Default label color, line 1" />
         </label>
+        <label class="defaults__item">
+          <span class="defaults__label">Table</span>
+          <input id="def-table" type="color" class="defaults__swatch" aria-label="Default table color" />
+        </label>
         <span class="defaults__caption">Default Colors</span>
         <label class="defaults__item">
           <span class="defaults__label defaults__label--sub">Line 2</span>
@@ -226,13 +231,27 @@
         <button id="btn-copy-format" class="btn" type="button" title="Copy the selected square, labels and all">Copy square</button>
         <button id="btn-paste-format" class="btn" type="button" title="Clone the copied square onto every selected square">Paste square</button>
         <span class="toolbar__sep" aria-hidden="true"></span>
+        <button id="btn-table-round" class="btn" type="button" title="Make a round table from the selected squares">Round table</button>
+        <button id="btn-table-square" class="btn" type="button" title="Make a square table from the selected squares">Square table</button>
+        <button id="btn-select-clear" class="btn btn--ghost" type="button">Clear selection</button>
+      </div>
+    </div>
+
+    <!-- ===== Table action bar (only shown in table mode) ===== -->
+    <div id="table-bar" class="selectbar selectbar--table" hidden>
+      <span id="table-count" class="selectbar__count">0 tables selected</span>
+      <div class="selectbar__actions">
+        <button id="btn-table-all" class="btn" type="button" title="Select every table">Select all tables</button>
+        <span class="toolbar__sep" aria-hidden="true"></span>
         <label class="field">
           <span class="field__label">Color</span>
-          <input id="table-color" class="field__input field__input--color" type="color" value="#8d6e63" />
+          <input id="table-edit-color" class="field__input field__input--color" type="color" value="#8d6e63" />
         </label>
-        <button id="btn-table-round" class="btn" type="button">Round table</button>
-        <button id="btn-table-square" class="btn" type="button">Square table</button>
-        <button id="btn-select-clear" class="btn btn--ghost" type="button">Clear selection</button>
+        <button id="btn-table-to-round" class="btn" type="button" title="Make the selected tables round">Round</button>
+        <button id="btn-table-to-square" class="btn" type="button" title="Make the selected tables square">Square</button>
+        <span class="toolbar__sep" aria-hidden="true"></span>
+        <button id="btn-table-remove" class="btn btn--empty" type="button" title="Remove the selected tables">Remove</button>
+        <button id="btn-table-clear" class="btn btn--ghost" type="button">Clear selection</button>
       </div>
     </div>
 

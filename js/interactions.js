@@ -14,6 +14,12 @@ function setSelectMode(on) {
 }
 function isSelectMode() { return selectMode; }
 
+// Table mode picks TABLES rather than squares. The two modes are mutually
+// exclusive — the UI layer (js/tables.js) turns one off when the other goes on.
+let tableMode = false;
+function setTableMode(on) { tableMode = on; }
+function isTableMode() { return tableMode; }
+
 let editHandler = () => {};
 function onRequestEdit(fn) { editHandler = fn; }
 
@@ -101,6 +107,15 @@ function initInteractions(chartEl) {
 function fireTap(cell, mods = {}) {
   const [r, c] = parseKey(cell.dataset.key);
   const { additive, shift } = mods;
+
+  // In table mode a tap picks the table drawn over the square. The shapes are
+  // pointer-events:none overlays, so the square underneath is what the pointer
+  // actually lands on and the table is found from its position.
+  if (tableMode) {
+    const table = tableAt(r, c);
+    if (table) toggleTableSelection(table.id);
+    return;
+  }
 
   // Shift+click sizes a rectangle from a fixed anchor, and only commits seating
   // when the same rectangle is clicked twice:

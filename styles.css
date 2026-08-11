@@ -151,7 +151,7 @@ body {
    carries the section caption and the Line 2 swatch under "Labels". */
 .defaults {
   display: grid;
-  grid-template-columns: repeat(4, auto);
+  grid-template-columns: repeat(5, auto);
   align-items: end;
   gap: 6px 10px;
   padding-left: 14px;
@@ -478,6 +478,14 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Picked in table mode: a dashed accent ring around the shape. */
+.table-shape--picked {
+  outline: 3px dashed var(--accent);
+  outline-offset: 2px;
+}
+/* The table bar reads as a different mode from the square one. */
+.selectbar--table { background: var(--surface); border-top: 2px solid var(--accent); }
 
 /* Table shape overlays (multi-square) */
 .table-shape {

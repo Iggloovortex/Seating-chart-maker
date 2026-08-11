@@ -37,7 +37,7 @@ rowsInput.addEventListener('change', applyGrid);
 // ---- Default colors --------------------------------------------------------
 const DEFAULT_COLOR_INPUTS = {
   fill: 'def-fill', border: 'def-border', iconColor: 'def-icon',
-  labelColor: 'def-label', labelColor2: 'def-label2',
+  labelColor: 'def-label', labelColor2: 'def-label2', tableColor: 'def-table',
 };
 for (const [key, id] of Object.entries(DEFAULT_COLOR_INPUTS)) {
   const el = document.getElementById(id);
@@ -54,6 +54,7 @@ function reflectDefaults() {
 initPaperControls();
 initOrientationControls();
 initTables();
+initTableMode();
 initInsertGuides(document.getElementById('stage'));
 
 // Grid view options
