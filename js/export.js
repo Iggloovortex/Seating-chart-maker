@@ -327,7 +327,7 @@ function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, 
 
   let cursorY = -totalH / 2;
   if (hasIcon) {
-    const img = imgCache.get(`${iconId}|${iconColorOf(data)}`);
+    const img = imgCache.get(iconKey(iconId, data));
     if (img) ctx.drawImage(img, -iconSize / 2, cursorY, iconSize, iconSize);
     cursorY += iconSize;
   }
@@ -401,17 +401,23 @@ function iconColorOf(data) {
   return data.iconColor || data.border || '#2f6feb';
 }
 
+/** Cache key for a drawn icon: the same glyph in a different colour or fill is
+ *  a different image. */
+function iconKey(id, data) {
+  return `${id}|${iconColorOf(data)}|${data.iconFill || ''}`;
+}
+
 async function preloadIcons(desks, seats, covered = []) {
-  const needed = new Map(); // "id|color" -> dataUrl
-  const want = (id, color) => needed.set(`${id}|${color}`, iconDataUrl(id, color));
+  const needed = new Map(); // key -> dataUrl
+  const want = (id, data) =>
+    needed.set(iconKey(id, data), iconDataUrl(id, iconColorOf(data), data.iconFill));
 
   for (const { data } of [...desks, ...covered]) {
-    if (data.icon) want(data.icon, iconColorOf(data));
+    if (data.icon) want(data.icon, data);
   }
   for (const { data } of seats) {
-    const color = iconColorOf(data);
-    if (data.icon) want(data.icon, color);
-    else if ((data.labels || []).filter((l) => l.text).length === 0) want('chair', color); // empty chair
+    if (data.icon) want(data.icon, data);
+    else if ((data.labels || []).filter((l) => l.text).length === 0) want('chair', data); // empty chair
   }
 
   const cache = new Map();

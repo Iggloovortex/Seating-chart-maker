@@ -577,7 +577,7 @@ function buildCell(r, c, rects) {
     content.style.setProperty('--rot', `${(data.rotation || 0) + tableRot}deg`);
 
     if (data.icon) {
-      const svg = iconUse(data.icon);
+      const svg = iconUse(data.icon, 'cell__icon', data.iconFill);
       if (svg) {
         svg.style.color = data.iconColor || '#1f2933'; // drives currentColor in the icon
         // Chairs preview at their chair size, matching the scaled-down output.

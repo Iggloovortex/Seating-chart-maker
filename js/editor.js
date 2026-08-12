@@ -44,6 +44,7 @@ function showPane() {
 }
 
 function closeEditor() {
+  document.getElementById('editor-actions').replaceChildren();
   editorEl.hidden = true;
   editorEl.setAttribute('aria-hidden', 'true');
   current = null;
@@ -51,42 +52,7 @@ function closeEditor() {
 
 function render(cell) {
   bodyEl.replaceChildren();
-
-  // --- Copy / paste / delete, at the top where they are reached first -------
-  bodyEl.appendChild(group('Square', (g) => {
-    const row = document.createElement('div');
-    row.className = 'erow';
-
-    const copy = document.createElement('button');
-    copy.type = 'button';
-    copy.className = 'btn';
-    copy.style.flex = '1';
-    copy.textContent = 'Copy';
-    copy.title = 'Copy this square: colors, icon, facing and every label line';
-    copy.addEventListener('click', () => {
-      copySquareFrom(current.r, current.c);
-      render(peekCell(current.r, current.c));
-    });
-
-    const paste = document.createElement('button');
-    paste.type = 'button';
-    paste.className = 'btn';
-    paste.style.flex = '1';
-    paste.textContent = 'Paste';
-    paste.title = 'Clone the copied square onto this one, label text included';
-    paste.disabled = !hasSquareClipboard();
-    paste.addEventListener('click', () => {
-      pasteSquareTo([keyOf(current.r, current.c)]);
-      render(peekCell(current.r, current.c));
-    });
-
-    const del = deleteButton(() => [keyOf(current.r, current.c)],
-                             () => ({ r: current.r, c: current.c }));
-    del.style.flex = '1';
-    del.style.marginRight = '';
-    row.append(copy, paste, del);
-    g.appendChild(row);
-  }));
+  renderSquareActions();
 
   // --- Seat, facing and colors share one row --------------------------------
   bodyEl.appendChild(group('Seat, facing & colors', (g) => {
@@ -122,7 +88,6 @@ function render(cell) {
       picker.appendChild(btn);
     }
     g.appendChild(picker);
-    g.appendChild(colorRow('Icon color', cell.iconColor, (v) => updateCell(current.r, current.c, { iconColor: v })));
 
     // The chair icon makes the square a chair: furniture that draws smaller than
     // a desk, so it fits inside a thinned walkway. There is no size to set — the
@@ -192,6 +157,7 @@ function render(cell) {
 
 function renderBulk(keys) {
   bodyEl.replaceChildren();
+  renderSquareActions();      // empties the header bar; bulk has no single square
 
   // Seed color/rotation controls from the first selected cell.
   const [sr, sc] = keys[0].split(',').map(Number);
@@ -595,7 +561,10 @@ function facingCompass(cell) {
   return wrap;
 }
 
-/** Fill and border as named swatches, the size the toolbar's defaults use. */
+/** Every colour a square carries, as named swatches the size the toolbar's
+ *  defaults use — icon colour among them, rather than stranded in the Icon
+ *  section. Icon fill paints the space enclosed by the icon's strokes and is off
+ *  until its box is ticked. */
 function squareColors(cell) {
   const wrap = controlGroup('Colors');
   const row = document.createElement('div');
@@ -603,9 +572,33 @@ function squareColors(cell) {
   row.append(
     swatch('Fill', cell.fill, (v) => updateCell(current.r, current.c, { fill: v })),
     swatch('Border', cell.border, (v) => updateCell(current.r, current.c, { border: v })),
+    swatch('Icon', cell.iconColor, (v) => updateCell(current.r, current.c, { iconColor: v })),
+    iconFillSwatch(cell),
   );
   wrap.appendChild(row);
   return wrap;
+}
+
+function iconFillSwatch(cell) {
+  const on = !!cell.iconFill;
+  const item = swatch('Icon fill', cell.iconFill || cell.fill,
+                      (v) => updateCell(current.r, current.c, { iconFill: v }));
+  const input = item.querySelector('input');
+  input.disabled = !on;
+
+  // A tick in the label turns it on and off; off means the icon stays an outline.
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.className = 'swatch__toggle';
+  box.checked = on;
+  box.title = on ? 'Icon fill on' : 'Icon fill off';
+  box.setAttribute('aria-label', 'Fill the space inside the icon');
+  box.addEventListener('change', () => {
+    updateCell(current.r, current.c, { iconFill: box.checked ? input.value : null });
+    render(peekCell(current.r, current.c));
+  });
+  item.querySelector('.defaults__label').prepend(box);
+  return item;
 }
 
 function swatch(label, value, onChange) {
@@ -632,4 +625,38 @@ function controlGroup(title) {
   h.textContent = title;
   el.appendChild(h);
   return el;
+}
+
+/** Copy / paste / delete live in the pane's header, under the title, so they are
+ *  reached before any scrolling. */
+function renderSquareActions() {
+  const bar = document.getElementById('editor-actions');
+  bar.replaceChildren();
+  if (!current) return;
+
+  const copy = document.createElement('button');
+  copy.type = 'button';
+  copy.className = 'btn';
+  copy.textContent = 'Copy';
+  copy.title = 'Copy this square: colors, icon, facing and every label line';
+  copy.addEventListener('click', () => {
+    copySquareFrom(current.r, current.c);
+    render(peekCell(current.r, current.c));
+  });
+
+  const paste = document.createElement('button');
+  paste.type = 'button';
+  paste.className = 'btn';
+  paste.textContent = 'Paste';
+  paste.title = 'Clone the copied square onto this one, label text included';
+  paste.disabled = !hasSquareClipboard();
+  paste.addEventListener('click', () => {
+    pasteSquareTo([keyOf(current.r, current.c)]);
+    render(peekCell(current.r, current.c));
+  });
+
+  const del = deleteButton(() => [keyOf(current.r, current.c)],
+                           () => ({ r: current.r, c: current.c }));
+  del.style.marginRight = '';
+  bar.append(copy, paste, del);
 }

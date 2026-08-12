@@ -56,6 +56,7 @@ function makeCell() {
     labels: [],                 // [{ text, color }]
     icon: null,                 // icon id from icons.js
     iconColor: state.defaults.iconColor,
+    iconFill: null,             // null => the icon stays an outline
     rotation: 0,                // 0 | 90 | 180 | 270
     fill: state.defaults.fill,
     border: state.defaults.border,
@@ -338,6 +339,7 @@ function copySquareFrom(r, c) {
     icon: cell.icon,
     iconColor: cell.iconColor,
     rotation: cell.rotation,
+    iconFill: cell.iconFill,
     labels: (cell.labels || []).map((l) => ({ text: l.text, color: l.color })),
   };
   emit();
@@ -359,6 +361,7 @@ function pasteSquareTo(keys) {
       cell.icon = f.icon;
       cell.iconColor = f.iconColor;
       cell.rotation = f.rotation;
+      cell.iconFill = f.iconFill;
       // Fresh objects per target so squares never share label instances.
       cell.labels = f.labels.map((l) => ({ text: l.text, color: l.color }));
     }
