@@ -383,6 +383,7 @@ function openDeleteMenu(x, y, { keys, r, c }) {
   deleteMenu.setAttribute('role', 'menu');
 
   const n = keys.length;
+  const tables = [...state.tableSelection];
   const item = (label, danger, run) => {
     const b = document.createElement('button');
     b.type = 'button';
@@ -393,12 +394,18 @@ function openDeleteMenu(x, y, { keys, r, c }) {
     deleteMenu.appendChild(b);
   };
 
-  item(n > 1 ? `Reset ${n} squares` : 'Reset square', false, () => {
+  // Deleting squares takes any picked tables with them, so one action clears
+  // everything that is currently selected.
+  const what = [n > 1 ? `${n} squares` : 'square'];
+  if (tables.length) what.push(tables.length > 1 ? `${tables.length} tables` : 'table');
+  item(`Delete ${what.join(' + ')}`, true, () => {
     const filled = keys.some((k) => { const [rr, cc] = parseKey(k); return isEnabled(rr, cc); });
-    if (filled && !confirm(n > 1
-      ? `Reset ${n} squares? Their labels, icons and colors are removed.`
-      : 'Reset this square? Its labels, icon and colors are removed.')) return;
-    resetSquares(keys);
+    if ((filled || tables.length) &&
+        !confirm(`Delete ${what.join(' and ')}? Labels, icons and colors go with them.`)) return;
+    batch(() => {
+      resetSquares(keys);
+      if (tables.length) removeTables(tables);
+    });
   });
   item(`Delete row ${r + 1}`, true, () => {
     if (lineHasContent('row', r) &&
@@ -454,7 +461,10 @@ function initInsertGuides(stageEl) {
 /** Corner grab handle for dragging the whole selection to a new spot. Shown at
  *  the top-left of the selection's bounding box while in select mode. */
 function renderMoveHandle() {
-  if (typeof isSelectMode === 'function' && !isSelectMode()) return;
+  // Table mode picks squares too, so the handle belongs there just as much.
+  const picking = (typeof isSelectMode === 'function' && isSelectMode()) ||
+                  (typeof isTableMode === 'function' && isTableMode());
+  if (!picking) return;
   const box = selectionBounds();
   if (!box) return;
 
@@ -565,12 +575,20 @@ function buildCell(r, c, rects) {
     el.appendChild(checkBadge());
   }
 
-  if (data && data.enabled) {
-    el.classList.add('cell--on');
-    el.style.background = data.fill;
-    el.style.borderColor = data.border;
+  // A square that has been emptied but still holds a label or an icon shows them
+  // faded, so somewhere you have used before stays recognisable. Grid only — the
+  // output draws nothing at all for an empty square.
+  const ghost = !!(data && !data.enabled && hasContent(data));
+
+  if (data && (data.enabled || ghost)) {
+    if (data.enabled) {
+      el.classList.add('cell--on');
+      el.style.background = data.fill;
+      el.style.borderColor = data.border;
+    }
 
     const content = document.createElement('div');
+    if (ghost) content.classList.add('cell__content--ghost');
     content.className = 'cell__content';
     // A square under a table turns with the table, on top of its own facing.
     const tableRot = tableAt(r, c)?.rotation || 0;
@@ -600,7 +618,9 @@ function buildCell(r, c, rects) {
       content.appendChild(labels);
     }
     el.appendChild(content);
-    el.setAttribute('aria-label', ariaLabel(r, c, data));
+    el.setAttribute('aria-label', ghost
+      ? `Empty seat row ${r + 1}, column ${c + 1}, previously ${ariaLabel(r, c, data)}`
+      : ariaLabel(r, c, data));
   } else {
     el.setAttribute('aria-label', `Empty seat row ${r + 1}, column ${c + 1}`);
   }
@@ -677,14 +697,18 @@ function renderTables() {
     del.textContent = '✕';
     del.title = 'Remove table';
     del.setAttribute('aria-label', 'Remove table');
-    del.style.left = `${right - inset - TABLE_BADGE - BADGE_PAD}px`;
-    del.style.top = `${top + inset + BADGE_PAD}px`;
+    // Everything pinned to a table turns with it, so the x and the grips stay on
+    // the corners they belong to rather than hanging where the shape used to be.
+    const spin = spinner(table, left + inset, top + inset, right - inset, bottom - inset);
+    const dp = spin(right - inset - TABLE_BADGE / 2 - BADGE_PAD, top + inset + TABLE_BADGE / 2 + BADGE_PAD);
+    del.style.left = `${dp.x - TABLE_BADGE / 2}px`;
+    del.style.top = `${dp.y - TABLE_BADGE / 2}px`;
     del.addEventListener('click', (e) => { e.stopPropagation(); removeTable(table.id); });
     chart.appendChild(del);
 
     // A picked table can be re-shaped by its own edges.
     if (state.tableSelection.has(table.id) && typeof isTableMode === 'function' && isTableMode()) {
-      addResizeHandles(table, left + inset, top + inset, right - inset, bottom - inset);
+      addResizeHandles(table, left + inset, top + inset, right - inset, bottom - inset, spin);
     }
   }
 }
@@ -701,15 +725,29 @@ const RESIZE_DIRS = {
   sw: [0, 1], s: [0.5, 1], se: [1, 1],
 };
 
-function addResizeHandles(table, x1, y1, x2, y2) {
+/** Turns a point on an unrotated table into where it lands once the table is
+ *  turned, so anything attached to the shape travels with it. */
+function spinner(table, x1, y1, x2, y2) {
+  const rot = ((table.rotation || 0) * Math.PI) / 180;
+  const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+  const cos = Math.cos(rot), sin = Math.sin(rot);
+  return (x, y) => {
+    const dx = x - cx, dy = y - cy;
+    return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos };
+  };
+}
+
+function addResizeHandles(table, x1, y1, x2, y2, spin) {
   for (const [dir, [fx, fy]] of Object.entries(RESIZE_DIRS)) {
     const h = document.createElement('button');
     h.type = 'button';
     h.className = `table-handle table-handle--${dir}`;
     h.title = 'Drag to resize the table';
     h.setAttribute('aria-label', h.title);
-    h.style.left = `${x1 + (x2 - x1) * fx}px`;
-    h.style.top = `${y1 + (y2 - y1) * fy}px`;
+    const at = spin(x1 + (x2 - x1) * fx, y1 + (y2 - y1) * fy);
+    h.style.left = `${at.x}px`;
+    h.style.top = `${at.y}px`;
+    if (table.rotation) h.style.rotate = `${table.rotation}deg`;
     attachResizeDrag(h, table, dir);
     chart.appendChild(h);
   }

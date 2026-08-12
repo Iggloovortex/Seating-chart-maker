@@ -26,7 +26,7 @@ const DEFAULTS = {
   labelColor: '#1f2933',
   labelColor2: '#52606d',   // second label line (two lines are the norm)
   iconColor: '#1f2933',
-  labelColor3: '#7b8794',   // third label line
+  iconFill: null,           // null => new icons stay outlines
   tableColor: '#8d6e63',
   tableBorder: '#5d4037',
   rowWeight: 1,
@@ -40,12 +40,10 @@ function isChairCell(cell) {
 }
 function isChairAt(r, c) { return isChairCell(peekCell(r, c)); }
 
-/** Default color for label line `index`. Lines 1-3 each have their own; beyond
- *  that they carry on with line 3's. */
+/** Default color for label line `index`. Line 1 has its own; line 2 and every
+ *  line after it share the second colour. */
 function defaultLabelColor(index) {
-  if (index <= 0) return state.defaults.labelColor;
-  if (index === 1) return state.defaults.labelColor2;
-  return state.defaults.labelColor3;
+  return index <= 0 ? state.defaults.labelColor : state.defaults.labelColor2;
 }
 
 function makeCell() {
@@ -56,7 +54,7 @@ function makeCell() {
     labels: [],                 // [{ text, color }]
     icon: null,                 // icon id from icons.js
     iconColor: state.defaults.iconColor,
-    iconFill: null,             // null => the icon stays an outline
+    iconFill: state.defaults.iconFill,   // null => the icon stays an outline
     rotation: 0,                // 0 | 90 | 180 | 270
     fill: state.defaults.fill,
     border: state.defaults.border,
@@ -73,7 +71,7 @@ const state = {
     iconColor: DEFAULTS.iconColor,
     labelColor: DEFAULTS.labelColor,
     labelColor2: DEFAULTS.labelColor2,
-    labelColor3: DEFAULTS.labelColor3,
+    iconFill: DEFAULTS.iconFill,
     tableColor: DEFAULTS.tableColor,
     tableBorder: DEFAULTS.tableBorder,
   },
@@ -862,7 +860,7 @@ function deserialize(data) {
       iconColor: data.defaults?.iconColor || DEFAULTS.iconColor,
       labelColor: data.defaults?.labelColor || DEFAULTS.labelColor,
       labelColor2: data.defaults?.labelColor2 || DEFAULTS.labelColor2,
-      labelColor3: data.defaults?.labelColor3 || DEFAULTS.labelColor3,
+      iconFill: data.defaults?.iconFill || DEFAULTS.iconFill,
       tableColor: data.defaults?.tableColor || DEFAULTS.tableColor,
       tableBorder: data.defaults?.tableBorder || DEFAULTS.tableBorder,
     };

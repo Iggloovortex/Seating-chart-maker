@@ -211,9 +211,9 @@ function initTableMode() {
     if (!tableActive) return;
     const squares = state.selection.size;
     const tables = state.tableSelection.size;
-    countEl.textContent = squares
-      ? `${plural(squares, 'square')} selected`
-      : `${plural(tables, 'table')} selected`;
+    // Both halves are always reported, since either can be non-empty here.
+    countEl.textContent =
+      `${plural(squares, 'square')} & ${plural(tables, 'table')} selected`;
 
     // Shape buttons build from selected squares, or convert picked tables.
     const canShape = squares > 0 || tables > 0;

@@ -37,7 +37,7 @@ rowsInput.addEventListener('change', applyGrid);
 // ---- Default colors --------------------------------------------------------
 const DEFAULT_COLOR_INPUTS = {
   fill: 'def-fill', border: 'def-border', iconColor: 'def-icon',
-  labelColor: 'def-label', labelColor2: 'def-label2', labelColor3: 'def-label3',
+  labelColor: 'def-label', labelColor2: 'def-label2',
   tableColor: 'def-table', tableBorder: 'def-table-border',
 };
 for (const [key, id] of Object.entries(DEFAULT_COLOR_INPUTS)) {
@@ -49,7 +49,27 @@ function reflectDefaults() {
   for (const [key, id] of Object.entries(DEFAULT_COLOR_INPUTS)) {
     document.getElementById(id).value = state.defaults[key];
   }
+  reflectIconFillDefault();
 }
+
+// Icon fill is the one default that can be OFF, so it carries a tick as well as
+// a swatch — the same pair the edit pane uses.
+const iconFillOn = document.getElementById('def-icon-fill-on');
+const iconFillSwatchEl = document.getElementById('def-icon-fill');
+function reflectIconFillDefault() {
+  const on = !!state.defaults.iconFill;
+  iconFillOn.checked = on;
+  iconFillSwatchEl.disabled = !on;
+  if (on) iconFillSwatchEl.value = state.defaults.iconFill;
+}
+iconFillOn.addEventListener('change', () => {
+  setDefault('iconFill', iconFillOn.checked ? iconFillSwatchEl.value : null);
+  reflectIconFillDefault();
+});
+bindColorInput(iconFillSwatchEl, () => {
+  if (iconFillOn.checked) setDefault('iconFill', iconFillSwatchEl.value);
+});
+reflectIconFillDefault();
 
 // ---- Paper, tables ---------------------------------------------------------
 initPaperControls();

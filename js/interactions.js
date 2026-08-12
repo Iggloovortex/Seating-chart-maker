@@ -174,7 +174,13 @@ function fireTap(cell, mods = {}) {
       return;
     }
 
-    if (r === lineAnchor.r || c === lineAnchor.c) {
+    // Once a line exists, only a click INSIDE it re-sizes it; anywhere else —
+    // even along the same row — starts a fresh line, so consecutive runs down
+    // one column do not keep swallowing each other.
+    const started = lineKeys.length > 1;
+    const inside = lineKeys.includes(keyOf(r, c));
+    const sameLine = r === lineAnchor.r || c === lineAnchor.c;
+    if (sameLine && (!started || inside)) {
       deselectKeys(lineKeys);                    // re-size: take this line back
       lineKeys = addLineRange(lineAnchor.r, lineAnchor.c, r, c);
       return;

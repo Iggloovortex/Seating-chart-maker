@@ -150,13 +150,23 @@ body {
    above itself: seat colours and Table on top, the three label lines and Table
    Border beneath, so Table Border sits directly under Table. */
 .defaults {
-  display: grid;
-  grid-template-columns: repeat(4, auto);
-  align-items: end;
-  gap: 6px 10px;
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
   padding-left: 14px;
   border-left: 1px solid var(--line);
 }
+/* Three groups — the square's own colours, the icon's, the table's — each two
+   swatches wide at most, with a rule between them so the grouping is visible. */
+.defaults__set {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  align-items: end;
+  gap: 6px 10px;
+}
+.defaults__set--icon,
+.defaults__set--table { grid-template-columns: auto; }
+.defaults__rule { width: 1px; background: var(--line); }
 .defaults__item {
   display: flex;
   flex-direction: column;
@@ -194,8 +204,11 @@ body {
     border-top: 1px solid var(--line);
     padding-top: 8px;
     width: 100%;
+    flex-wrap: wrap;
   }
+  .defaults__set { flex: 1; }
   .defaults__swatch { width: 100%; min-width: 44px; }
+  .defaults__rule { display: none; }
 }
 .field__input--color {
   width: 48px;
@@ -392,6 +405,11 @@ body {
   outline: 3px solid var(--accent);
   outline-offset: -3px;
 }
+
+/* An empty square that still holds a label or an icon shows them faded, so a
+   square you have used before is recognisable. Grid only — the output draws
+   nothing for an empty square. */
+.cell__content--ghost { opacity: .75; }
 
 /* Ticked checkbox in the square's top-right corner. The padding is transparent
    and generous, so the mark sits comfortably in from both edges instead of
@@ -1080,12 +1098,6 @@ body {
    class, which would take these with it on each re-render. */
 .line-remove { transform: translate(-50%, -50%); z-index: 7; }
 
-/* A menu raised at the pointer rather than anchored to a button. */
-.delete-menu { position: fixed; z-index: 70; }
-.popmenu__item--danger { color: var(--danger); }
-.popmenu__item--danger:hover,
-.popmenu__item--danger:focus-visible { background: var(--danger); color: #fff; }
-
 /* ===================== Small pop-up menus ===================== */
 .menu-anchor { position: relative; display: inline-flex; }
 .popmenu {
@@ -1119,3 +1131,11 @@ body {
 .popmenu__item:hover,
 .popmenu__item:focus-visible { background: var(--accent); color: var(--accent-ink); }
 .popmenu__item:disabled { opacity: .5; cursor: default; }
+
+/* A menu raised at the pointer rather than anchored to a button. Declared AFTER
+   .popmenu so its position and stacking win — at .popmenu's z-index it opened
+   behind the edit pane, which reads as the Delete button doing nothing. */
+.delete-menu { position: fixed; z-index: 70; }
+.popmenu__item--danger { color: var(--danger); }
+.popmenu__item--danger:hover,
+.popmenu__item--danger:focus-visible { background: var(--danger); color: #fff; }

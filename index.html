@@ -86,6 +86,11 @@
         <rect x="3.5" y="3.5" width="17" height="17" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/>
         <path d="M7.5 12.5l3 3 6-6.5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
       </symbol>
+      <symbol id="ui-table" viewBox="0 0 24 24">
+        <rect x="2.5" y="6" width="19" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M2.5 12h19" fill="none" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M9 6v12M15 6v12" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      </symbol>
       <symbol id="ui-select-off" viewBox="0 0 24 24">
         <rect x="3.5" y="3.5" width="17" height="17" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/>
       </symbol>
@@ -189,7 +194,10 @@
 
        <div class="toolbar__row toolbar__row--actions">
       <div class="toolbar__group toolbar__group--actions">
-        <button id="btn-table-mode" class="btn btn--toggle" type="button" aria-pressed="false" title="Table mode — pick and edit tables">Table</button>
+        <button id="btn-table-mode" class="btn btn--icon btn--toggle" type="button" aria-pressed="false"
+                title="Table mode — pick and edit tables" aria-label="Table mode">
+          <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-table"/></svg>
+        </button>
         <button id="btn-select" class="btn btn--icon btn--toggle" type="button" aria-pressed="false" title="Select mode" aria-label="Select mode">
           <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use id="select-icon" href="#ui-select-off"/></svg>
         </button>
@@ -203,38 +211,49 @@
 
       <!-- Default colors: spans both toolbar rows on the right -->
       <div class="defaults" role="group" aria-label="Default colors">
-        <label class="defaults__item">
-          <span class="defaults__label">Fill</span>
-          <input id="def-fill" type="color" class="defaults__swatch" aria-label="Default seat fill" />
-        </label>
-        <label class="defaults__item">
-          <span class="defaults__label">Border</span>
-          <input id="def-border" type="color" class="defaults__swatch" aria-label="Default seat border" />
-        </label>
-        <label class="defaults__item">
-          <span class="defaults__label">Icon</span>
-          <input id="def-icon" type="color" class="defaults__swatch" aria-label="Default icon color" />
-        </label>
-        <label class="defaults__item">
-          <span class="defaults__label">Table</span>
-          <input id="def-table" type="color" class="defaults__swatch" aria-label="Default table color" />
-        </label>
-        <label class="defaults__item">
-          <span class="defaults__label">Label 1</span>
-          <input id="def-label" type="color" class="defaults__swatch" aria-label="Default label color, line 1" />
-        </label>
-        <label class="defaults__item">
-          <span class="defaults__label">Label 2</span>
-          <input id="def-label2" type="color" class="defaults__swatch" aria-label="Default label color, line 2" />
-        </label>
-        <label class="defaults__item">
-          <span class="defaults__label">Label 3</span>
-          <input id="def-label3" type="color" class="defaults__swatch" aria-label="Default label color, line 3" />
-        </label>
-        <label class="defaults__item">
-          <span class="defaults__label">Table Border</span>
-          <input id="def-table-border" type="color" class="defaults__swatch" aria-label="Default table border color" />
-        </label>
+        <div class="defaults__set">
+          <label class="defaults__item">
+            <span class="defaults__label">Fill</span>
+            <input id="def-fill" type="color" class="defaults__swatch" aria-label="Default seat fill" />
+          </label>
+          <label class="defaults__item">
+            <span class="defaults__label">Border</span>
+            <input id="def-border" type="color" class="defaults__swatch" aria-label="Default seat border" />
+          </label>
+          <label class="defaults__item">
+            <span class="defaults__label">Label 1</span>
+            <input id="def-label" type="color" class="defaults__swatch" aria-label="Default label color, line 1" />
+          </label>
+          <label class="defaults__item">
+            <span class="defaults__label">Label 2</span>
+            <input id="def-label2" type="color" class="defaults__swatch" aria-label="Default label color, line 2 and beyond" />
+          </label>
+        </div>
+        <span class="defaults__rule" aria-hidden="true"></span>
+        <div class="defaults__set defaults__set--icon">
+          <label class="defaults__item">
+            <span class="defaults__label">Icon</span>
+            <input id="def-icon" type="color" class="defaults__swatch" aria-label="Default icon color" />
+          </label>
+          <label class="defaults__item">
+            <span class="defaults__label">
+              <input id="def-icon-fill-on" type="checkbox" class="swatch__toggle"
+                     aria-label="Fill the space inside icons by default" />Fill
+            </span>
+            <input id="def-icon-fill" type="color" class="defaults__swatch" aria-label="Default icon fill color" />
+          </label>
+        </div>
+        <span class="defaults__rule" aria-hidden="true"></span>
+        <div class="defaults__set defaults__set--table">
+          <label class="defaults__item">
+            <span class="defaults__label">Table</span>
+            <input id="def-table" type="color" class="defaults__swatch" aria-label="Default table color" />
+          </label>
+          <label class="defaults__item">
+            <span class="defaults__label">Border</span>
+            <input id="def-table-border" type="color" class="defaults__swatch" aria-label="Default table border color" />
+          </label>
+        </div>
       </div>
     </header>
 
