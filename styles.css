@@ -409,7 +409,7 @@ body {
 /* An empty square that still holds a label or an icon shows them faded, so a
    square you have used before is recognisable. Grid only — the output draws
    nothing for an empty square. */
-.cell__content--ghost { opacity: .75; }
+.cell__content--ghost { opacity: .3; }
 
 /* Ticked checkbox in the square's top-right corner. The padding is transparent
    and generous, so the mark sits comfortably in from both edges instead of

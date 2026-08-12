@@ -588,8 +588,7 @@ function buildCell(r, c, rects) {
     }
 
     const content = document.createElement('div');
-    if (ghost) content.classList.add('cell__content--ghost');
-    content.className = 'cell__content';
+    content.className = ghost ? 'cell__content cell__content--ghost' : 'cell__content';
     // A square under a table turns with the table, on top of its own facing.
     const tableRot = tableAt(r, c)?.rotation || 0;
     content.style.setProperty('--rot', `${(data.rotation || 0) + tableRot}deg`);
@@ -747,7 +746,10 @@ function addResizeHandles(table, x1, y1, x2, y2, spin) {
     const at = spin(x1 + (x2 - x1) * fx, y1 + (y2 - y1) * fy);
     h.style.left = `${at.x}px`;
     h.style.top = `${at.y}px`;
-    if (table.rotation) h.style.rotate = `${table.rotation}deg`;
+    // The rotation has to sit in the same transform as the centring translate.
+    // As a separate `rotate` property it is applied first, which then spins the
+    // translate(-50%,-50%) too and slides every grip off its corner.
+    if (table.rotation) h.style.transform = `translate(-50%, -50%) rotate(${table.rotation}deg)`;
     attachResizeDrag(h, table, dir);
     chart.appendChild(h);
   }

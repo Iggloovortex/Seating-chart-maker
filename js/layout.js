@@ -22,8 +22,12 @@ function footprintOf(cellKeys) {
 function layoutRules() {
   const footprints = state.tables.map((t) => ({ t, fp: footprintOf(t.cellKeys) }));
 
-  const insideAnyFootprint = (r, c) =>
-    footprints.some(({ fp }) => r >= fp.minR && r <= fp.maxR && c >= fp.minC && c <= fp.maxC);
+  // What each table actually sits on, turned or not.
+  const covers = new Map(state.tables.map((t) => [t.id, new Set(tableCoverage(t))]));
+  const insideAnyFootprint = (r, c) => {
+    const k = keyOf(r, c);
+    return state.tables.some((t) => covers.get(t.id).has(k));
+  };
 
   /** The table a square is a seat at: the nearest one whose 1-cell ring
    *  (orthogonal or diagonal) it sits in without being under the table itself. */
@@ -101,4 +105,45 @@ function layoutRects({ wUnits, hUnits }, unit, originX, originY) {
     }
   }
   return rects;
+}
+
+/** The squares a table covers. Sitting square on the grid that is simply its
+ *  footprint; turned, it is every square whose centre falls inside the turned
+ *  shape — the rough outline the table now occupies.
+ *
+ *  `cellKeys` stays the table's BASE rectangle, which is what the shape is drawn
+ *  from. Coverage is derived, never stored, so rotating cannot feed its own
+ *  result back in and grow the table each time. */
+function tableCoverage(table) {
+  const fp = footprintOf(table.cellKeys);
+  const rot = ((table.rotation || 0) % 360 + 360) % 360;
+  const keys = [];
+  if (!rot) {
+    for (let r = fp.minR; r <= fp.maxR; r++)
+      for (let c = fp.minC; c <= fp.maxC; c++) keys.push(keyOf(r, c));
+    return keys;
+  }
+
+  // Work in cell units: the rectangle spans [minC, maxC+1] x [minR, maxR+1].
+  const cx = (fp.minC + fp.maxC + 1) / 2, cy = (fp.minR + fp.maxR + 1) / 2;
+  const hw = (fp.maxC + 1 - fp.minC) / 2, hh = (fp.maxR + 1 - fp.minR) / 2;
+  // Turn each square's centre BACK into the rectangle's own frame, where the
+  // test is just a pair of comparisons.
+  const rad = (-rot * Math.PI) / 180;
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+
+  // Only squares inside the turned rectangle's bounding box can qualify.
+  const ac = Math.abs(Math.cos((rot * Math.PI) / 180));
+  const as = Math.abs(Math.sin((rot * Math.PI) / 180));
+  const spanX = hw * ac + hh * as, spanY = hw * as + hh * ac;
+  const lo = (v) => Math.max(0, Math.floor(v));
+  for (let r = lo(cy - spanY); r <= Math.ceil(cy + spanY) && r < state.grid.rows; r++) {
+    for (let c = lo(cx - spanX); c <= Math.ceil(cx + spanX) && c < state.grid.cols; c++) {
+      const px = c + 0.5 - cx, py = r + 0.5 - cy;
+      if (Math.abs(px * cos - py * sin) <= hw && Math.abs(px * sin + py * cos) <= hh) {
+        keys.push(keyOf(r, c));
+      }
+    }
+  }
+  return keys;
 }

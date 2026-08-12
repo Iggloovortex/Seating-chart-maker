@@ -29,9 +29,10 @@ const SYMBOL_MARKUP = {
     '<rect x="3" y="4" width="18" height="12" rx="1" fill="FILL" stroke="COLOR" stroke-width="1.6"/>' +
     '<path d="M9 20h6m-3-4v4" fill="FILL" stroke="COLOR" stroke-width="1.6" stroke-linecap="round"/>',
   'ic-monitor-double':
-    '<rect x="1.5" y="5" width="9.5" height="8" rx="1" fill="FILL" stroke="COLOR" stroke-width="1.6"/>' +
-    '<rect x="13" y="5" width="9.5" height="8" rx="1" fill="FILL" stroke="COLOR" stroke-width="1.6"/>' +
-    '<path d="M6.25 13v3.5M3.5 18.5h5.5M17.75 13v3.5M15 18.5h5.5" fill="FILL" stroke="COLOR" stroke-width="1.6" stroke-linecap="round"/>',
+    '<rect x="0.8" y="5" width="10.4" height="7" rx="1" fill="FILL" stroke="COLOR" stroke-width="1.6"/>' +
+    '<path d="M4.2 17h3.6m-1.8-5v5" fill="none" stroke="COLOR" stroke-width="1.6" stroke-linecap="round"/>' +
+    '<rect x="12.8" y="5" width="10.4" height="7" rx="1" fill="FILL" stroke="COLOR" stroke-width="1.6"/>' +
+    '<path d="M16.2 17h3.6m-1.8-5v5" fill="none" stroke="COLOR" stroke-width="1.6" stroke-linecap="round"/>',
   'ic-kvm':
     '<rect x="3" y="3.5" width="18" height="12" rx="1" fill="FILL" stroke="COLOR" stroke-width="1.6"/>' +
     '<circle cx="6.6" cy="7.2" r=".85" fill="COLOR"/>' +

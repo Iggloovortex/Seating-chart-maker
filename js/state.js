@@ -642,10 +642,7 @@ const hasLabelText = (cell) => (cell.labels || []).some((l) => l.text && l.text.
 /** True when a square falls inside some table's footprint — the block its shape
  *  is drawn over. Those squares belong to the table rather than standing alone. */
 function isUnderTable(r, c) {
-  return state.tables.some((t) => {
-    const fp = footprintOf(t.cellKeys);
-    return r >= fp.minR && r <= fp.maxR && c >= fp.minC && c <= fp.maxC;
-  });
+  return state.tables.some((t) => tableCoverage(t).includes(keyOf(r, c)));
 }
 
 /** Seated squares matching `pred` that are NOT part of a table. The "absence"
@@ -712,13 +709,13 @@ function removeTable(id) {
 // chart — like the square selection, it is a working state, not a property of
 // the layout.
 
-/** The table drawn over a square, if any. Later tables win, matching paint order. */
+/** The table drawn over a square, if any. Later tables win, matching paint order.
+ *  Uses the coverage, so a turned table answers for the squares it actually sits
+ *  on rather than the box it started as. */
 function tableAt(r, c) {
   let found = null;
-  for (const t of state.tables) {
-    const fp = footprintOf(t.cellKeys);
-    if (r >= fp.minR && r <= fp.maxR && c >= fp.minC && c <= fp.maxC) found = t;
-  }
+  const k = keyOf(r, c);
+  for (const t of state.tables) if (tableCoverage(t).includes(k)) found = t;
   return found;
 }
 
@@ -789,7 +786,18 @@ function resizeTable(id, minR, minC, maxR, maxC) {
 function rotateTables(ids, step = 45) {
   batch(() => {
     for (const t of state.tables) {
-      if (ids.includes(t.id)) t.rotation = (((t.rotation || 0) + step) % 360 + 360) % 360;
+      if (!ids.includes(t.id)) continue;
+      // The squares a table sits on change as it turns, so hand back the ones it
+      // leaves and take up the ones it now covers.
+      const before = tableCoverage(t);
+      t.rotation = (((t.rotation || 0) + step) % 360 + 360) % 360;
+      const after = new Set(tableCoverage(t));
+      for (const k of before) {
+        if (after.has(k)) continue;
+        const [r, c] = parseKey(k);
+        if (!isUnderTable(r, c)) getCell(r, c).enabled = false;
+      }
+      for (const k of after) { const [r, c] = parseKey(k); getCell(r, c).enabled = true; }
     }
   });
 }
