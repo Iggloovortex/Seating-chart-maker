@@ -482,6 +482,39 @@ function setSelectionRange(r1, c1, r2, c2) {
   });
 }
 
+/** ADD a straight run of squares to the selection, leaving everything already
+ *  picked in place. The run is constrained to one row or one column — whichever
+ *  the two ends share — so it can only ever be a line. Returns the keys it
+ *  actually added, which is what lets the caller take exactly this line back
+ *  without disturbing squares an earlier line had already claimed. */
+function addLineRange(r1, c1, r2, c2) {
+  const added = [];
+  batch(() => {
+    if (r1 === r2) {
+      const [lo, hi] = c1 <= c2 ? [c1, c2] : [c2, c1];
+      for (let c = lo; c <= hi; c++) added.push(...addKey(keyOf(r1, c)));
+    } else if (c1 === c2) {
+      const [lo, hi] = r1 <= r2 ? [r1, r2] : [r2, r1];
+      for (let r = lo; r <= hi; r++) added.push(...addKey(keyOf(r, c1)));
+    } else {
+      added.push(...addKey(keyOf(r2, c2)));   // not a line: just the square
+    }
+  });
+  return added;
+}
+
+function addKey(k) {
+  if (state.selection.has(k)) return [];
+  state.selection.add(k);
+  return [k];
+}
+
+/** Drop specific keys from the selection. */
+function deselectKeys(keys) {
+  if (!keys.length) return;
+  batch(() => { for (const k of keys) state.selection.delete(k); });
+}
+
 /** True when every square in the rectangle is already seated. Drives the
  *  Shift+click commit direction: a rect with any gap fills in, and only an
  *  already-complete rect empties. */

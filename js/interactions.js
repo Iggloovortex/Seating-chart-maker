@@ -32,6 +32,11 @@ function onRequestBulkEdit(fn) { bulkEditHandler = fn; }
 let enterSelectHandler = () => {};
 function onEnterSelect(fn) { enterSelectHandler = fn; }
 
+// The same shortcut landing on a TABLE opens table mode instead, so one gesture
+// reaches whichever thing is actually under the pointer.
+let enterTableHandler = () => {};
+function onEnterTable(fn) { enterTableHandler = fn; }
+
 // Fired when a user tap in select mode empties the selection, so the UI can
 // leave select mode.
 let selectionEmptiedHandler = () => {};
@@ -42,8 +47,20 @@ function onSelectionEmptied(fn) { selectionEmptiedHandler = fn; }
 let anchor = null;
 let corner = null;
 
-/** Forget the range, so the next Shift+click starts a fresh run. */
-function resetSelectAnchor() { anchor = null; corner = null; }
+// Ctrl+Shift runs a separate, additive line: `lineAnchor` is where the current
+// line starts and `lineKeys` is exactly what that line put into the selection,
+// so re-sizing it can take its own squares back without disturbing the lines
+// added before it.
+let lineAnchor = null;
+let lineKeys = [];
+
+/** Forget both runs, so the next Shift+click starts fresh. */
+function resetSelectAnchor() {
+  anchor = null;
+  corner = null;
+  lineAnchor = null;
+  lineKeys = [];
+}
 
 function initInteractions(chartEl) {
   let pointer = null; // { id, x, y, cell, timer, longFired }
@@ -123,6 +140,32 @@ function fireTap(cell, mods = {}) {
   // behave identically in either one.
   const picking = selectMode || tableMode;
 
+  // Ctrl+Shift ADDS a line to whatever is already selected, rather than replacing
+  // it. Clicks sharing the anchor's row or column stretch the line; a diagonal
+  // click keeps every line already added and starts a new one where it landed —
+  // dropping the old anchor only when nothing ever grew from it, so a stray
+  // single square is not left behind.
+  if (shift && additive) {
+    if (!picking) enterSelectHandler();
+
+    if (!lineAnchor) {
+      lineAnchor = { r, c };
+      lineKeys = addLineRange(r, c, r, c);
+      return;
+    }
+
+    if (r === lineAnchor.r || c === lineAnchor.c) {
+      deselectKeys(lineKeys);                    // re-size: take this line back
+      lineKeys = addLineRange(lineAnchor.r, lineAnchor.c, r, c);
+      return;
+    }
+
+    if (lineKeys.length === 1) deselectKeys(lineKeys);
+    lineAnchor = { r, c };
+    lineKeys = addLineRange(r, c, r, c);
+    return;
+  }
+
   // Shift+click sizes a rectangle from a fixed anchor, and only commits seating
   // when the same rectangle is clicked twice:
   //   - no run yet          -> anchor here, select this square, no seat change
@@ -132,6 +175,7 @@ function fireTap(cell, mods = {}) {
   // The rect always replaces the selection, so squares outside it are dropped.
   if (shift) {
     if (!picking) enterSelectHandler();
+    lineAnchor = null; lineKeys = [];   // a rectangle run ends any line run
 
     if (!anchor) {
       anchor = { r, c };
@@ -158,8 +202,17 @@ function fireTap(cell, mods = {}) {
     // bar is still needed for the tables.
     if (selectMode && state.selection.size === 0) selectionEmptiedHandler();
   } else if (additive) {
-    enterSelectHandler();     // turn on select mode + show the select bar
-    toggleSelection(r, c);
+    // Outside both modes the shortcut picks the mode that matches what it hit: a
+    // table under the pointer opens table mode and picks the table, anything
+    // else opens select mode and picks the square.
+    const table = tableAt(r, c);
+    if (table) {
+      enterTableHandler();
+      toggleTableSelection(table.id);
+    } else {
+      enterSelectHandler();   // turn on select mode + show the select bar
+      toggleSelection(r, c);
+    }
   } else {
     toggleEnabled(r, c);
   }

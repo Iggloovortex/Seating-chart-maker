@@ -54,7 +54,7 @@ function initTables() {
   setSelectActive = setActive;
   selectBtn.addEventListener('click', () => setActive(!active));
 
-  // Ctrl/Cmd+click on a square (outside select mode) turns select mode on.
+  // Ctrl/Cmd+click on a bare square (outside both modes) turns select mode on.
   onEnterSelect(() => { if (!active) setActive(true); });
 
   // Deselecting the last square (manually) leaves select mode too.
@@ -168,6 +168,16 @@ function initTableMode() {
       switchingModes = false;
     }
     setTableActive(turningOn);
+  });
+
+  // Ctrl/Cmd+click landing on a table opens this bar instead of the select one.
+  onEnterTable(() => {
+    if (!tableActive) {
+      switchingModes = true;
+      setSelectActive(false);
+      switchingModes = false;
+      setTableActive(true);
+    }
   });
 
   document.getElementById('btn-table-all').addEventListener('click', selectAllTables);
