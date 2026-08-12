@@ -944,12 +944,15 @@ body {
 }
 .insert-add:hover { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
 
+/* A guide spans the grid's edges, so pushing each + out by --line-out puts its
+   centre exactly as far off the grid as the delete x on the opposite side.
+   The extra 11px is half the button, turning an edge offset into a centre one. */
 .insert-guide--row .insert-add { top: -11px; }
-.insert-guide--row .insert-add--start { left: -11px; }
-.insert-guide--row .insert-add--end { right: -11px; }
+.insert-guide--row .insert-add--start { left: calc(-1 * var(--line-out, 16px) - 11px); }
+.insert-guide--row .insert-add--end { right: calc(-1 * var(--line-out, 16px) - 11px); }
 .insert-guide--col .insert-add { left: -11px; }
-.insert-guide--col .insert-add--start { top: -11px; }
-.insert-guide--col .insert-add--end { bottom: -11px; }
+.insert-guide--col .insert-add--start { top: calc(-1 * var(--line-out, 16px) - 11px); }
+.insert-guide--col .insert-add--end { bottom: calc(-1 * var(--line-out, 16px) - 11px); }
 
 /* A line shown purely as context while its menu item is hovered carries no +,
    and takes the accent colour so it reads through the open menu beside it. */

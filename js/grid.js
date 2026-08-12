@@ -69,6 +69,7 @@ function renderGrid() {
     }
   }
 
+  chart.style.setProperty('--line-out', `${LINE_BTN_OUT}px`);
   renderTables();
   renderMoveHandle();
   buildInsertGuides();
@@ -93,7 +94,9 @@ function trueSizeRects(size) {
 // a single + appears instead and asks which one you meant.
 
 const INSERT_REACH = 14;     // px from the border that reveals a guide
-const DELETE_OFFSET = 16;    // px the delete button stands outside the grid
+// How far outside the grid the line buttons stand. Both the insert + and the
+// delete x use it, so they land on the same line either side of the chart.
+const LINE_BTN_OUT = 16;
 let movingSelection = false; // true while the selection is being dragged
 let rowGuide = null, colGuide = null, cornerBtn = null, cornerMenu = null;
 let rowDelBtn = null, colDelBtn = null;
@@ -262,14 +265,14 @@ function updateInsertGuides(e) {
       const i = lineAt(rowBs, y);
       if (i >= 0 && rowBs.length > 2) {
         placeDelete(rowDelBtn, i,
-          x < (left + right) / 2 ? left - DELETE_OFFSET : right + DELETE_OFFSET,
+          x < (left + right) / 2 ? left - LINE_BTN_OUT : right + LINE_BTN_OUT,
           (rowBs[i] + rowBs[i + 1]) / 2, 'row');
       }
     } else if (near(y, top, bottom)) {
       const i = lineAt(colBs, x);
       if (i >= 0 && colBs.length > 2) {
         placeDelete(colDelBtn, i, (colBs[i] + colBs[i + 1]) / 2,
-          y < (top + bottom) / 2 ? top - DELETE_OFFSET : bottom + DELETE_OFFSET, 'col');
+          y < (top + bottom) / 2 ? top - LINE_BTN_OUT : bottom + LINE_BTN_OUT, 'col');
       }
     }
     return;
@@ -285,9 +288,21 @@ function updateInsertGuides(e) {
     cornerBtn.style.top = `${row.pos}px`;
     cornerBtn.hidden = false;
   } else if (row) {
-    placeGuide(rowGuide, 'top', row);
+    placeGuide(rowGuide, 'top', row, left, right);
   } else if (col) {
-    placeGuide(colGuide, 'left', col);
+    placeGuide(colGuide, 'left', col, top, bottom);
+  }
+}
+
+/** Stretch a guide across the grid itself rather than the chart's padding box,
+ *  so its ends sit exactly on the grid's edges. */
+function spanGuide(guide, axis, from, to) {
+  if (axis === 'row') {
+    guide.style.left = `${from}px`;
+    guide.style.width = `${to - from}px`;
+  } else {
+    guide.style.top = `${from}px`;
+    guide.style.height = `${to - from}px`;
   }
 }
 
@@ -300,9 +315,10 @@ function placeDelete(btn, index, x, y, axis) {
   btn.hidden = false;
 }
 
-function placeGuide(guide, side, at) {
+function placeGuide(guide, side, at, from, to) {
   guide.dataset.index = String(at.index);
   guide.style[side] = `${at.pos}px`;
+  spanGuide(guide, side === 'top' ? 'row' : 'col', from, to);
   guide.classList.remove('insert-guide--preview');
   guide.hidden = false;
 }
@@ -315,6 +331,8 @@ function previewInsertLine(axis) {
   const guide = axis === 'row' ? rowGuide : colGuide;
   const side = axis === 'row' ? 'top' : 'left';
   guide.style[side] = `${cornerBtn.dataset[axis === 'row' ? 'rowPos' : 'colPos']}px`;
+  const bs = boundaries(axis === 'row' ? 'col' : 'row');   // the span it crosses
+  if (bs.length) spanGuide(guide, axis, bs[0], bs[bs.length - 1]);
   guide.classList.add('insert-guide--preview');
   guide.hidden = false;
 }
