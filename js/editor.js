@@ -21,12 +21,12 @@ function initEditor() {
 function openEditor(r, c) {
   current = { r, c };
   const cell = getCell(r, c); // ensures it exists so edits persist
-  titleEl.textContent = `Seat — Row ${r + 1}, Col ${c + 1}`;
+  titleEl.textContent = `Square — Row ${r + 1}, Col ${c + 1}`;
   render(cell);
   showPane();
 }
 
-/** Bulk-edit every selected square at once. Shared properties (seat, icon,
+/** Bulk-edit every selected square at once. Shared properties (fill, icon,
  *  facing, fill, border) apply to all; label line colors can be changed for
  *  all, but each square keeps its own label text. */
 function openBulkEditor(keys) {
@@ -55,7 +55,7 @@ function render(cell) {
   renderSquareActions();
 
   // --- Seat, facing and colors share one row --------------------------------
-  bodyEl.appendChild(group('Seat, facing & colors', (g) => {
+  bodyEl.appendChild(group('Fill, facing & colors', (g) => {
     const row = document.createElement('div');
     row.className = 'erow erow--controls';
     row.append(seatToggle(cell), facingCompass(cell), squareColors(cell));
@@ -137,7 +137,7 @@ function render(cell) {
     note.style.textTransform = 'none';
     note.style.fontWeight = '400';
     note.style.marginTop = '6px';
-    note.textContent = 'In the output, this resizes only the empty spaces in this row/column — seated squares stay full size, which offsets them. The editing grid stays uniform.';
+    note.textContent = 'In the output, this resizes only the empty spaces in this row/column — filled squares stay full size, which offsets them. The editing grid stays uniform.';
     g.appendChild(note);
   }));
 
@@ -163,7 +163,7 @@ function renderBulk(keys) {
   const [sr, sc] = keys[0].split(',').map(Number);
   const first = getCell(sr, sc);
 
-  // Seat all / Empty all live in the select bar, not here.
+  // Fill all / Empty all live in the select bar, not here.
 
   // --- Labels for every selected square -----------------------------------
   // Each line shows the shared text when all selected squares match, or a
@@ -503,13 +503,13 @@ function deleteButton(getKeys, getAt) {
 
 /** One button that both reports and flips the seat, instead of a two-way pair. */
 function seatToggle(cell) {
-  const wrap = controlGroup('Seat');
+  const wrap = controlGroup('Fill');
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = `btn ${cell.enabled ? 'btn--seat' : 'btn--empty'}`;
-  btn.textContent = cell.enabled ? 'Seated' : 'Empty';
+  btn.textContent = cell.enabled ? 'Filled' : 'Empty';
   btn.setAttribute('aria-pressed', String(cell.enabled));
-  btn.title = cell.enabled ? 'Seated — click to empty' : 'Empty — click to seat';
+  btn.title = cell.enabled ? 'Filled — click to empty' : 'Empty — click to fill';
   btn.addEventListener('click', () => {
     updateCell(current.r, current.c, { enabled: !cell.enabled });
     render(peekCell(current.r, current.c));

@@ -396,12 +396,12 @@ function openDeleteMenu(x, y, { keys, r, c }) {
 
   // Deleting squares takes any picked tables with them, so one action clears
   // everything that is currently selected.
-  const what = [n > 1 ? `${n} squares` : 'square'];
-  if (tables.length) what.push(tables.length > 1 ? `${tables.length} tables` : 'table');
-  item(`Delete ${what.join(' + ')}`, true, () => {
+  const many = n > 1 || tables.length > 0;
+  const what = many ? 'selected items' : 'square';
+  item(`Delete ${what}`, true, () => {
     const filled = keys.some((k) => { const [rr, cc] = parseKey(k); return isEnabled(rr, cc); });
     if ((filled || tables.length) &&
-        !confirm(`Delete ${what.join(' and ')}? Labels, icons and colors go with them.`)) return;
+        !confirm(`Delete ${what}? Labels, icons and colors go with them.`)) return;
     batch(() => {
       resetSquares(keys);
       if (tables.length) removeTables(tables);

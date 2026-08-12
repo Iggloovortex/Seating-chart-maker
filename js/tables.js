@@ -78,7 +78,7 @@ function initTables() {
     selectAllSquares();
   });
 
-  // Filtered selections — all imply "seated".
+  // Filtered selections — all imply "filled".
   const FILTER_BUTTONS = {
     'btn-select-labeled': selectLabeled,
     'btn-select-unlabeled': selectUnlabeled,
