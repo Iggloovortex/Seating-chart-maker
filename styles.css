@@ -977,6 +977,58 @@ body {
 .insert-menu--up:not(.insert-menu--left)  { transform: translateY(-100%); }
 .insert-menu--up.insert-menu--left { transform: translate(-100%, -100%); }
 
+/* Seat / facing / colors on one row in the edit pane. */
+.erow--controls {
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.controlgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.controlgroup__title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.controlgroup .btn { width: 100%; }
+
+/* Eight facing directions as a compass; the middle cell stays empty. */
+.compass {
+  display: grid;
+  grid-template-columns: repeat(3, 34px);
+  grid-auto-rows: 34px;
+  gap: 3px;
+}
+.compass__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.compass__btn:hover { background: var(--line); }
+.compass__btn[aria-pressed="true"] {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.compass__btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Fill / border shown the way the toolbar shows its defaults. */
+.swatches { display: flex; gap: 8px; }
+.swatches .defaults__swatch { width: 46px; }
+
 /* Resize grips on a picked table: four corners and four sides. */
 .table-handle {
   position: absolute;

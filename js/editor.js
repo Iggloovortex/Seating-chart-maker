@@ -52,38 +52,48 @@ function closeEditor() {
 function render(cell) {
   bodyEl.replaceChildren();
 
-  // --- Seat on/off ---------------------------------------------------------
-  bodyEl.appendChild(group('Seat', (g) => {
-    const seg = document.createElement('div');
-    seg.className = 'seg';
-    const onBtn = segBtn('Seated', cell.enabled, () => { updateCell(current.r, current.c, { enabled: true }); render(peekCell(current.r, current.c)); });
-    const offBtn = segBtn('Empty', !cell.enabled, () => { updateCell(current.r, current.c, { enabled: false }); render(peekCell(current.r, current.c)); });
-    seg.append(onBtn, offBtn);
-    g.appendChild(seg);
+  // --- Copy / paste / delete, at the top where they are reached first -------
+  bodyEl.appendChild(group('Square', (g) => {
+    const row = document.createElement('div');
+    row.className = 'erow';
+
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'btn';
+    copy.style.flex = '1';
+    copy.textContent = 'Copy';
+    copy.title = 'Copy this square: colors, icon, facing and every label line';
+    copy.addEventListener('click', () => {
+      copySquareFrom(current.r, current.c);
+      render(peekCell(current.r, current.c));
+    });
+
+    const paste = document.createElement('button');
+    paste.type = 'button';
+    paste.className = 'btn';
+    paste.style.flex = '1';
+    paste.textContent = 'Paste';
+    paste.title = 'Clone the copied square onto this one, label text included';
+    paste.disabled = !hasSquareClipboard();
+    paste.addEventListener('click', () => {
+      pasteSquareTo([keyOf(current.r, current.c)]);
+      render(peekCell(current.r, current.c));
+    });
+
+    const del = deleteButton(() => [keyOf(current.r, current.c)],
+                             () => ({ r: current.r, c: current.c }));
+    del.style.flex = '1';
+    del.style.marginRight = '';
+    row.append(copy, paste, del);
+    g.appendChild(row);
   }));
 
-  // --- Labels (each line has its own color) --------------------------------
-  bodyEl.appendChild(group('Labels', (g) => {
-    const list = document.createElement('div');
-    list.id = 'label-list';
-    const labels = cell.labels.length ? cell.labels : [];
-    labels.forEach((line, i) => list.appendChild(labelRow(line, i)));
-    g.appendChild(list);
-
-    const add = document.createElement('button');
-    add.type = 'button';
-    add.className = 'link-btn';
-    add.textContent = '+ Add label line';
-    add.addEventListener('click', () => {
-      const c = getCell(current.r, current.c);
-      c.labels.push({ text: '', color: defaultLabelColor(c.labels.length) });
-      updateCell(current.r, current.c, {}); // emit
-      render(peekCell(current.r, current.c));
-      // focus the newly added input
-      const inputs = bodyEl.querySelectorAll('#label-list .field__input');
-      inputs[inputs.length - 1]?.focus();
-    });
-    g.appendChild(add);
+  // --- Seat, facing and colors share one row --------------------------------
+  bodyEl.appendChild(group('Seat, facing & colors', (g) => {
+    const row = document.createElement('div');
+    row.className = 'erow erow--controls';
+    row.append(seatToggle(cell), facingCompass(cell), squareColors(cell));
+    g.appendChild(row);
   }));
 
   // --- Icon ---------------------------------------------------------------
@@ -129,34 +139,28 @@ function render(cell) {
     }
   }));
 
-  // --- Rotation (arrows for the direction the seat faces) -----------------
-  bodyEl.appendChild(group('Facing', (g) => {
-    const seg = document.createElement('div');
-    seg.className = 'seg';
-    // deg maps to the on-screen rotation; arrow shows which way content points.
-    const dirs = [
-      { deg: 0, arrow: '↑', label: 'Up' },
-      { deg: 90, arrow: '→', label: 'Right' },
-      { deg: 180, arrow: '↓', label: 'Down' },
-      { deg: 270, arrow: '←', label: 'Left' },
-    ];
-    for (const { deg, arrow, label } of dirs) {
-      const b = segBtn(arrow, (cell.rotation || 0) === deg, () => {
-        updateCell(current.r, current.c, { rotation: deg });
-        render(peekCell(current.r, current.c));
-      });
-      b.classList.add('seg__btn--arrow');
-      b.setAttribute('aria-label', `Face ${label}`);
-      b.title = label;
-      seg.appendChild(b);
-    }
-    g.appendChild(seg);
-  }));
+  // --- Labels (each line has its own color) --------------------------------
+  bodyEl.appendChild(group('Labels', (g) => {
+    const list = document.createElement('div');
+    list.id = 'label-list';
+    const labels = cell.labels.length ? cell.labels : [];
+    labels.forEach((line, i) => list.appendChild(labelRow(line, i)));
+    g.appendChild(list);
 
-  // --- Colors -------------------------------------------------------------
-  bodyEl.appendChild(group('Colors', (g) => {
-    g.appendChild(colorRow('Space (fill)', cell.fill, (v) => updateCell(current.r, current.c, { fill: v })));
-    g.appendChild(colorRow('Border', cell.border, (v) => updateCell(current.r, current.c, { border: v })));
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'link-btn';
+    add.textContent = '+ Add label line';
+    add.addEventListener('click', () => {
+      const c = getCell(current.r, current.c);
+      c.labels.push({ text: '', color: defaultLabelColor(c.labels.length) });
+      updateCell(current.r, current.c, {}); // emit
+      render(peekCell(current.r, current.c));
+      // focus the newly added input
+      const inputs = bodyEl.querySelectorAll('#label-list .field__input');
+      inputs[inputs.length - 1]?.focus();
+    });
+    g.appendChild(add);
   }));
 
   // --- Row / column size (empty row & column height) ----------------------
@@ -172,49 +176,9 @@ function render(cell) {
     g.appendChild(note);
   }));
 
-  // --- Copy / paste the whole square ---------------------------------------
-  bodyEl.appendChild(group('Copy square', (g) => {
-    const row = document.createElement('div');
-    row.className = 'erow';
-
-    const copy = document.createElement('button');
-    copy.type = 'button';
-    copy.className = 'btn';
-    copy.style.flex = '1';
-    copy.textContent = 'Copy square';
-    copy.addEventListener('click', () => {
-      copySquareFrom(current.r, current.c);
-      render(peekCell(current.r, current.c));
-    });
-
-    const paste = document.createElement('button');
-    paste.type = 'button';
-    paste.className = 'btn';
-    paste.style.flex = '1';
-    paste.textContent = 'Paste square';
-    paste.disabled = !hasSquareClipboard();
-    paste.addEventListener('click', () => {
-      pasteSquareTo([keyOf(current.r, current.c)]);
-      render(peekCell(current.r, current.c));
-    });
-
-    row.append(copy, paste);
-    g.appendChild(row);
-
-    const note = document.createElement('p');
-    note.className = 'egroup__title';
-    note.style.textTransform = 'none';
-    note.style.fontWeight = '400';
-    note.style.marginTop = '6px';
-    note.textContent = 'Copies colors, icon, facing, chair size and every label line, text included.';
-    g.appendChild(note);
-  }));
-
   // --- Footer -------------------------------------------------------------
   const foot = document.createElement('div');
   foot.className = 'editor__foot';
-  foot.appendChild(deleteButton(() => [keyOf(current.r, current.c)],
-                                () => ({ r: current.r, c: current.c })));
   const done = document.createElement('button');
   done.type = 'button';
   done.className = 'btn btn--primary';
@@ -297,22 +261,9 @@ function renderBulk(keys) {
 
   // --- Facing (all) -------------------------------------------------------
   bodyEl.appendChild(group('Facing (all selected)', (g) => {
-    const seg = document.createElement('div');
-    seg.className = 'seg';
-    const dirs = [
-      { deg: 0, arrow: '↑', label: 'Up' },
-      { deg: 90, arrow: '→', label: 'Right' },
-      { deg: 180, arrow: '↓', label: 'Down' },
-      { deg: 270, arrow: '←', label: 'Left' },
-    ];
-    for (const { deg, arrow, label } of dirs) {
-      const b = segBtn(arrow, false, () => updateCells(keys, { rotation: deg }));
-      b.classList.add('seg__btn--arrow');
-      b.setAttribute('aria-label', `Face ${label}`);
-      b.title = label;
-      seg.appendChild(b);
-    }
-    g.appendChild(seg);
+    // Same eight directions as the single pane; nothing is pre-chosen because a
+    // selection may hold several facings at once.
+    g.appendChild(buildCompass(null, (deg) => updateCells(keys, { rotation: deg })));
   }));
 
   // --- Colors (all) -------------------------------------------------------
@@ -577,4 +528,108 @@ function deleteButton(getKeys, getAt) {
     openDeleteMenu(box.left, box.bottom + 6, { keys: getKeys(), ...getAt() });
   });
   return btn;
+}
+
+// -------------------------------------------------- single-square controls
+//
+// Seat, facing and colors sit on one row, so the three things you reach for most
+// are visible together without scrolling.
+
+/** One button that both reports and flips the seat, instead of a two-way pair. */
+function seatToggle(cell) {
+  const wrap = controlGroup('Seat');
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = `btn ${cell.enabled ? 'btn--seat' : 'btn--empty'}`;
+  btn.textContent = cell.enabled ? 'Seated' : 'Empty';
+  btn.setAttribute('aria-pressed', String(cell.enabled));
+  btn.title = cell.enabled ? 'Seated — click to empty' : 'Empty — click to seat';
+  btn.addEventListener('click', () => {
+    updateCell(current.r, current.c, { enabled: !cell.enabled });
+    render(peekCell(current.r, current.c));
+  });
+  wrap.appendChild(btn);
+  return wrap;
+}
+
+// Eight directions laid out as a compass, which reads far quicker than a strip
+// of arrows. The middle cell is left empty.
+const FACINGS = [
+  { deg: 315, arrow: '↖', label: 'Up and left' },
+  { deg: 0,   arrow: '↑', label: 'Up' },
+  { deg: 45,  arrow: '↗', label: 'Up and right' },
+  { deg: 270, arrow: '←', label: 'Left' },
+  null,
+  { deg: 90,  arrow: '→', label: 'Right' },
+  { deg: 225, arrow: '↙', label: 'Down and left' },
+  { deg: 180, arrow: '↓', label: 'Down' },
+  { deg: 135, arrow: '↘', label: 'Down and right' },
+];
+
+/** The compass itself. `chosen` marks the current facing (null when a
+ *  selection disagrees), `onPick` receives the degrees. */
+function buildCompass(chosen, onPick) {
+  const grid = document.createElement('div');
+  grid.className = 'compass';
+  for (const dir of FACINGS) {
+    if (!dir) { grid.appendChild(document.createElement('span')); continue; }
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'compass__btn';
+    b.textContent = dir.arrow;
+    b.title = dir.label;
+    b.setAttribute('aria-label', `Face ${dir.label.toLowerCase()}`);
+    b.setAttribute('aria-pressed', String(chosen === dir.deg));
+    b.addEventListener('click', () => onPick(dir.deg));
+    grid.appendChild(b);
+  }
+  return grid;
+}
+
+function facingCompass(cell) {
+  const wrap = controlGroup('Facing');
+  wrap.appendChild(buildCompass(cell.rotation || 0, (deg) => {
+    updateCell(current.r, current.c, { rotation: deg });
+    render(peekCell(current.r, current.c));
+  }));
+  return wrap;
+}
+
+/** Fill and border as named swatches, the size the toolbar's defaults use. */
+function squareColors(cell) {
+  const wrap = controlGroup('Colors');
+  const row = document.createElement('div');
+  row.className = 'swatches';
+  row.append(
+    swatch('Fill', cell.fill, (v) => updateCell(current.r, current.c, { fill: v })),
+    swatch('Border', cell.border, (v) => updateCell(current.r, current.c, { border: v })),
+  );
+  wrap.appendChild(row);
+  return wrap;
+}
+
+function swatch(label, value, onChange) {
+  const item = document.createElement('label');
+  item.className = 'defaults__item';
+  const name = document.createElement('span');
+  name.className = 'defaults__label';
+  name.textContent = label;
+  const input = document.createElement('input');
+  input.type = 'color';
+  input.className = 'defaults__swatch';
+  input.value = value;
+  input.setAttribute('aria-label', label);
+  bindColorInput(input, () => onChange(input.value));
+  item.append(name, input);
+  return item;
+}
+
+function controlGroup(title) {
+  const el = document.createElement('div');
+  el.className = 'controlgroup';
+  const h = document.createElement('span');
+  h.className = 'controlgroup__title';
+  h.textContent = title;
+  el.appendChild(h);
+  return el;
 }

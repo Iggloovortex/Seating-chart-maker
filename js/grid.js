@@ -661,11 +661,9 @@ function renderTables() {
     shape.style.height = `${bottom - top - inset * 2}px`;
     shape.style.background = table.color;
     shape.style.borderColor = table.border || state.defaults.tableBorder;
-    // A turned table stays inside its footprint — same shrink the output uses.
-    if (table.rotation) {
-      const fit = rotationFit(right - left - inset * 2, bottom - top - inset * 2, table.rotation);
-      shape.style.transform = `rotate(${table.rotation}deg) scale(${fit})`;
-    }
+    // Turned at full size, matching the output: the shape keeps its dimensions
+    // and overhangs its footprint instead of shrinking into it.
+    if (table.rotation) shape.style.transform = `rotate(${table.rotation}deg)`;
     shape.dataset.tableId = table.id;
     chart.appendChild(shape);
 

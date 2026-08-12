@@ -757,9 +757,27 @@ function resizeTable(id, minR, minC, maxR, maxC) {
 
   const keys = [];
   for (let r = minR; r <= maxR; r++) for (let c = minC; c <= maxC; c++) keys.push(keyOf(r, c));
+  const now = new Set(keys);
+  // Everything the table used to cover — including squares only its footprint
+  // reached — so shrinking hands them back the way growing took them.
+  const before = footprintOf(t.cellKeys);
+  const dropped = [];
+  for (let r = before.minR; r <= before.maxR; r++) {
+    for (let c = before.minC; c <= before.maxC; c++) {
+      const k = keyOf(r, c);
+      if (!now.has(k)) dropped.push(k);
+    }
+  }
+
   batch(() => {
     t.cellKeys = keys;
     for (const k of keys) { const [r, c] = parseKey(k); getCell(r, c).enabled = true; }
+    // A table seats what it covers, so letting go of a square empties it again.
+    // Non-destructive as ever: its labels and colors stay for when it is reseated.
+    for (const k of dropped) {
+      const [r, c] = parseKey(k);
+      if (!isUnderTable(r, c)) getCell(r, c).enabled = false;
+    }
   });
   return true;
 }

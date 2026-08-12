@@ -6,7 +6,10 @@ const MAX_DIM = 4000;      // cap canvas pixels for memory safety
 const CHAIR_SCALE = 0.7;   // a chair's share of its square — furniture, not a desk
 
 /** Which neighbouring square each rotation faces, as [rowStep, colStep]. */
-const FACING_STEP = { 0: [-1, 0], 90: [0, 1], 180: [1, 0], 270: [0, -1] };
+const FACING_STEP = {
+  0: [-1, 0], 45: [-1, 1], 90: [0, 1], 135: [1, 1],
+  180: [1, 0], 225: [1, -1], 270: [0, -1], 315: [-1, -1],
+};
 
 /** Render the current chart onto a fresh canvas. Returns a Promise<canvas>. */
 async function renderToCanvas(dpi = 300) {
@@ -197,22 +200,24 @@ function chairGeometry(rectOf, { r, c, data }) {
   let cx = rect.x + rect.w / 2;
   let cy = rect.y + rect.h / 2;
   const rot = data.rotation || 0;
-  switch (rot) {
-    case 0:   cy = rect.y + size / 2 + inset; break;              // faces up
-    case 90:  cx = rect.x + rect.w - size / 2 - inset; break;     // faces right
-    case 180: cy = rect.y + rect.h - size / 2 - inset; break;     // faces down
-    case 270: cx = rect.x + size / 2 + inset; break;              // faces left
-  }
+  // The facing's row/column step says which edges to hug: one for a straight
+  // facing, both for a diagonal, which tucks the chair into that corner.
+  const [dr, dc] = FACING_STEP[rot] || FACING_STEP[0];
+  if (dr < 0) cy = rect.y + size / 2 + inset;
+  if (dr > 0) cy = rect.y + rect.h - size / 2 - inset;
+  if (dc < 0) cx = rect.x + size / 2 + inset;
+  if (dc > 0) cx = rect.x + rect.w - size / 2 - inset;
 
   // Across the other axis, line the chair up with the square it is pulled up
   // to rather than with its own. Thinning a walkway shifts every square after
   // it along that row or column, so a chair's own cell often no longer sits
   // under the middle of the desk it belongs to.
-  const [dr, dc] = FACING_STEP[rot] || FACING_STEP[0];
   const faced = isEnabled(r + dr, c + dc) ? rectOf(r + dr, c + dc) : null;
   if (faced) {
-    if (dr) cx = faced.x + faced.w / 2;   // facing up/down → align horizontally
-    else    cy = faced.y + faced.h / 2;   // facing left/right → align vertically
+    // Only a straight facing has a free axis to line up on; a diagonal is
+    // already pinned to its corner.
+    if (dr && !dc) cx = faced.x + faced.w / 2;
+    if (dc && !dr) cy = faced.y + faced.h / 2;
   }
   return { cx, cy, w: size, h: size };
 }
@@ -368,12 +373,11 @@ function drawTable(ctx, table, rectOf) {
 
   ctx.save();
   if (rot) {
-    // Spin about the table's own centre, shrunk just enough that the turned
-    // shape still fits its footprint instead of overhanging its neighbours.
-    const fit = rotationFit(w, h, rot);
+    // Spin about the table's own centre at full size — a 2x8 table turned 45
+    // degrees is still a 2x8 table, so it overhangs its footprint rather than
+    // shrinking to fit inside it.
     ctx.translate(x + w / 2, y + h / 2);
     ctx.rotate((rot * Math.PI) / 180);
-    ctx.scale(fit, fit);
     ctx.translate(-(x + w / 2), -(y + h / 2));
   }
   ctx.fillStyle = table.color || '#8d6e63';
