@@ -231,14 +231,17 @@
           <button id="btn-print" class="iconbtn iconbtn--print" type="button" title="Print / PDF" aria-label="Print or save as PDF">
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-print"/></svg>
           </button>
-          <span class="iconbar__sep" aria-hidden="true"></span>
+          <input id="file-input" type="file" accept=".seatchart,application/json" hidden />
+        </div>
+        <!-- Second row: actions that change the grid rather than the file.
+             Undo/redo will join this row. -->
+        <div class="iconbar" role="group" aria-label="Grid actions">
           <button id="btn-copy-format" class="iconbtn" type="button" title="Copy the selected square, labels and all" aria-label="Copy square">
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-copy"/></svg>
           </button>
           <button id="btn-paste-format" class="iconbtn" type="button" title="Clone the copied square onto every selected square" aria-label="Paste square">
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-paste"/></svg>
           </button>
-          <input id="file-input" type="file" accept=".seatchart,application/json" hidden />
         </div>
       </div>
 
@@ -296,9 +299,22 @@
 
        <div class="toolbar__row toolbar__row--actions">
       <div class="toolbar__group toolbar__group--actions">
+        <button id="btn-empty-all" class="btn btn--empty" type="button" title="Empty every square on the grid — labels and colors are kept">Clear Grid</button>
+        <button id="btn-preview" class="btn btn--primary" type="button" title="Preview and export">Export</button>
+        <button id="btn-reset-sizes" class="btn" type="button" title="Reset every row and column to the default size">Reset sizes</button>
+        <button id="btn-true-size" class="btn btn--toggle" type="button" aria-pressed="false" title="Show weighted row/column sizes in the grid">True size</button>
+        <button id="btn-select" class="btn btn--icon btn--toggle" type="button" aria-pressed="false" title="Select mode" aria-label="Select mode">
+          <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use id="select-icon" href="#ui-select-off"/></svg>
+        </button>
+      </div>
+       </div>
+      </div>
+
+      <!-- Default colors: spans both toolbar rows on the right -->
+      <div class="defaults" role="group" aria-label="Default colors">
         <!-- Selection filters. Each is a toggle: while it is lit, the squares it
-             matches are selected, and turning it off gives up only the squares
-             no other lit toggle still claims. -->
+           matches are selected, and turning it off gives up only the squares
+           no other lit toggle still claims. -->
         <div class="filterbar" role="group" aria-label="Select by">
           <button id="btn-filter-all" class="btn btn--icon btn--toggle filterbtn" type="button" aria-pressed="false" title="All squares" aria-label="All squares">
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-f-all"/></svg>
@@ -331,19 +347,7 @@
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-f-ghost"/><use href="#ui-no-badge"/></svg>
           </button>
         </div>
-        <button id="btn-select" class="btn btn--icon btn--toggle" type="button" aria-pressed="false" title="Select mode" aria-label="Select mode">
-          <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use id="select-icon" href="#ui-select-off"/></svg>
-        </button>
-        <button id="btn-true-size" class="btn btn--toggle" type="button" aria-pressed="false" title="Show weighted row/column sizes in the grid">True size</button>
-        <button id="btn-reset-sizes" class="btn" type="button" title="Reset every row and column to the default size">Reset sizes</button>
-        <button id="btn-preview" class="btn btn--primary" type="button" title="Preview and export">Export</button>
-        <button id="btn-empty-all" class="btn btn--empty" type="button" title="Empty every square on the grid — labels and colors are kept">Clear Grid</button>
-      </div>
-       </div>
-      </div>
-
-      <!-- Default colors: spans both toolbar rows on the right -->
-      <div class="defaults" role="group" aria-label="Default colors">
+        <div class="defaults__rule" aria-hidden="true"></div>
         <div class="defaults__set">
           <label class="defaults__item">
             <span class="defaults__label">Fill</span>

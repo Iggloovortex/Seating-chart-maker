@@ -279,11 +279,14 @@ body {
 }
 
 /* ============================ Selection filters ============================
-   Ten icon toggles, kept as one block so they read as a set rather than as ten
-   unrelated buttons. They wrap together on narrow screens. */
+   Ten icon toggles in a fixed 5x2 grid, so the frame keeps the same shape in
+   either orientation instead of reflowing into a long row on wide screens. It
+   lives at the left end of the Default Colors block, whose border is its
+   separator. */
 .filterbar {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(5, auto);
+  align-content: center;
   gap: 4px;
   padding: 3px;
   border: 1px solid var(--line);
