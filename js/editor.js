@@ -213,6 +213,8 @@ function render(cell) {
   // --- Footer -------------------------------------------------------------
   const foot = document.createElement('div');
   foot.className = 'editor__foot';
+  foot.appendChild(deleteButton(() => [keyOf(current.r, current.c)],
+                                () => ({ r: current.r, c: current.c })));
   const done = document.createElement('button');
   done.type = 'button';
   done.className = 'btn btn--primary';
@@ -334,6 +336,9 @@ function renderBulk(keys) {
   // --- Footer -------------------------------------------------------------
   const foot = document.createElement('div');
   foot.className = 'editor__foot';
+  // The row and column named in the menu are the first selected square's.
+  foot.appendChild(deleteButton(() => [...keys],
+                                () => { const [r, c] = parseKey(keys[0]); return { r, c }; }));
   const done = document.createElement('button');
   done.type = 'button';
   done.className = 'btn btn--primary';
@@ -556,4 +561,20 @@ function weightRow(label, value, onChange) {
   num.addEventListener('change', () => onChange(parseFloat(num.value) || 1));
   row.append(span, num);
   return row;
+}
+
+/** Delete button for either pane. It raises the same menu Shift+right-click
+ *  does, so the three ways in can never offer different choices. */
+function deleteButton(getKeys, getAt) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn btn--empty';
+  btn.textContent = 'Delete\u2026';
+  btn.title = 'Reset these squares, or delete their row or column';
+  btn.style.marginRight = 'auto';
+  btn.addEventListener('click', () => {
+    const box = btn.getBoundingClientRect();
+    openDeleteMenu(box.left, box.bottom + 6, { keys: getKeys(), ...getAt() });
+  });
+  return btn;
 }

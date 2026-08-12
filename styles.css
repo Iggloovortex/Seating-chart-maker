@@ -554,7 +554,8 @@ body {
 }
 
 /* Delete button on each table (the shape itself is pointer-events:none) */
-.table-remove {
+.table-remove,
+.line-remove {
   position: absolute;
   z-index: 3;
   width: 24px;
@@ -572,8 +573,11 @@ body {
   cursor: pointer;
   box-shadow: 0 1px 4px rgba(0,0,0,.35);
 }
-.table-remove:hover { filter: brightness(1.1); }
-@media (pointer: coarse) { .table-remove { width: 30px; height: 30px; font-size: 15px; } }
+.table-remove:hover,
+.line-remove:hover { filter: brightness(1.1); }
+@media (pointer: coarse) {
+  .table-remove, .line-remove { width: 30px; height: 30px; font-size: 15px; }
+}
 
 /* Arrow buttons in the Facing segmented control */
 .seg__btn--arrow { font-size: 18px; min-width: 48px; }
@@ -969,6 +973,18 @@ body {
 .insert-menu--up   { margin-top: -14px; }
 .insert-menu--up:not(.insert-menu--left)  { transform: translateY(-100%); }
 .insert-menu--up.insert-menu--left { transform: translate(-100%, -100%); }
+
+/* Row / column delete: the same red x a table carries, standing outside the grid
+   level with the middle of the line it removes. It deliberately does NOT reuse
+   the .table-remove class — refreshTables() sweeps every element with that
+   class, which would take these with it on each re-render. */
+.line-remove { transform: translate(-50%, -50%); z-index: 7; }
+
+/* A menu raised at the pointer rather than anchored to a button. */
+.delete-menu { position: fixed; z-index: 70; }
+.popmenu__item--danger { color: var(--danger); }
+.popmenu__item--danger:hover,
+.popmenu__item--danger:focus-visible { background: var(--danger); color: #fff; }
 
 /* ===================== Small pop-up menus ===================== */
 .menu-anchor { position: relative; display: inline-flex; }

@@ -104,11 +104,18 @@ function initInteractions(chartEl) {
     pointer = null;
   }
 
-  // Desktop right-click => edit.
+  // Desktop right-click => edit. Shift+right-click => the delete menu instead,
+  // acting on the whole selection when there is one.
   chartEl.addEventListener('contextmenu', (e) => {
     const cell = cellFrom(e.target);
     if (!cell) return;
     e.preventDefault();
+    if (e.shiftKey) {
+      const [r, c] = parseKey(cell.dataset.key);
+      const keys = state.selection.size ? [...state.selection] : [keyOf(r, c)];
+      openDeleteMenu(e.clientX, e.clientY, { keys, r, c });
+      return;
+    }
     fireEdit(cell);
   });
 
@@ -139,6 +146,19 @@ function fireTap(cell, mods = {}) {
   // Both modes pick squares, so Shift ranges, Ctrl adds and the range anchor all
   // behave identically in either one.
   const picking = selectMode || tableMode;
+
+  // Ctrl/Cmd+click follows what it lands on, whatever mode is running: a table
+  // under the pointer picks the table and opens the table bar, anything else
+  // falls through to the square. A plain click still reaches the square beneath
+  // a table, which is how covered squares stay editable.
+  if (additive && !shift) {
+    const table = tableAt(r, c);
+    if (table) {
+      if (!tableMode) enterTableHandler();
+      toggleTableSelection(table.id);
+      return;
+    }
+  }
 
   // Ctrl+Shift ADDS a line to whatever is already selected, rather than replacing
   // it. Clicks sharing the anchor's row or column stretch the line; a diagonal
@@ -202,17 +222,8 @@ function fireTap(cell, mods = {}) {
     // bar is still needed for the tables.
     if (selectMode && state.selection.size === 0) selectionEmptiedHandler();
   } else if (additive) {
-    // Outside both modes the shortcut picks the mode that matches what it hit: a
-    // table under the pointer opens table mode and picks the table, anything
-    // else opens select mode and picks the square.
-    const table = tableAt(r, c);
-    if (table) {
-      enterTableHandler();
-      toggleTableSelection(table.id);
-    } else {
-      enterSelectHandler();   // turn on select mode + show the select bar
-      toggleSelection(r, c);
-    }
+    enterSelectHandler();     // turn on select mode + show the select bar
+    toggleSelection(r, c);
   } else {
     toggleEnabled(r, c);
   }

@@ -93,8 +93,10 @@ function trueSizeRects(size) {
 // a single + appears instead and asks which one you meant.
 
 const INSERT_REACH = 14;     // px from the border that reveals a guide
+const DELETE_OFFSET = 16;    // px the delete button stands outside the grid
 let movingSelection = false; // true while the selection is being dragged
 let rowGuide = null, colGuide = null, cornerBtn = null, cornerMenu = null;
+let rowDelBtn = null, colDelBtn = null;
 let cornerMenuOpen = false;
 
 function makeGuide(axis) {
@@ -159,11 +161,42 @@ function makeCorner() {
   return btn;
 }
 
+/** The red x that deletes a whole row or column. It stands OUTSIDE the grid,
+ *  level with the middle of the line it removes — the complement of the insert
+ *  guides, which appear when the pointer is near a line instead of a square. */
+function makeDelete(axis) {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = `line-remove line-remove--${axis}`;
+  el.textContent = '\u2715';
+  el.hidden = true;
+  el.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    const at = Number(el.dataset.index);
+    const what = axis === 'row' ? 'row' : 'column';
+    if (lineHasContent(axis, at) &&
+        !confirm(`Delete ${what} ${at + 1}? Everything in it is removed.`)) return;
+    if (axis === 'row') deleteRow(at); else deleteCol(at);
+  });
+  chart.appendChild(el);
+  return el;
+}
+
 function buildInsertGuides() {
   rowGuide = makeGuide('row');
   colGuide = makeGuide('col');
   cornerBtn = makeCorner();
+  rowDelBtn = makeDelete('row');
+  colDelBtn = makeDelete('col');
   cornerMenuOpen = false;   // a re-render throws the old menu away
+}
+
+/** Which row/column an offset falls inside, from a boundary list. */
+function lineAt(bs, along) {
+  for (let i = 0; i < bs.length - 1; i++) {
+    if (along >= bs[i] && along < bs[i + 1]) return i;
+  }
+  return -1;
 }
 
 /** Offset of each grid line, in the chart's own layout pixels. Boundary i sits
@@ -221,6 +254,27 @@ function updateInsertGuides(e) {
   const col = inside && near(y, top, bottom) ? nearest(colBs, x) : null;
 
   hideInsertGuides();
+
+  // Beside the grid but NOT near a line means the pointer is level with the
+  // middle of a row or column, which is where that line's delete button sits.
+  if (inside && !row && !col) {
+    if (near(x, left, right)) {
+      const i = lineAt(rowBs, y);
+      if (i >= 0 && rowBs.length > 2) {
+        placeDelete(rowDelBtn, i,
+          x < (left + right) / 2 ? left - DELETE_OFFSET : right + DELETE_OFFSET,
+          (rowBs[i] + rowBs[i + 1]) / 2, 'row');
+      }
+    } else if (near(y, top, bottom)) {
+      const i = lineAt(colBs, x);
+      if (i >= 0 && colBs.length > 2) {
+        placeDelete(colDelBtn, i, (colBs[i] + colBs[i + 1]) / 2,
+          y < (top + bottom) / 2 ? top - DELETE_OFFSET : bottom + DELETE_OFFSET, 'col');
+      }
+    }
+    return;
+  }
+
   if (row && col) {
     // The two lines cross here, so ask rather than guess.
     cornerBtn.dataset.rowIndex = String(row.index);
@@ -235,6 +289,15 @@ function updateInsertGuides(e) {
   } else if (col) {
     placeGuide(colGuide, 'left', col);
   }
+}
+
+function placeDelete(btn, index, x, y, axis) {
+  btn.dataset.index = String(index);
+  btn.style.left = `${x}px`;
+  btn.style.top = `${y}px`;
+  btn.title = `Delete ${axis === 'row' ? 'row' : 'column'} ${index + 1}`;
+  btn.setAttribute('aria-label', btn.title);
+  btn.hidden = false;
 }
 
 function placeGuide(guide, side, at) {
@@ -280,16 +343,82 @@ function hideInsertGuides() {
   if (rowGuide) { rowGuide.hidden = true; rowGuide.classList.remove('insert-guide--preview'); }
   if (colGuide) { colGuide.hidden = true; colGuide.classList.remove('insert-guide--preview'); }
   if (cornerBtn && !cornerMenuOpen) cornerBtn.hidden = true;
+  if (rowDelBtn) rowDelBtn.hidden = true;
+  if (colDelBtn) colDelBtn.hidden = true;
 }
+
+// ---------------------------------------------------------------- delete menu
+//
+// One menu behind three doors: Shift+right-click on the grid, and the Delete
+// button in either edit pane. Whatever opens it, the choices are the same.
+
+let deleteMenu = null;
+
+/** Open the delete menu at a point on screen. `keys` is what Reset acts on;
+ *  `r` and `c` name the row and column the click landed in. */
+function openDeleteMenu(x, y, { keys, r, c }) {
+  closeDeleteMenu();
+  deleteMenu = document.createElement('div');
+  deleteMenu.className = 'popmenu delete-menu';
+  deleteMenu.setAttribute('role', 'menu');
+
+  const n = keys.length;
+  const item = (label, danger, run) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `popmenu__item${danger ? ' popmenu__item--danger' : ''}`;
+    b.setAttribute('role', 'menuitem');
+    b.textContent = label;
+    b.addEventListener('click', (ev) => { ev.stopPropagation(); closeDeleteMenu(); run(); });
+    deleteMenu.appendChild(b);
+  };
+
+  item(n > 1 ? `Reset ${n} squares` : 'Reset square', false, () => {
+    const filled = keys.some((k) => { const [rr, cc] = parseKey(k); return isEnabled(rr, cc); });
+    if (filled && !confirm(n > 1
+      ? `Reset ${n} squares? Their labels, icons and colors are removed.`
+      : 'Reset this square? Its labels, icon and colors are removed.')) return;
+    resetSquares(keys);
+  });
+  item(`Delete row ${r + 1}`, true, () => {
+    if (lineHasContent('row', r) &&
+        !confirm(`Delete row ${r + 1}? Everything in it is removed.`)) return;
+    deleteRow(r);
+  });
+  item(`Delete column ${c + 1}`, true, () => {
+    if (lineHasContent('col', c) &&
+        !confirm(`Delete column ${c + 1}? Everything in it is removed.`)) return;
+    deleteCol(c);
+  });
+
+  document.body.appendChild(deleteMenu);
+  // Keep it on screen when the click lands near an edge.
+  const box = deleteMenu.getBoundingClientRect();
+  deleteMenu.style.left = `${Math.min(x, window.innerWidth - box.width - 8)}px`;
+  deleteMenu.style.top = `${Math.min(y, window.innerHeight - box.height - 8)}px`;
+}
+
+function closeDeleteMenu() {
+  deleteMenu?.remove();
+  deleteMenu = null;
+}
+
+document.addEventListener('pointerdown', (e) => {
+  if (deleteMenu && !e.target.closest?.('.delete-menu')) closeDeleteMenu();
+}, true);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDeleteMenu(); });
 
 /** Wire the hover behaviour once; the stage is bigger than the chart so the
  *  guides can also be reached from just outside its edges. */
 function initInsertGuides(stageEl) {
   stageEl.addEventListener('pointermove', (e) => {
     if (e.pointerType === 'touch') return;   // touch has no hover to key off
-    // While the pointer is on a guide, its + or the corner menu, leave things
-    // be — otherwise reaching for a button would recompute and slide it away.
-    if (e.target.closest && e.target.closest('.insert-guide, .insert-corner, .insert-menu')) return;
+    // While the pointer is on a guide, a +, an x or the corner menu, leave things
+    // be — otherwise reaching for a button would recompute and hide it. The
+    // delete x sits just outside the grid, past the reach that revealed it, so
+    // without this it disappears the moment you go for it.
+    if (e.target.closest &&
+        e.target.closest('.insert-guide, .insert-corner, .insert-menu, .line-remove')) return;
     updateInsertGuides(e);
   });
   stageEl.addEventListener('pointerleave', () => { if (!cornerMenuOpen) hideInsertGuides(); });

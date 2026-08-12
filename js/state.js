@@ -459,6 +459,79 @@ function insertRow(index) { return insertLine('row', index); }
 /** Insert an empty column left of column `index` (index === cols appends). */
 function insertCol(index) { return insertLine('col', index); }
 
+/** Remove a whole row or column, pulling everything after it back by one. The
+ *  exact inverse of insertLine. The last remaining line cannot go — a grid with
+ *  no rows is not a chart. */
+function deleteLine(axis, index) {
+  const isRow = axis === 'row';
+  const limit = isRow ? state.grid.rows : state.grid.cols;
+  if (index < 0 || index >= limit || limit <= 1) return false;
+
+  // undefined => the square went with the deleted line
+  const shift = (k) => {
+    const [r, c] = parseKey(k);
+    const along = isRow ? r : c;
+    if (along === index) return undefined;
+    if (along < index) return k;
+    return isRow ? keyOf(r - 1, c) : keyOf(r, c - 1);
+  };
+
+  const moved = new Map();
+  for (const [k, cell] of state.cells) {
+    const next = shift(k);
+    if (next !== undefined) moved.set(next, cell);
+  }
+  const sel = new Set();
+  for (const k of state.selection) {
+    const next = shift(k);
+    if (next !== undefined) sel.add(next);
+  }
+
+  batch(() => {
+    state.cells = moved;
+    state.selection = sel;
+    for (const t of state.tables) {
+      t.cellKeys = t.cellKeys.map(shift).filter((k) => k !== undefined);
+    }
+    const weights = isRow ? state.rowWeights : state.colWeights;
+    weights.splice(index, 1);
+    if (isRow) state.grid = { ...state.grid, rows: state.grid.rows - 1 };
+    else state.grid = { ...state.grid, cols: state.grid.cols - 1 };
+    state.rowWeights.length = state.grid.rows;
+    state.colWeights.length = state.grid.cols;
+    pruneTables();      // a table that lived entirely on that line is gone now
+    pruneSelection();
+  });
+  return true;
+}
+
+function deleteRow(index) { return deleteLine('row', index); }
+function deleteCol(index) { return deleteLine('col', index); }
+
+/** True when a row or column holds any seated square — the caller uses this to
+ *  decide whether deleting it is worth confirming first. */
+function lineHasContent(axis, index) {
+  const { rows, cols } = state.grid;
+  if (axis === 'row') {
+    for (let c = 0; c < cols; c++) if (isEnabled(index, c)) return true;
+  } else {
+    for (let r = 0; r < rows; r++) if (isEnabled(r, index)) return true;
+  }
+  return false;
+}
+
+/** Strip squares back to nothing: no labels, no icon, default colours, unseated.
+ *  Unlike emptying, this does not keep the content for later. */
+function resetSquares(keys) {
+  batch(() => {
+    for (const k of keys) {
+      const [r, c] = parseKey(k);
+      state.cells.set(k, makeCell());
+      if (!inBounds(r, c)) state.cells.delete(k);
+    }
+  });
+}
+
 // ---------------------------------------------------------------- selection
 
 function toggleSelection(r, c) {
