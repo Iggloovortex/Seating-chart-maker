@@ -110,6 +110,86 @@
               stroke-width="2.6" stroke-linecap="round"/>
         <path d="M19.84 17.17 13.88 17.26 16.78 22.28Z" fill="currentColor"/>
       </symbol>
+
+      <!-- ===== Multi-select filter toggles ===== -->
+      <!-- Every square on the grid -->
+      <symbol id="ui-f-all" viewBox="0 0 24 24">
+        <rect x="3" y="3" width="8" height="8" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.7"/>
+        <rect x="13" y="3" width="8" height="8" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.7"/>
+        <rect x="3" y="13" width="8" height="8" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.7"/>
+        <rect x="13" y="13" width="8" height="8" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.7"/>
+      </symbol>
+      <!-- Filled (was "seated") — a square in use -->
+      <symbol id="ui-f-filled" viewBox="0 0 24 24">
+        <rect x="3.5" y="3.5" width="17" height="17" rx="2.6" fill="currentColor"/>
+      </symbol>
+      <!-- Blank — a square with nothing in it, ever -->
+      <symbol id="ui-f-blank" viewBox="0 0 24 24">
+        <rect x="3.5" y="3.5" width="17" height="17" rx="2.6" fill="none" stroke="currentColor"
+              stroke-width="1.7" stroke-dasharray="3.4 2.6"/>
+      </symbol>
+      <!-- Ghost — emptied, but still holding what it had -->
+      <symbol id="ui-f-ghost" viewBox="0 0 24 24">
+        <rect x="3.5" y="3.5" width="17" height="17" rx="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
+        <path d="M7.5 10h9M7.5 14h5.5" fill="none" stroke="currentColor" stroke-width="1.7"
+              stroke-linecap="round" opacity=".4"/>
+      </symbol>
+      <!-- Labelled — a square carrying label lines -->
+      <symbol id="ui-f-labeled" viewBox="0 0 24 24">
+        <rect x="3.5" y="3.5" width="17" height="17" rx="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
+        <path d="M7.5 10h9M7.5 14h5.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+      </symbol>
+      <!-- Iconed — a square carrying an icon -->
+      <symbol id="ui-f-icons" viewBox="0 0 24 24">
+        <rect x="3.5" y="3.5" width="17" height="17" rx="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
+        <path d="M12 7.6l1.55 3.25 3.45.48-2.5 2.42.6 3.45L12 15.6l-3.1 1.6.6-3.45-2.5-2.42 3.45-.48z"
+              fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+      </symbol>
+      <!-- Tables -->
+      <symbol id="ui-f-tables" viewBox="0 0 24 24">
+        <rect x="2.5" y="5.5" width="19" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/>
+        <path d="M6 13.5V19M18 13.5V19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+      </symbol>
+      <!-- The "not" ring, layered over a filter to negate it -->
+      <symbol id="ui-no" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9.6" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M5.2 18.8 18.8 5.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </symbol>
+      <!-- Small corner variant of the same idea -->
+      <symbol id="ui-no-badge" viewBox="0 0 24 24">
+        <circle cx="17.2" cy="17.2" r="5.6" fill="var(--surface, #fff)" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M13.6 20.8 20.8 13.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </symbol>
+
+      <!-- ===== Actions ===== -->
+      <symbol id="ui-pencil" viewBox="0 0 24 24">
+        <path d="M4 20.2h4.1L20 8.3l-4.1-4.1L4 16.1v4.1z" fill="none" stroke="currentColor"
+              stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M14.4 5.7 18.5 9.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="ui-copy" viewBox="0 0 24 24">
+        <rect x="8.5" y="2.8" width="12.2" height="14.4" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M15.4 21.2H5.3a2 2 0 0 1-2-2V7.3" fill="none" stroke="currentColor"
+              stroke-width="1.8" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="ui-paste" viewBox="0 0 24 24">
+        <path d="M9.2 4.6H7a2 2 0 0 0-2 2v12.6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6.6a2 2 0 0 0-2-2h-2.2"
+              fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        <rect x="9.2" y="2.4" width="5.6" height="4.4" rx="1.3" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      </symbol>
+      <symbol id="ui-trash" viewBox="0 0 24 24">
+        <path d="M4.5 6.5h15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M9.5 6.5V4.6a1.4 1.4 0 0 1 1.4-1.4h2.2a1.4 1.4 0 0 1 1.4 1.4V6.5" fill="none"
+              stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M6.4 6.5l1 12.6a1.8 1.8 0 0 0 1.8 1.7h5.6a1.8 1.8 0 0 0 1.8-1.7l1-12.6" fill="none"
+              stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+      </symbol>
+      <!-- Fill all — a square being filled in -->
+      <symbol id="ui-fill-all" viewBox="0 0 24 24">
+        <path d="M3.5 12v-5.9a2.6 2.6 0 0 1 2.6-2.6h11.8a2.6 2.6 0 0 1 2.6 2.6V12" fill="none"
+              stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M3.5 12h17v5.9a2.6 2.6 0 0 1-2.6 2.6H6.1a2.6 2.6 0 0 1-2.6-2.6z" fill="currentColor"/>
+      </symbol>
     </defs>
   </svg>
 
