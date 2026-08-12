@@ -264,6 +264,12 @@ body {
   background: var(--accent);
   border-color: var(--accent);
 }
+/* The fill toggle keeps its own green when lit, so it is not mistaken for one
+   more blue toggle sitting next to Edit. */
+.btn--seat.btn--toggle[aria-pressed="true"] {
+  background: #276d2b;
+  border-color: #276d2b;
+}
 
 .btn--icon {
   min-width: var(--tap);
@@ -271,6 +277,25 @@ body {
   font-size: 18px;
   line-height: 1;
 }
+
+/* ============================ Selection filters ============================
+   Ten icon toggles, kept as one block so they read as a set rather than as ten
+   unrelated buttons. They wrap together on narrow screens. */
+.filterbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.filterbtn { padding: 6px; min-width: 34px; }
+.filterbtn .iconbtn__svg { width: 20px; height: 20px; }
+/* The negation badge punches a hole in the base mark, so it needs the button's
+   own background to read as a break rather than a smudge. */
+.filterbtn { --surface: var(--surface-2); }
+.filterbtn[aria-pressed="true"] { --surface: var(--accent); }
 
 /* ============================== Select bar ============================== */
 .selectbar {
@@ -846,7 +871,13 @@ body {
 }
 .toolbar__brand { margin-right: 0; }
 
-.iconbar { display: flex; gap: 6px; flex-wrap: wrap; }
+.iconbar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.iconbar__sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--line);
+  margin: 4px 2px;
+}
 
 .iconbtn {
   width: var(--tap);

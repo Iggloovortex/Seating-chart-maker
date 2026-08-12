@@ -461,10 +461,7 @@ function initInsertGuides(stageEl) {
 /** Corner grab handle for dragging the whole selection to a new spot. Shown at
  *  the top-left of the selection's bounding box while in select mode. */
 function renderMoveHandle() {
-  // Table mode picks squares too, so the handle belongs there just as much.
-  const picking = (typeof isSelectMode === 'function' && isSelectMode()) ||
-                  (typeof isTableMode === 'function' && isTableMode());
-  if (!picking) return;
+  if (typeof isSelectMode !== 'function' || !isSelectMode()) return;
   const box = selectionBounds();
   if (!box) return;
 
@@ -706,7 +703,7 @@ function renderTables() {
     chart.appendChild(del);
 
     // A picked table can be re-shaped by its own edges.
-    if (state.tableSelection.has(table.id) && typeof isTableMode === 'function' && isTableMode()) {
+    if (state.tableSelection.has(table.id) && typeof isSelectMode === 'function' && isSelectMode()) {
       addResizeHandles(table, left + inset, top + inset, right - inset, bottom - inset, spin);
     }
   }

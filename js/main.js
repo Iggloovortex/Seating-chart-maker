@@ -75,7 +75,7 @@ reflectIconFillDefault();
 initPaperControls();
 initOrientationControls();
 initTables();
-initTableMode();
+initFilters();
 initInsertGuides(document.getElementById('stage'));
 
 // Grid view options

@@ -231,6 +231,13 @@
           <button id="btn-print" class="iconbtn iconbtn--print" type="button" title="Print / PDF" aria-label="Print or save as PDF">
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-print"/></svg>
           </button>
+          <span class="iconbar__sep" aria-hidden="true"></span>
+          <button id="btn-copy-format" class="iconbtn" type="button" title="Copy the selected square, labels and all" aria-label="Copy square">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-copy"/></svg>
+          </button>
+          <button id="btn-paste-format" class="iconbtn" type="button" title="Clone the copied square onto every selected square" aria-label="Paste square">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-paste"/></svg>
+          </button>
           <input id="file-input" type="file" accept=".seatchart,application/json" hidden />
         </div>
       </div>
@@ -289,10 +296,41 @@
 
        <div class="toolbar__row toolbar__row--actions">
       <div class="toolbar__group toolbar__group--actions">
-        <button id="btn-table-mode" class="btn btn--icon btn--toggle" type="button" aria-pressed="false"
-                title="Table mode — pick and edit tables" aria-label="Table mode">
-          <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-table"/></svg>
-        </button>
+        <!-- Selection filters. Each is a toggle: while it is lit, the squares it
+             matches are selected, and turning it off gives up only the squares
+             no other lit toggle still claims. -->
+        <div class="filterbar" role="group" aria-label="Select by">
+          <button id="btn-filter-all" class="btn btn--icon btn--toggle filterbtn" type="button" aria-pressed="false" title="All squares" aria-label="All squares">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-f-all"/></svg>
+          </button>
+          <button id="btn-filter-filled" class="btn btn--icon btn--toggle filterbtn" type="button" aria-pressed="false" title="All filled" aria-label="All filled">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-f-filled"/></svg>
+          </button>
+          <button id="btn-filter-blank" class="btn btn--icon btn--toggle filterbtn" type="button" aria-pressed="false" title="All blank" aria-label="All blank">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-f-blank"/></svg>
+          </button>
+          <button id="btn-filter-labeled" class="btn btn--icon btn--toggle filterbtn" type="button" aria-pressed="false" title="All labeled" aria-label="All labeled">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-f-labeled"/></svg>
+          </button>
+          <button id="btn-filter-unlabeled" class="btn btn--icon btn--toggle filterbtn" type="button" aria-pressed="false" title="All unlabeled" aria-label="All unlabeled">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-f-labeled"/><use href="#ui-no-badge"/></svg>
+          </button>
+          <button id="btn-filter-icons" class="btn btn--icon btn--toggle filterbtn" type="button" aria-pressed="false" title="All w/ icons" aria-label="All with icons">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-f-icons"/></svg>
+          </button>
+          <button id="btn-filter-noicons" class="btn btn--icon btn--toggle filterbtn" type="button" aria-pressed="false" title="All w/o icons" aria-label="All without icons">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-f-icons"/><use href="#ui-no-badge"/></svg>
+          </button>
+          <button id="btn-filter-ghost" class="btn btn--icon btn--toggle filterbtn" type="button" aria-pressed="false" title="All ghost — emptied squares that still hold content" aria-label="All ghost">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-f-ghost"/></svg>
+          </button>
+          <button id="btn-filter-tables" class="btn btn--icon btn--toggle filterbtn" type="button" aria-pressed="false" title="All tables" aria-label="All tables">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-f-tables"/></svg>
+          </button>
+          <button id="btn-filter-noghost" class="btn btn--icon btn--toggle filterbtn" type="button" aria-pressed="false" title="No ghost — keep emptied squares out of the selection" aria-label="No ghost">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-f-ghost"/><use href="#ui-no-badge"/></svg>
+          </button>
+        </div>
         <button id="btn-select" class="btn btn--icon btn--toggle" type="button" aria-pressed="false" title="Select mode" aria-label="Select mode">
           <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use id="select-icon" href="#ui-select-off"/></svg>
         </button>
@@ -353,36 +391,24 @@
     </header>
 
     <!-- ===== Table-select action bar (only shown in select mode) ===== -->
+    <!-- ===== Selection bar. One bar for both halves of the work: the squares
+             that are picked and the tables that are picked. ===== -->
     <div id="select-bar" class="selectbar" hidden>
-      <span id="select-count" class="selectbar__count">0 selected</span>
+      <span id="select-count" class="selectbar__count">0 squares &amp; 0 tables selected</span>
       <div class="selectbar__actions">
-        <button id="btn-select-enabled" class="btn" type="button" title="Select every filled square">All filled</button>
-        <button id="btn-select-all" class="btn" type="button" title="Select every square">All squares</button>
-        <button id="btn-select-labeled" class="btn" type="button" title="Select filled squares that have label text">All labeled</button>
-        <button id="btn-select-unlabeled" class="btn" type="button" title="Select filled squares with no label text">All unlabeled</button>
-        <button id="btn-select-icons" class="btn" type="button" title="Select filled squares that have an icon">All w/ icons</button>
-        <button id="btn-select-no-icons" class="btn" type="button" title="Select filled squares with no icon">All w/o icons</button>
-        <button id="btn-edit-selected" class="btn btn--primary" type="button">Edit selected</button>
-        <span class="toolbar__sep" aria-hidden="true"></span>
-        <button id="btn-seat-all" class="btn btn--seat" type="button" title="Fill every selected square">Fill all</button>
-        <span class="toolbar__sep" aria-hidden="true"></span>
-        <button id="btn-copy-format" class="btn" type="button" title="Copy the selected square, labels and all">Copy square</button>
-        <button id="btn-paste-format" class="btn" type="button" title="Clone the copied square onto every selected square">Paste square</button>
-        <button id="btn-select-clear" class="btn btn--ghost" type="button">Clear selection</button>
-      </div>
-    </div>
-
-    <!-- ===== Table action bar (only shown in table mode) ===== -->
-    <div id="table-bar" class="selectbar selectbar--table" hidden>
-      <span id="table-count" class="selectbar__count">0 tables selected</span>
-      <div class="selectbar__actions">
-        <button id="btn-table-all" class="btn" type="button" title="Select every table">Select all tables</button>
+        <button id="btn-seat-all" class="btn btn--seat btn--icon btn--toggle" type="button" aria-pressed="false"
+                title="Fill every selected square" aria-label="Fill all">
+          <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-fill-all"/></svg>
+        </button>
+        <button id="btn-edit-selected" class="btn btn--primary btn--icon" type="button"
+                title="Edit the selected squares" aria-label="Edit selected">
+          <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-pencil"/></svg>
+        </button>
         <span class="toolbar__sep" aria-hidden="true"></span>
         <button id="btn-table-round" class="btn" type="button"
                 title="Squares selected: build a round table from them. Tables picked: make them round.">Round table</button>
         <button id="btn-table-square" class="btn" type="button"
                 title="Squares selected: build a square table from them. Tables picked: make them square.">Square table</button>
-        <span class="toolbar__sep" aria-hidden="true"></span>
         <label class="field">
           <span class="field__label">Color</span>
           <input id="table-edit-color" class="field__input field__input--color" type="color" value="#8d6e63" />
@@ -392,8 +418,12 @@
           <input id="table-edit-border" class="field__input field__input--color" type="color" value="#5d4037" />
         </label>
         <button id="btn-table-rotate" class="btn" type="button" title="Turn the picked tables 45°">Rotate 45°</button>
-        <button id="btn-table-remove" class="btn btn--empty" type="button" title="Remove the selected tables">Remove</button>
-        <button id="btn-table-clear" class="btn btn--ghost" type="button">Clear selection</button>
+        <span class="toolbar__sep" aria-hidden="true"></span>
+        <button id="btn-table-remove" class="btn btn--empty btn--icon" type="button"
+                title="Delete the selected items" aria-label="Delete selected">
+          <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-trash"/></svg>
+        </button>
+        <button id="btn-select-clear" class="btn btn--ghost" type="button">Clear selection</button>
       </div>
     </div>
 
@@ -478,6 +508,7 @@
   <script src="js/layout.js"></script>
   <script src="js/grid.js"></script>
   <script src="js/interactions.js"></script>
+  <script src="js/filters.js"></script>
   <script src="js/editor.js"></script>
   <script src="js/tables.js"></script>
   <script src="js/export.js"></script>

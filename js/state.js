@@ -10,6 +10,11 @@ function subscribe(fn) {
 
 function emit() {
   if (quiet) return;
+  // The selection is DERIVED — hand-picked squares plus whatever the active
+  // filter toggles claim (see js/filters.js). Rebuilding it here, before the
+  // listeners run, is what makes a filter live: label a square while "All
+  // labeled" is lit and it joins the selection on the same tick.
+  if (typeof recomputeSelection === 'function') recomputeSelection();
   for (const fn of listeners) fn(state);
 }
 
@@ -82,8 +87,13 @@ const state = {
   tables: [],                   // [{ id, cellKeys:[], shape:'round'|'square', color }]
   paper: 'letter',              // preset id or { w, h, unit }
   landscape: true,              // paper orientation; false swaps width/height
-  selection: new Set(),         // keys highlighted in select mode
-  tableSelection: new Set(),    // table ids highlighted in table mode
+  // The selection is derived and must never be assigned to directly: it is
+  // rebuilt from the three fields below on every emit.
+  selection: new Set(),         // keys highlighted in select mode (DERIVED)
+  filters: new Set(),           // active filter toggle ids (see js/filters.js)
+  manualAdd: new Set(),         // squares picked by hand
+  manualDrop: new Set(),        // squares un-picked by hand, overriding filters
+  tableSelection: new Set(),    // table ids highlighted in select mode
   showTrueSizes: false,         // preview weighted row/col sizes in the grid
 };
 
@@ -402,7 +412,9 @@ function moveSelection(dr, dc) {
         });
       }
     }
-    state.selection = new Set(keys.map((k) => {
+    // The moved squares travel with the drag; filters stay out of it, since a
+    // move is as explicit a pick as a rectangle.
+    selectionReplace(keys.map((k) => {
       const [r, c] = parseKey(k);
       return keyOf(r + dr, c + dc);
     }));
@@ -439,11 +451,10 @@ function insertLine(axis, index) {
 
   const moved = new Map();
   for (const [k, cell] of state.cells) moved.set(shift(k), cell);
-  const sel = new Set([...state.selection].map(shift));
 
   batch(() => {
     state.cells = moved;
-    state.selection = sel;
+    remapSelection(shift);
     for (const t of state.tables) t.cellKeys = t.cellKeys.map(shift);
     const weights = isRow ? state.rowWeights : state.colWeights;
     weights.splice(index, 0, undefined);          // the new line takes the default
@@ -482,15 +493,9 @@ function deleteLine(axis, index) {
     const next = shift(k);
     if (next !== undefined) moved.set(next, cell);
   }
-  const sel = new Set();
-  for (const k of state.selection) {
-    const next = shift(k);
-    if (next !== undefined) sel.add(next);
-  }
-
   batch(() => {
     state.cells = moved;
-    state.selection = sel;
+    remapSelection(shift);
     for (const t of state.tables) {
       t.cellKeys = t.cellKeys.map(shift).filter((k) => k !== undefined);
     }
@@ -535,13 +540,49 @@ function resetSquares(keys) {
 
 // ---------------------------------------------------------------- selection
 
+/** Pick squares by hand. A hand-pick outranks a filter that dropped them. */
+function selectionAdd(keys) {
+  for (const k of keys) { state.manualAdd.add(k); state.manualDrop.delete(k); }
+}
+/** Un-pick squares by hand. Recorded rather than simply deleted, so a filter
+ *  that claims the same square cannot put it straight back. */
+function selectionDrop(keys) {
+  for (const k of keys) { state.manualDrop.add(k); state.manualAdd.delete(k); }
+}
+/** Make `keys` THE selection: filters are turned off, since an explicit
+ *  rectangle or line means "this, and nothing else". */
+function selectionReplace(keys) {
+  state.filters.clear();
+  state.manualAdd = new Set(keys);
+  state.manualDrop.clear();
+}
+/** Move every remembered key through `shift`, which returns undefined for keys
+ *  that no longer exist. Used when a row or column is inserted or deleted. */
+function remapSelection(shift) {
+  const move = (set) => {
+    const next = new Set();
+    for (const k of set) { const n = shift(k); if (n !== undefined) next.add(n); }
+    return next;
+  };
+  state.manualAdd = move(state.manualAdd);
+  state.manualDrop = move(state.manualDrop);
+}
+
 function toggleSelection(r, c) {
   const k = keyOf(r, c);
-  if (state.selection.has(k)) state.selection.delete(k);
-  else state.selection.add(k);
+  if (state.selection.has(k)) selectionDrop([k]);
+  else selectionAdd([k]);
   emit();
 }
-function clearSelection() { state.selection.clear(); emit(); }
+/** Wipe the whole selection — filters included — without emitting. Callers
+ *  inside a batch use this; `clearSelection` is the same thing plus the emit. */
+function clearManualSelection() {
+  state.filters.clear();
+  state.manualAdd.clear();
+  state.manualDrop.clear();
+  state.selection.clear();
+}
+function clearSelection() { clearManualSelection(); emit(); }
 
 /** Make the rectangle between two cells THE selection, without touching seats.
  *  Used while Shift+click is sizing a rectangle: every click re-sizes the
@@ -550,9 +591,10 @@ function setSelectionRange(r1, c1, r2, c2) {
   const rMin = Math.min(r1, r2), rMax = Math.max(r1, r2);
   const cMin = Math.min(c1, c2), cMax = Math.max(c1, c2);
   batch(() => {
-    state.selection.clear();
+    const keys = [];
     for (let r = rMin; r <= rMax; r++)
-      for (let c = cMin; c <= cMax; c++) state.selection.add(keyOf(r, c));
+      for (let c = cMin; c <= cMax; c++) keys.push(keyOf(r, c));
+    selectionReplace(keys);
   });
 }
 
@@ -579,14 +621,18 @@ function addLineRange(r1, c1, r2, c2) {
 
 function addKey(k) {
   if (state.selection.has(k)) return [];
-  state.selection.add(k);
+  selectionAdd([k]);
+  state.selection.add(k);   // visible to the rest of this batch, before the emit
   return [k];
 }
 
 /** Drop specific keys from the selection. */
 function deselectKeys(keys) {
   if (!keys.length) return;
-  batch(() => { for (const k of keys) state.selection.delete(k); });
+  batch(() => {
+    selectionDrop(keys);
+    for (const k of keys) state.selection.delete(k);
+  });
 }
 
 /** True when every square in the rectangle is already seated. Drives the
@@ -608,32 +654,13 @@ function seatRange(r1, c1, r2, c2, enabled) {
   const rMin = Math.min(r1, r2), rMax = Math.max(r1, r2);
   const cMin = Math.min(c1, c2), cMax = Math.max(c1, c2);
   batch(() => {
-    state.selection.clear();
+    const keys = [];
     for (let r = rMin; r <= rMax; r++)
       for (let c = cMin; c <= cMax; c++) {
         getCell(r, c).enabled = enabled;
-        state.selection.add(keyOf(r, c));
+        keys.push(keyOf(r, c));
       }
-  });
-}
-
-/** Select every seated (enabled) square. */
-function selectAllEnabled() {
-  batch(() => {
-    state.selection.clear();
-    for (const [k, cell] of state.cells) if (cell.enabled) state.selection.add(k);
-  });
-}
-
-/** Select every SEATED square matching `pred(cell)`. (A first pass at
- *  filtered selection; a general filter system can replace this later.) */
-function selectSeatedWhere(pred) {
-  batch(() => {
-    state.selection.clear();
-    for (const [k, cell] of state.cells) {
-      const [r, c] = parseKey(k);
-      if (cell.enabled && pred(cell, r, c)) state.selection.add(k);
-    }
+    selectionReplace(keys);
   });
 }
 
@@ -645,34 +672,12 @@ function isUnderTable(r, c) {
   return state.tables.some((t) => tableCoverage(t).includes(keyOf(r, c)));
 }
 
-/** Seated squares matching `pred` that are NOT part of a table. The "absence"
- *  filters use this: a table seats everything under it, so those squares are all
- *  unlabelled and icon-less and would otherwise swamp the result. */
-function selectSeatedWhereFree(pred) {
-  selectSeatedWhere((cell, r, c) => pred(cell) && !isUnderTable(r, c));
-}
-
-/** Seated squares that carry at least one non-empty label line. */
-function selectLabeled() { selectSeatedWhere(hasLabelText); }
-/** Seated squares with no label text at all, table squares excepted. */
-function selectUnlabeled() { selectSeatedWhereFree((cell) => !hasLabelText(cell)); }
-/** Seated squares that have an icon. */
-function selectWithIcons() { selectSeatedWhere((cell) => !!cell.icon); }
-/** Seated squares with no icon, table squares excepted. */
-function selectWithoutIcons() { selectSeatedWhereFree((cell) => !cell.icon); }
-
-/** Select every square in the grid. */
-function selectAllSquares() {
-  batch(() => {
-    state.selection.clear();
-    for (let r = 0; r < state.grid.rows; r++)
-      for (let c = 0; c < state.grid.cols; c++) state.selection.add(keyOf(r, c));
-  });
-}
 function pruneSelection() {
-  for (const k of [...state.selection]) {
-    const [r, c] = parseKey(k);
-    if (!inBounds(r, c)) state.selection.delete(k);
+  for (const set of [state.manualAdd, state.manualDrop]) {
+    for (const k of [...set]) {
+      const [r, c] = parseKey(k);
+      if (!inBounds(r, c)) set.delete(k);
+    }
   }
 }
 
@@ -693,7 +698,7 @@ function addTable(shape, color) {
   for (let r = fp.minR; r <= fp.maxR; r++) {
     for (let c = fp.minC; c <= fp.maxC; c++) getCell(r, c).enabled = true;
   }
-  state.selection.clear();
+  clearManualSelection();
   emit();
   return table;
 }
@@ -820,8 +825,14 @@ function pruneTables() {
 /** Empty every square on the grid. Non-destructive, like any unseating: labels,
  *  colors and icons stay on the squares and reappear when they are seated
  *  again. Tables are left alone — use New to wipe the chart outright. */
+/** Empty every square and take the tables with them. Labels, icons and colours
+ *  survive — this clears the layout, not the content. */
 function clearGrid() {
-  batch(() => { for (const cell of state.cells.values()) cell.enabled = false; });
+  batch(() => {
+    for (const cell of state.cells.values()) cell.enabled = false;
+    state.tables = [];
+    state.tableSelection.clear();
+  });
 }
 
 function clearAll() {
@@ -832,7 +843,7 @@ function clearAll() {
     state.title = '';
     state.cells.clear();
     state.tables = [];
-    state.selection.clear();
+    clearManualSelection();
     state.tableSelection.clear();
     state.rowWeights = [];
     state.colWeights = [];
@@ -892,7 +903,7 @@ function deserialize(data) {
       : [];
     state.paper = data.paper || 'letter';
     state.landscape = data.landscape !== false;
-    state.selection = new Set();
+    clearManualSelection();
     state.tableSelection = new Set();
     pruneTables();
   });

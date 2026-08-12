@@ -14,12 +14,6 @@ function setSelectMode(on) {
 }
 function isSelectMode() { return selectMode; }
 
-// Table mode picks TABLES rather than squares. The two modes are mutually
-// exclusive — the UI layer (js/tables.js) turns one off when the other goes on.
-let tableMode = false;
-function setTableMode(on) { tableMode = on; }
-function isTableMode() { return tableMode; }
-
 let editHandler = () => {};
 function onRequestEdit(fn) { editHandler = fn; }
 
@@ -32,8 +26,8 @@ function onRequestBulkEdit(fn) { bulkEditHandler = fn; }
 let enterSelectHandler = () => {};
 function onEnterSelect(fn) { enterSelectHandler = fn; }
 
-// The same shortcut landing on a TABLE opens table mode instead, so one gesture
-// reaches whichever thing is actually under the pointer.
+// The same shortcut landing on a TABLE picks the table, so one gesture reaches
+// whichever thing is actually under the pointer.
 let enterTableHandler = () => {};
 function onEnterTable(fn) { enterTableHandler = fn; }
 
@@ -132,29 +126,18 @@ function fireTap(cell, mods = {}) {
   const [r, c] = parseKey(cell.dataset.key);
   const { additive, shift } = mods;
 
-  // Table mode handles both halves of table work without swapping bars. A tap on
-  // a square that already carries a table picks the TABLE; a tap on a bare
-  // square selects the SQUARE, which is how the next table gets built. The
-  // shapes are pointer-events:none overlays, so the square underneath is what
-  // the pointer actually lands on and the table is found from its position.
-  if (tableMode) {
-    const table = tableAt(r, c);
-    if (table) { toggleTableSelection(table.id); return; }
-    // A bare square falls straight through to the square-picking paths below.
-  }
+  const picking = selectMode;
 
-  // Both modes pick squares, so Shift ranges, Ctrl adds and the range anchor all
-  // behave identically in either one.
-  const picking = selectMode || tableMode;
-
-  // Ctrl/Cmd+click follows what it lands on, whatever mode is running: a table
-  // under the pointer picks the table and opens the table bar, anything else
-  // falls through to the square. A plain click still reaches the square beneath
-  // a table, which is how covered squares stay editable.
+  // Ctrl/Cmd+click follows what it lands on: a table under the pointer picks the
+  // table and opens the select bar, anything else falls through to the square.
+  // A plain click still reaches the square beneath a table, which is how covered
+  // squares stay editable. The shapes are pointer-events:none overlays, so the
+  // square underneath is what the pointer lands on and the table is found from
+  // its position.
   if (additive && !shift) {
     const table = tableAt(r, c);
     if (table) {
-      if (!tableMode) enterTableHandler();
+      if (!selectMode) enterTableHandler();
       toggleTableSelection(table.id);
       return;
     }
@@ -224,9 +207,8 @@ function fireTap(cell, mods = {}) {
 
   if (picking) {
     toggleSelection(r, c);
-    // Emptying the selection leaves SELECT mode, but not table mode — there the
-    // bar is still needed for the tables.
-    if (selectMode && state.selection.size === 0) selectionEmptiedHandler();
+    // Emptying the selection leaves select mode, unless a table is still picked.
+    if (state.selection.size === 0) selectionEmptiedHandler();
   } else if (additive) {
     enterSelectHandler();     // turn on select mode + show the select bar
     toggleSelection(r, c);
