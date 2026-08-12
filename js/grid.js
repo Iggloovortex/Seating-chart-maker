@@ -34,6 +34,8 @@ function uniformCellSize() {
 
 const CHART_PAD = 4;   // .chart padding, in px
 const CELL_GAP = 4;    // .chart gap, in px
+const BADGE_PAD = 5;   // inset for a badge inside a shape (matches .cell__check)
+const TABLE_BADGE = 24; // .table-remove size, in px
 
 /** Full re-render of the grid. Called on any state change. */
 function renderGrid() {
@@ -570,7 +572,9 @@ function buildCell(r, c, rects) {
 
     const content = document.createElement('div');
     content.className = 'cell__content';
-    content.style.setProperty('--rot', `${data.rotation || 0}deg`);
+    // A square under a table turns with the table, on top of its own facing.
+    const tableRot = tableAt(r, c)?.rotation || 0;
+    content.style.setProperty('--rot', `${(data.rotation || 0) + tableRot}deg`);
 
     if (data.icon) {
       const svg = iconUse(data.icon);
@@ -666,23 +670,126 @@ function renderTables() {
     chart.appendChild(shape);
 
     // Remove button — the shape itself is pointer-events:none, so this button
-    // (pointer-events:auto) is how a table gets deleted. Placed at its top-right.
+    // (pointer-events:auto) is how a table gets deleted. It sits INSIDE the
+    // shape's top-right corner, held off the edges by the same padding a
+    // square's tick badge uses.
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'table-remove';
     del.textContent = '✕';
     del.title = 'Remove table';
     del.setAttribute('aria-label', 'Remove table');
-    del.style.left = `${right - inset - 12}px`;
-    del.style.top = `${top + inset - 12}px`;
+    del.style.left = `${right - inset - TABLE_BADGE - BADGE_PAD}px`;
+    del.style.top = `${top + inset + BADGE_PAD}px`;
     del.addEventListener('click', (e) => { e.stopPropagation(); removeTable(table.id); });
     chart.appendChild(del);
+
+    // A picked table can be re-shaped by its own edges.
+    if (state.tableSelection.has(table.id) && typeof isTableMode === 'function' && isTableMode()) {
+      addResizeHandles(table, left + inset, top + inset, right - inset, bottom - inset);
+    }
   }
+}
+
+// ------------------------------------------------------------ table resizing
+//
+// Eight handles on a picked table's shape — four corners and four sides. Each
+// drag moves its own edges by whole squares, previewing the block it would land
+// on, and the table takes that block on release.
+
+const RESIZE_DIRS = {
+  nw: [0, 0], n: [0.5, 0], ne: [1, 0],
+  w:  [0, 0.5],            e:  [1, 0.5],
+  sw: [0, 1], s: [0.5, 1], se: [1, 1],
+};
+
+function addResizeHandles(table, x1, y1, x2, y2) {
+  for (const [dir, [fx, fy]] of Object.entries(RESIZE_DIRS)) {
+    const h = document.createElement('button');
+    h.type = 'button';
+    h.className = `table-handle table-handle--${dir}`;
+    h.title = 'Drag to resize the table';
+    h.setAttribute('aria-label', h.title);
+    h.style.left = `${x1 + (x2 - x1) * fx}px`;
+    h.style.top = `${y1 + (y2 - y1) * fy}px`;
+    attachResizeDrag(h, table, dir);
+    chart.appendChild(h);
+  }
+}
+
+/** A cell's box in the chart's own layout pixels. */
+function cellLocalRect(r, c) {
+  const el = chart.querySelector(`.cell[data-key="${CSS.escape(keyOf(r, c))}"]`);
+  if (!el) return null;
+  const chartRect = chart.getBoundingClientRect();
+  const zoom = chartZoom();
+  const b = el.getBoundingClientRect();
+  return { left: (b.left - chartRect.left) / zoom, top: (b.top - chartRect.top) / zoom,
+           width: b.width / zoom, height: b.height / zoom };
+}
+
+function attachResizeDrag(handle, table, dir) {
+  let drag = null;
+
+  handle.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();          // never let it reach the square underneath
+    const fp = footprintOf(table.cellKeys);
+    const first = cellLocalRect(fp.minR, fp.minC);
+    if (!first) return;
+    handle.setPointerCapture(e.pointerId);
+    const gap = parseFloat(getComputedStyle(chart).gap) || 0;
+    drag = { x: e.clientX, y: e.clientY, fp, next: { ...fp }, zoom: chartZoom(),
+             stepX: first.width + gap, stepY: first.height + gap };
+    drag.preview = document.createElement('div');
+    drag.preview.className = 'move-preview';
+    chart.appendChild(drag.preview);
+    showResizePreview(drag);
+  });
+
+  handle.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const dc = Math.round((e.clientX - drag.x) / drag.zoom / drag.stepX);
+    const dr = Math.round((e.clientY - drag.y) / drag.zoom / drag.stepY);
+    const n = { ...drag.fp };
+    if (dir.includes('w')) n.minC += dc;
+    if (dir.includes('e')) n.maxC += dc;
+    if (dir.includes('n')) n.minR += dr;
+    if (dir.includes('s')) n.maxR += dr;
+    // An edge never crosses its opposite, and never leaves the grid.
+    n.minC = Math.max(0, Math.min(n.minC, n.maxC));
+    n.maxC = Math.min(state.grid.cols - 1, Math.max(n.maxC, n.minC));
+    n.minR = Math.max(0, Math.min(n.minR, n.maxR));
+    n.maxR = Math.min(state.grid.rows - 1, Math.max(n.maxR, n.minR));
+    drag.next = n;
+    showResizePreview(drag);
+  });
+
+  const finish = () => {
+    if (!drag) return;
+    const n = drag.next;
+    drag.preview.remove();
+    drag = null;
+    resizeTable(table.id, n.minR, n.minC, n.maxR, n.maxC);
+  };
+  handle.addEventListener('pointerup', finish);
+  handle.addEventListener('pointercancel', finish);
+}
+
+function showResizePreview({ preview, next }) {
+  const a = cellLocalRect(next.minR, next.minC);
+  const z = cellLocalRect(next.maxR, next.maxC);
+  if (!a || !z) return;
+  preview.style.left = `${a.left}px`;
+  preview.style.top = `${a.top}px`;
+  preview.style.width = `${z.left + z.width - a.left}px`;
+  preview.style.height = `${z.top + z.height - a.top}px`;
 }
 
 /** Re-measure table overlays after layout changes (zoom, resize). */
 function refreshTables() {
-  chart.querySelectorAll('.table-shape, .table-remove, .move-handle').forEach((n) => n.remove());
+  chart.querySelectorAll('.table-shape, .table-remove, .table-handle, .move-handle')
+    .forEach((n) => n.remove());
   renderTables();
   renderMoveHandle();
 }

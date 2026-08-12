@@ -744,6 +744,26 @@ function updateTables(ids, patch) {
     for (const t of state.tables) if (ids.includes(t.id)) Object.assign(t, patch);
   });
 }
+/** Re-shape a table onto a new block of squares. A footprint is always a full
+ *  rectangle and every square in it is seated, exactly as when a table is first
+ *  made — so growing one picks up the squares it now covers. */
+function resizeTable(id, minR, minC, maxR, maxC) {
+  const t = state.tables.find((x) => x.id === id);
+  if (!t) return false;
+  minR = Math.max(0, minR); minC = Math.max(0, minC);
+  maxR = Math.min(state.grid.rows - 1, maxR);
+  maxC = Math.min(state.grid.cols - 1, maxC);
+  if (maxR < minR || maxC < minC) return false;
+
+  const keys = [];
+  for (let r = minR; r <= maxR; r++) for (let c = minC; c <= maxC; c++) keys.push(keyOf(r, c));
+  batch(() => {
+    t.cellKeys = keys;
+    for (const k of keys) { const [r, c] = parseKey(k); getCell(r, c).enabled = true; }
+  });
+  return true;
+}
+
 /** Turn each listed table by `step` degrees. Rotation only shows on a square
  *  table — a circle looks the same whichever way round it is — so the control
  *  is worth having mainly for angled banks of desks. */

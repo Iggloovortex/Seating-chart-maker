@@ -115,7 +115,8 @@ async function renderToCanvas(dpi = 300) {
   // 4) Labels and icons of squares the table covers, painted last so they stay
   //    readable on top of the solid table.
   for (const v of covered) {
-    drawContent(ctx, v.geo.cx, v.geo.cy, v.geo.w, v.geo.h, v.data, imgCache, false, plan, v.geo.clip);
+    drawContent(ctx, v.geo.cx, v.geo.cy, v.geo.w, v.geo.h, v.data, imgCache, false, plan,
+                v.geo.clip, v.geo.tableRot);
   }
 
   return canvas;
@@ -275,7 +276,8 @@ function coveredGeometry(rectOf, { r, c }, footprints) {
   const cell = rectOf(r, c);
   const owner = footprints.find(({ fp }) =>
     r >= fp.minR && r <= fp.maxR && c >= fp.minC && c <= fp.maxC);
-  const geo = { cx: cell.x + cell.w / 2, cy: cell.y + cell.h / 2, w: cell.w, h: cell.h };
+  const geo = { cx: cell.x + cell.w / 2, cy: cell.y + cell.h / 2, w: cell.w, h: cell.h,
+                tableRot: owner ? (owner.t.rotation || 0) : 0 };
   if (!owner) return geo;
 
   const t = tableRect(owner.t, rectOf);
@@ -292,7 +294,7 @@ function coveredGeometry(rectOf, { r, c }, footprints) {
 
 /** Draw a seat's icon (above) and label lines (each its own color), rotated.
  *  When `forceChair` and the seat is otherwise empty, draw a chair icon. */
-function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip) {
+function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, extraRot = 0) {
   const labels = labelsOf(data);
   let iconId = data.icon;
   if (!iconId && labels.length === 0 && forceChair) iconId = 'chair';
@@ -307,7 +309,7 @@ function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip) 
 
   // Keep the stack inside `clip` when one is given (a table's drawn shape). The
   // stack runs down the square, or across it once rotated a quarter turn.
-  const rot = data.rotation || 0;
+  const rot = (data.rotation || 0) + extraRot;   // a table's angle carries through
   if (clip) {
     const half = totalH / 2;
     if (rot === 90 || rot === 270) cx = within(cx, clip.left + half, clip.right - half);
