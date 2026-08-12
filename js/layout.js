@@ -102,3 +102,16 @@ function layoutRects({ wUnits, hUnits }, unit, originX, originY) {
   }
   return rects;
 }
+
+/** How far a w x h rectangle must shrink to still fit inside its own footprint
+ *  once turned `deg` degrees. A rotated rectangle's bounding box grows, so
+ *  without this a turned table would overhang the squares around it. */
+function rotationFit(w, h, deg) {
+  if (!deg) return 1;
+  const rad = (deg * Math.PI) / 180;
+  const cos = Math.abs(Math.cos(rad));
+  const sin = Math.abs(Math.sin(rad));
+  const spanW = w * cos + h * sin;
+  const spanH = w * sin + h * cos;
+  return Math.min(1, w / spanW, h / spanH);
+}

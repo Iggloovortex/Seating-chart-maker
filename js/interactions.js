@@ -115,10 +115,13 @@ function fireTap(cell, mods = {}) {
   // the pointer actually lands on and the table is found from its position.
   if (tableMode) {
     const table = tableAt(r, c);
-    if (table) toggleTableSelection(table.id);
-    else toggleSelection(r, c);
-    return;
+    if (table) { toggleTableSelection(table.id); return; }
+    // A bare square falls straight through to the square-picking paths below.
   }
+
+  // Both modes pick squares, so Shift ranges, Ctrl adds and the range anchor all
+  // behave identically in either one.
+  const picking = selectMode || tableMode;
 
   // Shift+click sizes a rectangle from a fixed anchor, and only commits seating
   // when the same rectangle is clicked twice:
@@ -128,7 +131,7 @@ function fireTap(cell, mods = {}) {
   //                            already fully seated
   // The rect always replaces the selection, so squares outside it are dropped.
   if (shift) {
-    enterSelectHandler();
+    if (!picking) enterSelectHandler();
 
     if (!anchor) {
       anchor = { r, c };
@@ -149,19 +152,21 @@ function fireTap(cell, mods = {}) {
     return;
   }
 
-  if (selectMode) {
+  if (picking) {
     toggleSelection(r, c);
-    if (state.selection.size === 0) selectionEmptiedHandler(); // last one deselected
+    // Emptying the selection leaves SELECT mode, but not table mode — there the
+    // bar is still needed for the tables.
+    if (selectMode && state.selection.size === 0) selectionEmptiedHandler();
   } else if (additive) {
     enterSelectHandler();     // turn on select mode + show the select bar
     toggleSelection(r, c);
   } else {
     toggleEnabled(r, c);
   }
-  // Only clicks made IN select mode start a range. Outside select mode there is
+  // Only clicks made while PICKING start a range. Outside those modes there is
   // no anchor at all, so the first Shift+click always begins a fresh rectangle
   // instead of stretching from whichever square happened to be clicked last.
-  if (selectMode) {
+  if (picking) {
     anchor = { r, c };
     corner = { r, c };
   } else {

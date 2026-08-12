@@ -18,7 +18,10 @@ function initTables() {
   let active = false;
 
   const setActive = (on) => {
-    if (on) setTableActive(false);   // the two modes are mutually exclusive
+    // The two modes are mutually exclusive, but switching straight from one to
+    // the other keeps the squares already picked — they are usually the reason
+    // for the switch.
+    if (on) setTableActive(false, { keepSquares: true });
     active = on;
     setSelectMode(on);
     selectBtn.setAttribute('aria-pressed', String(on));
@@ -27,7 +30,7 @@ function initTables() {
       .setAttribute('href', on ? '#ui-select' : '#ui-select-off');
     selectBtn.title = on ? 'Select mode — on' : 'Select mode — off';
     bar.hidden = !on;
-    if (!on) clearSelection();
+    if (!on && !switchingModes) clearSelection();
     stageHint.style.display = on ? 'none' : '';
     syncSelectionButtons();
     emit(); // re-render so the move handle appears/disappears with the mode
@@ -131,8 +134,12 @@ function initTables() {
 
 let tableActive = false;
 
+// True while one mode is handing over to the other, so the square selection
+// survives the switch instead of being cleared on the way out.
+let switchingModes = false;
+
 /** Turn table mode on or off. Exported so select mode can switch it off. */
-function setTableActive(on) {
+function setTableActive(on, { keepSquares = false } = {}) {
   if (tableActive === on) return;
   tableActive = on;
   setTableMode(on);
@@ -140,9 +147,9 @@ function setTableActive(on) {
   const bar = document.getElementById('table-bar');
   btn.setAttribute('aria-pressed', String(on));
   bar.hidden = !on;
-  // Leaving drops both halves of the selection; entering just forces a redraw so
-  // the picked-table rings appear.
-  if (!on) batch(() => { clearTableSelection(); clearSelection(); });
+  // Leaving drops the picked tables, and the squares too unless another mode is
+  // taking them over. Entering just forces a redraw so the picked rings appear.
+  if (!on) batch(() => { clearTableSelection(); if (!keepSquares) clearSelection(); });
   else emit();
 }
 
@@ -150,11 +157,16 @@ function initTableMode() {
   const btn = document.getElementById('btn-table-mode');
   const countEl = document.getElementById('table-count');
   const colorInput = document.getElementById('table-edit-color');
+  const borderInput = document.getElementById('table-edit-border');
   const ids = () => [...state.tableSelection];
 
   btn.addEventListener('click', () => {
     const turningOn = !tableActive;
-    if (turningOn) setSelectActive(false);   // the two modes are exclusive
+    if (turningOn) {
+      switchingModes = true;                 // keep the squares through the swap
+      setSelectActive(false);
+      switchingModes = false;
+    }
     setTableActive(turningOn);
   });
 
@@ -174,6 +186,9 @@ function initTableMode() {
     if (ids().length) removeTables(ids());
   });
   bindColorInput(colorInput, () => updateTables(ids(), { color: colorInput.value }));
+  bindColorInput(borderInput, () => updateTables(ids(), { border: borderInput.value }));
+  document.getElementById('btn-table-rotate')
+    .addEventListener('click', () => { if (ids().length) rotateTables(ids(), 45); });
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && tableActive) setTableActive(false);
@@ -195,9 +210,15 @@ function initTableMode() {
     document.getElementById('btn-table-round').disabled = !canShape;
     document.getElementById('btn-table-square').disabled = !canShape;
     document.getElementById('btn-table-remove').disabled = tables === 0;
+    document.getElementById('btn-table-rotate').disabled = tables === 0;
     colorInput.disabled = tables === 0;
+    borderInput.disabled = tables === 0;
+    // Each swatch shows the value the picked tables share, or the default when
+    // they disagree.
     const picked = state.tables.filter((t) => state.tableSelection.has(t.id));
-    const shared = picked.length && picked.every((t) => t.color === picked[0].color);
-    colorInput.value = shared ? picked[0].color : state.defaults.tableColor;
+    const agreed = (key, fallback) =>
+      picked.length && picked.every((t) => t[key] === picked[0][key]) ? picked[0][key] : fallback;
+    colorInput.value = agreed('color', state.defaults.tableColor);
+    borderInput.value = agreed('border', state.defaults.tableBorder);
   });
 }

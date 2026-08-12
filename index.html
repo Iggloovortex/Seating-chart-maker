@@ -199,17 +199,24 @@
           <input id="def-icon" type="color" class="defaults__swatch" aria-label="Default icon color" />
         </label>
         <label class="defaults__item">
-          <span class="defaults__label">Labels</span>
-          <input id="def-label" type="color" class="defaults__swatch" aria-label="Default label color, line 1" />
-        </label>
-        <label class="defaults__item">
           <span class="defaults__label">Table</span>
           <input id="def-table" type="color" class="defaults__swatch" aria-label="Default table color" />
         </label>
-        <span class="defaults__caption">Default Colors</span>
         <label class="defaults__item">
-          <span class="defaults__label defaults__label--sub">Line 2</span>
+          <span class="defaults__label">Label 1</span>
+          <input id="def-label" type="color" class="defaults__swatch" aria-label="Default label color, line 1" />
+        </label>
+        <label class="defaults__item">
+          <span class="defaults__label">Label 2</span>
           <input id="def-label2" type="color" class="defaults__swatch" aria-label="Default label color, line 2" />
+        </label>
+        <label class="defaults__item">
+          <span class="defaults__label">Label 3</span>
+          <input id="def-label3" type="color" class="defaults__swatch" aria-label="Default label color, line 3" />
+        </label>
+        <label class="defaults__item">
+          <span class="defaults__label">Table Border</span>
+          <input id="def-table-border" type="color" class="defaults__swatch" aria-label="Default table border color" />
         </label>
       </div>
     </header>
@@ -249,6 +256,11 @@
           <span class="field__label">Color</span>
           <input id="table-edit-color" class="field__input field__input--color" type="color" value="#8d6e63" />
         </label>
+        <label class="field">
+          <span class="field__label">Border</span>
+          <input id="table-edit-border" class="field__input field__input--color" type="color" value="#5d4037" />
+        </label>
+        <button id="btn-table-rotate" class="btn" type="button" title="Turn the picked tables 45°">Rotate 45°</button>
         <button id="btn-table-remove" class="btn btn--empty" type="button" title="Remove the selected tables">Remove</button>
         <button id="btn-table-clear" class="btn btn--ghost" type="button">Clear selection</button>
       </div>

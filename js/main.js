@@ -37,7 +37,8 @@ rowsInput.addEventListener('change', applyGrid);
 // ---- Default colors --------------------------------------------------------
 const DEFAULT_COLOR_INPUTS = {
   fill: 'def-fill', border: 'def-border', iconColor: 'def-icon',
-  labelColor: 'def-label', labelColor2: 'def-label2', tableColor: 'def-table',
+  labelColor: 'def-label', labelColor2: 'def-label2', labelColor3: 'def-label3',
+  tableColor: 'def-table', tableBorder: 'def-table-border',
 };
 for (const [key, id] of Object.entries(DEFAULT_COLOR_INPUTS)) {
   const el = document.getElementById(id);

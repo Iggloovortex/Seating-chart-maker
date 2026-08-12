@@ -146,12 +146,12 @@ body {
 .toolbar__row--entries { justify-content: flex-end; }
 .toolbar__row--actions { justify-content: flex-end; }
 
-/* Default Colors block — spans both toolbar rows on the right.
-   4 columns of button-sized swatches with their names above; the second row
-   carries the section caption and the Line 2 swatch under "Labels". */
+/* Default colors — 4 columns x 2 rows of button-sized swatches, each named
+   above itself: seat colours and Table on top, the three label lines and Table
+   Border beneath, so Table Border sits directly under Table. */
 .defaults {
   display: grid;
-  grid-template-columns: repeat(5, auto);
+  grid-template-columns: repeat(4, auto);
   align-items: end;
   gap: 6px 10px;
   padding-left: 14px;
@@ -181,16 +181,6 @@ body {
   cursor: pointer;
 }
 .defaults__swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-/* Caption sits on the second row, spanning the first three columns. */
-.defaults__caption {
-  grid-column: 1 / 4;
-  justify-self: end;
-  align-self: center;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink);
-  white-space: nowrap;
-}
 
 @media (max-width: 900px) {
   /* Stack: brand, then entries + buttons, then the defaults block. */
@@ -205,7 +195,6 @@ body {
     padding-top: 8px;
     width: 100%;
   }
-  .defaults__caption { grid-column: 1 / 4; justify-self: start; }
   .defaults__swatch { width: 100%; min-width: 44px; }
 }
 .field__input--color {
@@ -519,7 +508,7 @@ body {
   /* Slightly see-through on the editing grid so the squares underneath stay
      visible and clickable. The exported output draws tables solid. */
   opacity: .8;
-  border: 2px solid rgba(0,0,0,.15);
+  border: 2px solid rgba(0,0,0,.15);   /* overridden per table by js/grid.js */
   box-sizing: border-box;
 }
 .table-shape--round { border-radius: 999px; }

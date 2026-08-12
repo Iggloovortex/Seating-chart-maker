@@ -313,13 +313,17 @@ function renderMoveHandle() {
   const last = chart.querySelector(`.cell[data-key="${CSS.escape(keyOf(box.maxR, box.maxC))}"]`);
   if (!first || !last) return;
 
+  // getBoundingClientRect reports SCREEN pixels, which the chart's zoom transform
+  // has already scaled; style.left/top are the chart's own unscaled layout
+  // pixels. Divide through so the two agree at any zoom.
   const chartRect = chart.getBoundingClientRect();
+  const zoom = chartZoom();
   const a = first.getBoundingClientRect();
   const z = last.getBoundingClientRect();
-  const left = a.left - chartRect.left;
-  const top = a.top - chartRect.top;
-  const width = z.right - a.left;
-  const height = z.bottom - a.top;
+  const left = (a.left - chartRect.left) / zoom;
+  const top = (a.top - chartRect.top) / zoom;
+  const width = (z.right - a.left) / zoom;
+  const height = (z.bottom - a.top) / zoom;
 
   const handle = document.createElement('button');
   handle.type = 'button';
@@ -331,7 +335,8 @@ function renderMoveHandle() {
   handle.style.top = `${top}px`;
   chart.appendChild(handle);
 
-  attachMoveDrag(handle, { left, top, width, height, box, cellW: a.width, cellH: a.height });
+  attachMoveDrag(handle, { left, top, width, height, box,
+                           cellW: a.width / zoom, cellH: a.height / zoom });
 }
 
 /** Drag the handle to shift the selection; a dashed preview shows the landing
@@ -344,9 +349,11 @@ function attachMoveDrag(handle, geo) {
     e.stopPropagation();
     hideInsertGuides();          // keep + buttons out of the drag's way
     handle.setPointerCapture(e.pointerId);
-    // Step includes the grid gap, and is measured live so zoom is accounted for.
+    // geo is in layout px, so pointer travel is converted to match before it is
+    // divided into whole-square steps.
     const gap = parseFloat(getComputedStyle(chart).gap) || 0;
-    drag = { x: e.clientX, y: e.clientY, dr: 0, dc: 0, stepX: geo.cellW + gap, stepY: geo.cellH + gap };
+    drag = { x: e.clientX, y: e.clientY, dr: 0, dc: 0, zoom: chartZoom(),
+             stepX: geo.cellW + gap, stepY: geo.cellH + gap };
 
     const preview = document.createElement('div');
     preview.className = 'move-preview';
@@ -361,8 +368,8 @@ function attachMoveDrag(handle, geo) {
 
   handle.addEventListener('pointermove', (e) => {
     if (!drag) return;
-    drag.dc = Math.round((e.clientX - drag.x) / drag.stepX);
-    drag.dr = Math.round((e.clientY - drag.y) / drag.stepY);
+    drag.dc = Math.round((e.clientX - drag.x) / drag.zoom / drag.stepX);
+    drag.dr = Math.round((e.clientY - drag.y) / drag.zoom / drag.stepY);
     drag.preview.style.left = `${geo.left + drag.dc * drag.stepX}px`;
     drag.preview.style.top = `${geo.top + drag.dr * drag.stepY}px`;
     // Flag a landing spot that would fall off the grid.
@@ -475,8 +482,11 @@ function ariaLabel(r, c, data) {
 /** Position table shapes over the bounding box of their member cells. */
 function renderTables() {
   if (!state.tables.length) return;
-  // Measure once relative to the chart's padded content box.
+  // Measure once relative to the chart's padded content box. Bounding rects are
+  // screen pixels and the chart carries a zoom transform, so everything is
+  // divided back into the chart's own layout pixels — the units style.left uses.
   const chartRect = chart.getBoundingClientRect();
+  const zoom = chartZoom();
 
   for (const table of state.tables) {
     const rects = table.cellKeys
@@ -485,10 +495,10 @@ function renderTables() {
       .map((el) => el.getBoundingClientRect());
     if (!rects.length) continue;
 
-    const left = Math.min(...rects.map((b) => b.left)) - chartRect.left;
-    const top = Math.min(...rects.map((b) => b.top)) - chartRect.top;
-    const right = Math.max(...rects.map((b) => b.right)) - chartRect.left;
-    const bottom = Math.max(...rects.map((b) => b.bottom)) - chartRect.top;
+    const left = (Math.min(...rects.map((b) => b.left)) - chartRect.left) / zoom;
+    const top = (Math.min(...rects.map((b) => b.top)) - chartRect.top) / zoom;
+    const right = (Math.max(...rects.map((b) => b.right)) - chartRect.left) / zoom;
+    const bottom = (Math.max(...rects.map((b) => b.bottom)) - chartRect.top) / zoom;
 
     const inset = 6; // transparent spacing so the shape never touches borders
     const shape = document.createElement('div');
@@ -499,6 +509,12 @@ function renderTables() {
     shape.style.width = `${right - left - inset * 2}px`;
     shape.style.height = `${bottom - top - inset * 2}px`;
     shape.style.background = table.color;
+    shape.style.borderColor = table.border || state.defaults.tableBorder;
+    // A turned table stays inside its footprint — same shrink the output uses.
+    if (table.rotation) {
+      const fit = rotationFit(right - left - inset * 2, bottom - top - inset * 2, table.rotation);
+      shape.style.transform = `rotate(${table.rotation}deg) scale(${fit})`;
+    }
     shape.dataset.tableId = table.id;
     chart.appendChild(shape);
 

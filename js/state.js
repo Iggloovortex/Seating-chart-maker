@@ -26,7 +26,9 @@ const DEFAULTS = {
   labelColor: '#1f2933',
   labelColor2: '#52606d',   // second label line (two lines are the norm)
   iconColor: '#1f2933',
+  labelColor3: '#7b8794',   // third label line
   tableColor: '#8d6e63',
+  tableBorder: '#5d4037',
   rowWeight: 1,
   colWeight: 1,
 };
@@ -38,9 +40,12 @@ function isChairCell(cell) {
 }
 function isChairAt(r, c) { return isChairCell(peekCell(r, c)); }
 
-/** Default color for label line `index` (line 2 and beyond use labelColor2). */
+/** Default color for label line `index`. Lines 1-3 each have their own; beyond
+ *  that they carry on with line 3's. */
 function defaultLabelColor(index) {
-  return index >= 1 ? state.defaults.labelColor2 : state.defaults.labelColor;
+  if (index <= 0) return state.defaults.labelColor;
+  if (index === 1) return state.defaults.labelColor2;
+  return state.defaults.labelColor3;
 }
 
 function makeCell() {
@@ -67,7 +72,9 @@ const state = {
     iconColor: DEFAULTS.iconColor,
     labelColor: DEFAULTS.labelColor,
     labelColor2: DEFAULTS.labelColor2,
+    labelColor3: DEFAULTS.labelColor3,
     tableColor: DEFAULTS.tableColor,
+    tableBorder: DEFAULTS.tableBorder,
   },
   grid: { cols: 6, rows: 5 },
   cells: new Map(),             // key "r,c" -> cell
@@ -571,7 +578,9 @@ function addTable(shape, color) {
   const cellKeys = [...state.selection];
   if (cellKeys.length === 0) return null;
   const table = { id: `t${Date.now().toString(36)}`, cellKeys, shape,
-                  color: color || state.defaults.tableColor };
+                  color: color || state.defaults.tableColor,
+                  border: state.defaults.tableBorder,
+                  rotation: 0 };
   state.tables.push(table);
   // A table seats everything under it: the shape covers its whole footprint, so
   // every square in that block belongs to the table whether it was selected or
@@ -629,6 +638,17 @@ function updateTables(ids, patch) {
     for (const t of state.tables) if (ids.includes(t.id)) Object.assign(t, patch);
   });
 }
+/** Turn each listed table by `step` degrees. Rotation only shows on a square
+ *  table — a circle looks the same whichever way round it is — so the control
+ *  is worth having mainly for angled banks of desks. */
+function rotateTables(ids, step = 45) {
+  batch(() => {
+    for (const t of state.tables) {
+      if (ids.includes(t.id)) t.rotation = (((t.rotation || 0) + step) % 360 + 360) % 360;
+    }
+  });
+}
+
 function removeTables(ids) {
   batch(() => {
     state.tables = state.tables.filter((t) => !ids.includes(t.id));
@@ -695,7 +715,9 @@ function deserialize(data) {
       iconColor: data.defaults?.iconColor || DEFAULTS.iconColor,
       labelColor: data.defaults?.labelColor || DEFAULTS.labelColor,
       labelColor2: data.defaults?.labelColor2 || DEFAULTS.labelColor2,
+      labelColor3: data.defaults?.labelColor3 || DEFAULTS.labelColor3,
       tableColor: data.defaults?.tableColor || DEFAULTS.tableColor,
+      tableBorder: data.defaults?.tableBorder || DEFAULTS.tableBorder,
     };
     state.grid = {
       cols: clampInt(data.grid?.cols, 1, 40, 6),
@@ -710,7 +732,10 @@ function deserialize(data) {
     state.rowWeights.length = state.grid.rows;
     state.colWeights.length = state.grid.cols;
     state.tables = Array.isArray(data.tables)
-      ? data.tables.map((t) => ({ id: t.id, shape: t.shape, color: t.color, cellKeys: [...(t.cellKeys || [])] }))
+      ? data.tables.map((t) => ({ id: t.id, shape: t.shape, color: t.color,
+                                  border: t.border || DEFAULTS.tableBorder,
+                                  rotation: t.rotation || 0,
+                                  cellKeys: [...(t.cellKeys || [])] }))
       : [];
     state.paper = data.paper || 'letter';
     state.landscape = data.landscape !== false;

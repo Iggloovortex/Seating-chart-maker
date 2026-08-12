@@ -362,16 +362,32 @@ function drawTable(ctx, table, rectOf) {
   const box = tableRect(table, rectOf);
   if (!box) return;
   const { x, y, w, h } = box;
+  const rot = table.rotation || 0;
 
+  ctx.save();
+  if (rot) {
+    // Spin about the table's own centre, shrunk just enough that the turned
+    // shape still fits its footprint instead of overhanging its neighbours.
+    const fit = rotationFit(w, h, rot);
+    ctx.translate(x + w / 2, y + h / 2);
+    ctx.rotate((rot * Math.PI) / 180);
+    ctx.scale(fit, fit);
+    ctx.translate(-(x + w / 2), -(y + h / 2));
+  }
   ctx.fillStyle = table.color || '#8d6e63';
+  ctx.lineWidth = Math.max(1, Math.min(w, h) * 0.02);
+  ctx.strokeStyle = table.border || state.defaults.tableBorder;
   if (table.shape === 'round') {
     ctx.beginPath();
     ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
   } else {
     roundRect(ctx, x, y, w, h, Math.min(w, h) * 0.08);
     ctx.fill();
+    ctx.stroke();
   }
+  ctx.restore();
 }
 
 /** Icon color for a cell: its dedicated iconColor, falling back to border. */
