@@ -195,10 +195,16 @@
               stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
       </symbol>
       <!-- Fill all — a square being filled in -->
+      <!-- Fill all — a tipped paint bucket. Outlined so the bucket still reads at
+           24px, with the paint inside it solid to say what the button does; a
+           half-shaded box only ever said "half". -->
       <symbol id="ui-fill-all" viewBox="0 0 24 24">
-        <path d="M3.5 12v-5.9a2.6 2.6 0 0 1 2.6-2.6h11.8a2.6 2.6 0 0 1 2.6 2.6V12" fill="none"
-              stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-        <path d="M3.5 12h17v5.9a2.6 2.6 0 0 1-2.6 2.6H6.1a2.6 2.6 0 0 1-2.6-2.6z" fill="currentColor"/>
+        <path d="M3.4 10.4 10.2 3.6l7.2 7.2-6.8 6.8a1.4 1.4 0 0 1-2 0l-5.2-5.2a1.4 1.4 0 0 1 0-2z"
+              fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M5.2 12.2h11.1l-5.7 5.7a1.4 1.4 0 0 1-2 0z" fill="currentColor"/>
+        <path d="M7.6 7 6 5.4a1.7 1.7 0 0 1 2.4-2.4L10 4.6" fill="none"
+              stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M20.2 13.6s2 2.4 2 3.8a2 2 0 1 1-4 0c0-1.4 2-3.8 2-3.8z" fill="currentColor"/>
       </symbol>
       <!-- Merge — two shapes driven inward onto a shared seam -->
       <symbol id="ui-merge" viewBox="0 0 24 24">
@@ -212,6 +218,39 @@
               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
         <path d="M19.4 12h-5.2M16.6 9.6 14.2 12l2.4 2.4" fill="none" stroke="currentColor"
               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+
+      <!-- ===== Grid-action row ===== -->
+      <symbol id="ui-undo" viewBox="0 0 24 24">
+        <path d="M4.2 9.4h9.4a5.8 5.8 0 0 1 0 11.6H7" fill="none" stroke="currentColor"
+              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M8.4 4.2 3.6 9.4l4.8 5.2" fill="none" stroke="currentColor"
+              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="ui-redo" viewBox="0 0 24 24">
+        <path d="M19.8 9.4h-9.4a5.8 5.8 0 0 0 0 11.6H17" fill="none" stroke="currentColor"
+              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M15.6 4.2l4.8 5.2-4.8 5.2" fill="none" stroke="currentColor"
+              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <!-- The square table: a grid whose header row is picked out -->
+      <symbol id="ui-rows" viewBox="0 0 24 24">
+        <rect x="2.6" y="4" width="18.8" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M2.6 9h18.8" fill="none" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M2.6 14.5h18.8M9.4 9v11M15.6 9v11" fill="none" stroke="currentColor" stroke-width="1.4"/>
+      </symbol>
+      <!-- Settings. Blocky teeth that meet the ring, not detached rays — a thin
+           radial burst reads as brightness, which would be badly wrong next to a
+           dark-mode toggle. -->
+      <symbol id="ui-settings" viewBox="0 0 24 24">
+        <path d="M12 3.1v3.4M12 17.5v3.4M20.9 12h-3.4M6.5 12H3.1M18.29 5.71 15.88 8.12M8.12 15.88l-2.41 2.41M18.29 18.29l-2.41-2.41M8.12 8.12 5.71 5.71"
+              fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"/>
+        <circle cx="12" cy="12" r="6.4" fill="currentColor"/>
+        <circle cx="12" cy="12" r="2.9" fill="var(--surface, #fff)"/>
+      </symbol>
+      <symbol id="ui-search" viewBox="0 0 24 24">
+        <circle cx="10.6" cy="10.6" r="6.6" fill="none" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M15.4 15.4 20.6 20.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
       </symbol>
     </defs>
   </svg>
@@ -251,6 +290,21 @@
           </button>
           <button id="btn-paste-format" class="iconbtn" type="button" title="Clone the copied square onto every selected square" aria-label="Paste square">
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-paste"/></svg>
+          </button>
+          <span class="iconbar__sep" aria-hidden="true"></span>
+          <!-- Placed, not yet wired: history and the two panes still to come. -->
+          <button id="btn-undo" class="iconbtn" type="button" disabled title="Undo — not built yet" aria-label="Undo">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-undo"/></svg>
+          </button>
+          <button id="btn-redo" class="iconbtn" type="button" disabled title="Redo — not built yet" aria-label="Redo">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-redo"/></svg>
+          </button>
+          <span class="iconbar__sep" aria-hidden="true"></span>
+          <button id="btn-rows" class="iconbtn" type="button" disabled title="Square table — not built yet" aria-label="Square table">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-rows"/></svg>
+          </button>
+          <button id="btn-settings" class="iconbtn" type="button" disabled title="Settings — not built yet" aria-label="Settings">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-settings"/></svg>
           </button>
         </div>
       </div>
@@ -356,6 +410,16 @@
           <button id="btn-filter-withghost" class="btn btn--icon btn--toggle filterbtn" type="button" aria-pressed="false" title="Include ghost — let the other filters reach emptied squares too" aria-label="Include ghost">
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-f-ghost"/><use href="#ui-yes-badge"/></svg>
           </button>
+          <!-- Search runs on submit only, so typing never selects half the chart.
+               Placed, not yet wired. -->
+          <form id="filter-search" class="filtersearch" role="search">
+            <input id="filter-query" class="filtersearch__input" type="search" disabled
+                   placeholder="Search labels &amp; icons" aria-label="Select squares matching" />
+            <button id="btn-filter-search" class="btn btn--icon filtersearch__go" type="submit" disabled
+                    title="Search — not built yet" aria-label="Run search">
+              <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-search"/></svg>
+            </button>
+          </form>
         </div>
         <div class="defaults__rule" aria-hidden="true"></div>
         <div class="defaults__set">
@@ -423,6 +487,10 @@
                 title="Squares selected: build a round table from them. Tables picked: make them round.">Round table</button>
         <button id="btn-table-square" class="btn" type="button"
                 title="Squares selected: build a square table from them. Tables picked: make them square.">Square table</button>
+        <button id="btn-table-merge" class="btn btn--icon" type="button" disabled
+                title="Merge — not built yet" aria-label="Merge tables">
+          <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-merge"/></svg>
+        </button>
         <label class="field">
           <span class="field__label">Color</span>
           <input id="table-edit-color" class="field__input field__input--color" type="color" value="#8d6e63" />

@@ -294,6 +294,27 @@ body {
   background: var(--surface-2);
 }
 .filterbtn { padding: 6px; min-width: 34px; }
+/* Search spans the frame under both rows of toggles. */
+.filtersearch {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 4px;
+  margin-top: 1px;
+}
+.filtersearch__input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.filtersearch__input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.filtersearch__go { padding: 6px; min-width: 34px; min-height: 34px; height: 34px; }
+.filtersearch__go .iconbtn__svg { width: 20px; height: 20px; }
 .filterbtn .iconbtn__svg { width: 20px; height: 20px; }
 /* The negation badge punches a hole in the base mark, so it needs the button's
    own background to read as a break rather than a smudge. */
