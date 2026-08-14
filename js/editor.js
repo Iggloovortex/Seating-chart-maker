@@ -279,6 +279,7 @@ function agreedAcross(keys, read, fallback = null) {
 
 function bulkFillControls(keys) {
   const wrap = controlGroup('Fill');
+  wrap.classList.add('controlgroup--fill');
   const allFilled = keys.every((k) => isEnabled(...parseKey(k)));
   const btn = document.createElement('button');
   btn.type = 'button';
@@ -586,6 +587,7 @@ function deleteButton(getKeys, getAt) {
  *  swatches beside it. */
 function fillControls(cell) {
   const wrap = controlGroup('Fill');
+  wrap.classList.add('controlgroup--fill');
   wrap.append(seatToggle(cell), presetButton(1), presetButton(2));
   return wrap;
 }

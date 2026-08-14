@@ -1054,7 +1054,18 @@ body {
 }
 /* A heading-less section: the controls inside carry their own labels. */
 .egroup--bare > .erow--controls { margin-top: 0; }
-.btn--preset { font-size: 12px; padding: 6px 8px; }
+/* The three fill buttons stand exactly as tall as the compass beside them:
+   three 34px rows with the compass's own 3px gaps, so the two columns end
+   level. That means overriding the 44px tap minimum every other button keeps —
+   acceptable here because the three sit in a block you aim at as a group. */
+.controlgroup--fill { gap: 3px; }
+.controlgroup--fill .btn {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+.btn--preset { font-size: 12px; }
 .controlgroup {
   display: flex;
   flex-direction: column;

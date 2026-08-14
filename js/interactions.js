@@ -128,13 +128,16 @@ function fireTap(cell, mods = {}) {
 
   const picking = selectMode;
 
-  // Ctrl/Cmd+click follows what it lands on: a table under the pointer picks the
-  // table and opens the select bar, anything else falls through to the square.
-  // A plain click still reaches the square beneath a table, which is how covered
-  // squares stay editable. The shapes are pointer-events:none overlays, so the
-  // square underneath is what the pointer lands on and the table is found from
-  // its position.
-  if (additive && !shift) {
+  // A click that lands on a table picks the TABLE, not the square hiding under
+  // it — the table is what you can see there, so it is what a click should mean.
+  // Plain and Ctrl/Cmd clicks agree on this; the difference is only that Ctrl
+  // reaches for a table without otherwise disturbing a square selection. Covered
+  // squares stay editable through right-click / long-press, which addresses the
+  // square by its key rather than by what is drawn over it.
+  //
+  // The shapes are pointer-events:none overlays, so the square underneath is what
+  // the pointer actually lands on and the table is found from its position.
+  if (!shift) {
     const table = tableAt(r, c);
     if (table) {
       if (!selectMode) enterTableHandler();
