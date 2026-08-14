@@ -1054,18 +1054,6 @@ body {
 }
 /* A heading-less section: the controls inside carry their own labels. */
 .egroup--bare > .erow--controls { margin-top: 0; }
-/* The three fill buttons stand exactly as tall as the compass beside them:
-   three 34px rows with the compass's own 3px gaps, so the two columns end
-   level. That means overriding the 44px tap minimum every other button keeps —
-   acceptable here because the three sit in a block you aim at as a group. */
-.controlgroup--fill { gap: 3px; }
-.controlgroup--fill .btn {
-  height: 34px;
-  min-height: 34px;
-  padding: 0 8px;
-  font-size: 13px;
-}
-.btn--preset { font-size: 12px; }
 .controlgroup {
   display: flex;
   flex-direction: column;
@@ -1079,6 +1067,36 @@ body {
   color: var(--ink-soft);
 }
 .controlgroup .btn { width: 100%; }
+
+/* The three fill buttons stand exactly as tall as the compass beside them:
+   three 34px rows with the compass's own 3px gaps — 108px either way, so the
+   two columns start and end level. They are their own stack so that tight
+   spacing does not also pull the group's title down onto them.
+
+   This overrides the 44px tap minimum every other button keeps, which is
+   acceptable here because the three sit in a block you aim at as a group. */
+.fillstack {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.fillstack .btn {
+  width: 100%;
+  height: 34px;
+  min-height: 34px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+/* Disabled buttons fade to 45%, which washes the preset borders out until the
+   boxes read taller than the solid button above them. Keep the edge crisp so
+   all three are seen at the size they actually are. */
+.btn--preset { font-size: 12px; }
+.btn--preset:disabled {
+  opacity: 1;
+  color: var(--ink-soft);
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+}
 
 /* Eight facing directions as a compass; the middle cell stays empty. */
 .compass {

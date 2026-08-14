@@ -279,7 +279,6 @@ function agreedAcross(keys, read, fallback = null) {
 
 function bulkFillControls(keys) {
   const wrap = controlGroup('Fill');
-  wrap.classList.add('controlgroup--fill');
   const allFilled = keys.every((k) => isEnabled(...parseKey(k)));
   const btn = document.createElement('button');
   btn.type = 'button';
@@ -291,7 +290,7 @@ function bulkFillControls(keys) {
     updateCells(keys, { enabled: !allFilled });
     renderBulk(keys);
   });
-  wrap.append(btn, presetButton(1), presetButton(2));
+  wrap.appendChild(fillStack(btn, presetButton(1), presetButton(2)));
   return wrap;
 }
 
@@ -587,9 +586,17 @@ function deleteButton(getKeys, getAt) {
  *  swatches beside it. */
 function fillControls(cell) {
   const wrap = controlGroup('Fill');
-  wrap.classList.add('controlgroup--fill');
-  wrap.append(seatToggle(cell), presetButton(1), presetButton(2));
+  wrap.appendChild(fillStack(seatToggle(cell), presetButton(1), presetButton(2)));
   return wrap;
+}
+
+/** The three buttons in their own stack, so their tight 3px spacing does not
+ *  also pull the group's title down onto them. */
+function fillStack(...buttons) {
+  const stack = document.createElement('div');
+  stack.className = 'fillstack';
+  stack.append(...buttons);
+  return stack;
 }
 
 /** One button that both reports and flips the fill, instead of a two-way pair. */
