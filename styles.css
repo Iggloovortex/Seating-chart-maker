@@ -908,12 +908,17 @@ body {
 .iconbtn--print { color: #1565c0; }
 .iconbtn--ok    { color: #fff; background: #2e7d32; border-color: #2e7d32; }
 
+/* The second row acts on the grid rather than the file, so it takes no per-
+   action colour — plain black on light, plain white on dark. */
+.iconbar--grid .iconbtn { color: #000; }
+
 @media (prefers-color-scheme: dark) {
   .iconbtn--new   { color: #b0bec5; }
   .iconbtn--save  { color: #81c784; }
   .iconbtn--open  { color: #ffb74d; }
   .iconbtn--share { color: #ce93d8; }
   .iconbtn--print { color: #90caf9; }
+  .iconbar--grid .iconbtn { color: #fff; }
 }
 
 /* Rotate-orientation button: a broken ring with the orientation's initial in
