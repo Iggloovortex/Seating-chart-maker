@@ -524,13 +524,8 @@
     <section class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="preview-title">
       <header class="modal__head">
         <h2 class="modal__title" id="preview-title">Preview &amp; Export</h2>
-        <button class="btn btn--icon" type="button" data-close-preview aria-label="Close">✕</button>
-      </header>
-      <!-- Paper size and orientation live here, where you can see what they do
-           to the page you are about to export. -->
-      <!-- Paper size and orientation live here, where you can see what they do
-           to the page you are about to export. -->
-      <div class="modal__bar">
+        <!-- Paper size and orientation sit on the title line, where you can see
+           what they do to the page you are about to export. -->
         <div class="toolbar__group" role="group" aria-label="Paper size">
           <label class="field">
             <span class="field__label" id="paper-label">Paper (Landscape)</span>
@@ -561,7 +556,8 @@
             </select>
           </label>
         </div>
-      </div>
+        <button class="btn btn--icon" type="button" data-close-preview aria-label="Close">✕</button>
+      </header>
       <div class="modal__body">
         <div class="preview__paper" id="preview-paper">
           <!-- a grid-line-free rendering, populated by js/export.js -->

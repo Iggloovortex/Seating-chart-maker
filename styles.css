@@ -683,13 +683,31 @@ body {
 }
 @keyframes slideIn { from { transform: translateX(24px); opacity: .6; } }
 
+/* Title, the page settings, then Close — all on one line. The settings push
+   right so they sit beside the ✕ rather than crowding the title. */
 .modal__head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding: 14px 16px;
   border-bottom: 1px solid var(--line);
+}
+.modal__head .toolbar__group {
+  margin-left: auto;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;                /* so it can shrink instead of overflowing */
+}
+.modal__head .field { flex-direction: row; align-items: center; gap: 6px; min-width: 0; }
+.modal__head .field__input { min-height: 38px; min-width: 0; }
+.modal__head .btn-rotate { min-height: 38px; flex: 0 0 auto; }
+.modal__head [data-close-preview] { flex: 0 0 auto; }
+@media (max-width: 640px) {
+  /* Too narrow for one line: keep Close beside the title and drop the page
+     settings onto their own row, rather than stranding Close below them. */
+  .modal__head .toolbar__group { order: 1; margin-left: 0; width: 100%; }
+  .modal__head [data-close-preview] { margin-left: auto; }
 }
 /* The pane's header carries the title row and, under it, the square actions. */
 .editor__head {
@@ -832,17 +850,6 @@ body {
   place-items: center;
   background: var(--surface-2);
 }
-/* A strip above the preview for the settings that change the page itself, so
-   their effect is visible in the same window. */
-.modal__bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 14px;
-  padding: 10px 16px;
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--line);
-}
-
 /* The rotate button carries the spiral and the word together. */
 .btn-rotate {
   display: inline-flex;
