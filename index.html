@@ -300,9 +300,6 @@
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-redo"/></svg>
           </button>
           <span class="iconbar__sep" aria-hidden="true"></span>
-          <button id="btn-rows" class="iconbtn" type="button" disabled title="Square table — not built yet" aria-label="Square table">
-            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-rows"/></svg>
-          </button>
           <button id="btn-settings" class="iconbtn" type="button" disabled title="Settings — not built yet" aria-label="Settings">
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-settings"/></svg>
           </button>
@@ -331,33 +328,6 @@
         </label>
       </div>
 
-      <div class="toolbar__group" role="group" aria-label="Paper size">
-        <label class="field">
-          <span class="field__label" id="paper-label">Paper (Landscape)</span>
-          <select id="paper-size" class="field__input"></select>
-        </label>
-        <button class="btn btn--icon btn-rotate" type="button" title="Rotate page orientation">
-          <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true">
-            <use class="btn-rotate__ring" href="#ui-orient-l"/>
-            <text class="btn-rotate__letter" x="12" y="12" dominant-baseline="central" text-anchor="middle">L</text>
-          </svg>
-        </button>
-        <label class="field field--custom-paper" hidden>
-          <span class="field__label">W</span>
-          <input id="paper-w" class="field__input field__input--num" type="number" min="1" step="0.1" value="11" inputmode="decimal" />
-        </label>
-        <label class="field field--custom-paper" hidden>
-          <span class="field__label">H</span>
-          <input id="paper-h" class="field__input field__input--num" type="number" min="1" step="0.1" value="8.5" inputmode="decimal" />
-        </label>
-        <label class="field field--custom-paper" hidden>
-          <span class="field__label">Unit</span>
-          <select id="paper-unit" class="field__input">
-            <option value="in">in</option>
-            <option value="mm">mm</option>
-          </select>
-        </label>
-      </div>
 
        </div>
 
@@ -556,13 +526,50 @@
         <h2 class="modal__title" id="preview-title">Preview &amp; Export</h2>
         <button class="btn btn--icon" type="button" data-close-preview aria-label="Close">✕</button>
       </header>
+      <!-- Paper size and orientation live here, where you can see what they do
+           to the page you are about to export. -->
+      <!-- Paper size and orientation live here, where you can see what they do
+           to the page you are about to export. -->
+      <div class="modal__bar">
+        <div class="toolbar__group" role="group" aria-label="Paper size">
+          <label class="field">
+            <span class="field__label" id="paper-label">Paper (Landscape)</span>
+            <select id="paper-size" class="field__input"></select>
+          </label>
+          <!-- One button, not two: the spiral with the orientation's initial in
+               it AND the word, since both did the same job. -->
+          <button class="btn btn-rotate" type="button" title="Rotate page orientation">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true">
+              <use class="btn-rotate__ring" href="#ui-orient-l"/>
+              <text class="btn-rotate__letter" x="12" y="12" dominant-baseline="central" text-anchor="middle">L</text>
+            </svg>
+            <span class="btn-rotate__word">Landscape</span>
+          </button>
+          <label class="field field--custom-paper" hidden>
+            <span class="field__label">W</span>
+            <input id="paper-w" class="field__input field__input--num" type="number" min="1" step="0.1" value="11" inputmode="decimal" />
+          </label>
+          <label class="field field--custom-paper" hidden>
+            <span class="field__label">H</span>
+            <input id="paper-h" class="field__input field__input--num" type="number" min="1" step="0.1" value="8.5" inputmode="decimal" />
+          </label>
+          <label class="field field--custom-paper" hidden>
+            <span class="field__label">Unit</span>
+            <select id="paper-unit" class="field__input">
+              <option value="in">in</option>
+              <option value="mm">mm</option>
+            </select>
+          </label>
+        </div>
+      </div>
       <div class="modal__body">
         <div class="preview__paper" id="preview-paper">
           <!-- a grid-line-free rendering, populated by js/export.js -->
         </div>
       </div>
       <footer class="modal__foot">
-        <button class="btn btn-rotate btn-rotate--text" type="button" title="Rotate page orientation">Landscape</button>
+        <button id="btn-rows" class="btn" type="button" disabled
+                title="Square table — every square as a row, exported and imported as CSV. Not built yet.">Square table</button>
         <button id="btn-preview-save" class="btn" type="button" title="Download a .seatchart file">Save File</button>
         <button id="btn-preview-share" class="btn" type="button" title="Copy a link that reopens this layout">Share Link</button>
         <button id="btn-preview-print" class="btn" type="button">Print / PDF</button>

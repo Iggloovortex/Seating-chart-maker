@@ -832,6 +832,24 @@ body {
   place-items: center;
   background: var(--surface-2);
 }
+/* A strip above the preview for the settings that change the page itself, so
+   their effect is visible in the same window. */
+.modal__bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 10px 16px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+}
+
+/* The rotate button carries the spiral and the word together. */
+.btn-rotate {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
 .modal__foot {
   display: flex;
   flex-wrap: wrap;
@@ -943,14 +961,14 @@ body {
 }
 
 /* Rotate-orientation button: a broken ring with the orientation's initial in
-   the middle. Drawn in the text colour so it stays legible in either scheme. */
-.btn-rotate .iconbtn__svg { width: 26px; height: 26px; color: var(--ink); }
+   the middle, and the word beside it. Drawn in the text colour so it stays
+   legible in either scheme. */
+.btn-rotate .iconbtn__svg { width: 24px; height: 24px; color: var(--ink); }
 .btn-rotate__letter {
   font: 700 12px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   fill: currentColor;
 }
-/* In the Export window it spells the orientation out instead of drawing it. */
-.btn-rotate--text { min-width: 6.5em; }
+.btn-rotate__word { min-width: 5.6em; text-align: left; }
 
 /* Transient confirmation under a button — e.g. "Link copied" under Share.
    Timed to match the button's own colour flash, so the two clear together. */

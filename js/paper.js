@@ -60,9 +60,10 @@ function initOrientationControls() {
     for (const btn of buttons) {
       btn.title = `Page is ${orientationLabel()} — click to rotate`;
       btn.setAttribute('aria-label', btn.title);
-      // The Export window says it in words; the toolbar carries the spiral icon
-      // with the orientation's initial inside it.
-      if (btn.classList.contains('btn-rotate--text')) btn.textContent = orientationLabel();
+      // One button carries both: the spiral with the orientation's initial in it
+      // and the word beside it.
+      const word = btn.querySelector('.btn-rotate__word');
+      if (word) word.textContent = orientationLabel();
       const ring = btn.querySelector('.btn-rotate__ring');
       if (ring) ring.setAttribute('href', state.landscape ? '#ui-orient-l' : '#ui-orient-p');
       const letter = btn.querySelector('.btn-rotate__letter');
