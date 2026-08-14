@@ -54,11 +54,13 @@ function render(cell) {
   bodyEl.replaceChildren();
   renderSquareActions();
 
-  // --- Seat, facing and colors share one row --------------------------------
-  bodyEl.appendChild(group('Fill, facing & colors', (g) => {
+  // --- Fill, facing and colors share one row --------------------------------
+  // No group heading: each control carries its own label, so a fourth line of
+  // text above them only pushed the row further down the pane.
+  bodyEl.appendChild(group(null, (g) => {
     const row = document.createElement('div');
     row.className = 'erow erow--controls';
-    row.append(seatToggle(cell), facingCompass(cell), squareColors(cell));
+    row.append(fillControls(cell), facingCompass(cell), squareColors(cell));
     g.appendChild(row);
   }));
 
@@ -163,7 +165,13 @@ function renderBulk(keys) {
   const [sr, sc] = keys[0].split(',').map(Number);
   const first = getCell(sr, sc);
 
-  // Fill all / Empty all live in the select bar, not here.
+  // --- Fill, facing and colors, laid out exactly as the single pane ---------
+  bodyEl.appendChild(group(null, (g) => {
+    const row = document.createElement('div');
+    row.className = 'erow erow--controls';
+    row.append(bulkFillControls(keys), bulkFacing(keys), bulkColors(keys, first));
+    g.appendChild(row);
+  }));
 
   // --- Labels for every selected square -----------------------------------
   // Each line shows the shared text when all selected squares match, or a
@@ -222,20 +230,6 @@ function renderBulk(keys) {
       picker.appendChild(btn);
     }
     g.appendChild(picker);
-    g.appendChild(colorRow('Icon color', first.iconColor, (v) => updateCells(keys, { iconColor: v })));
-  }));
-
-  // --- Facing (all) -------------------------------------------------------
-  bodyEl.appendChild(group('Facing (all selected)', (g) => {
-    // Same eight directions as the single pane; nothing is pre-chosen because a
-    // selection may hold several facings at once.
-    g.appendChild(buildCompass(null, (deg) => updateCells(keys, { rotation: deg })));
-  }));
-
-  // --- Colors (all) -------------------------------------------------------
-  bodyEl.appendChild(group('Colors (all selected)', (g) => {
-    g.appendChild(colorRow('Space (fill)', first.fill, (v) => updateCells(keys, { fill: v })));
-    g.appendChild(colorRow('Border', first.border, (v) => updateCells(keys, { border: v })));
   }));
 
   // --- Paste the copied square onto the whole selection --------------------
@@ -263,6 +257,88 @@ function renderBulk(keys) {
   done.addEventListener('click', closeEditor);
   foot.appendChild(done);
   bodyEl.appendChild(foot);
+}
+
+// ---- bulk versions of the three controls the single pane puts on one row ----
+//
+// Same shapes, same labels; only the target differs. Anything that reports a
+// single square's value shows what the whole selection agrees on, or nothing
+// when it disagrees.
+
+/** What every selected square shares for `read`, or `fallback` when they differ. */
+function agreedAcross(keys, read, fallback = null) {
+  let seen;
+  for (const k of keys) {
+    const [r, c] = parseKey(k);
+    const v = read(getCell(r, c));
+    if (seen === undefined) seen = v;
+    else if (seen !== v) return fallback;
+  }
+  return seen === undefined ? fallback : seen;
+}
+
+function bulkFillControls(keys) {
+  const wrap = controlGroup('Fill');
+  const allFilled = keys.every((k) => isEnabled(...parseKey(k)));
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = `btn ${allFilled ? 'btn--seat' : 'btn--empty'}`;
+  btn.textContent = allFilled ? 'Filled' : 'Empty';
+  btn.setAttribute('aria-pressed', String(allFilled));
+  btn.title = allFilled ? 'Empty every selected square' : 'Fill every selected square';
+  btn.addEventListener('click', () => {
+    updateCells(keys, { enabled: !allFilled });
+    renderBulk(keys);
+  });
+  wrap.append(btn, presetButton(1), presetButton(2));
+  return wrap;
+}
+
+function bulkFacing(keys) {
+  const wrap = controlGroup('Facing');
+  const chosen = agreedAcross(keys, (c) => c.rotation || 0);
+  wrap.appendChild(buildCompass(chosen, (deg) => {
+    updateCells(keys, { rotation: deg });
+    renderBulk(keys);
+  }));
+  return wrap;
+}
+
+function bulkColors(keys, first) {
+  const wrap = controlGroup('Colors');
+  const row = document.createElement('div');
+  row.className = 'swatches';
+  const seed = (read) => agreedAcross(keys, read, read(first));
+  row.append(
+    swatch('Fill', seed((c) => c.fill), (v) => updateCells(keys, { fill: v })),
+    swatch('Border', seed((c) => c.border), (v) => updateCells(keys, { border: v })),
+    swatch('Icon', seed((c) => c.iconColor), (v) => updateCells(keys, { iconColor: v })),
+    bulkIconFillSwatch(keys, first),
+  );
+  wrap.appendChild(row);
+  return wrap;
+}
+
+function bulkIconFillSwatch(keys, first) {
+  const shared = agreedAcross(keys, (c) => c.iconFill);
+  const on = !!shared;
+  const item = swatch('Icon fill', shared || first.fill,
+                      (v) => updateCells(keys, { iconFill: v }));
+  const input = item.querySelector('input');
+  input.disabled = !on;
+
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.className = 'swatch__toggle';
+  box.checked = on;
+  box.title = on ? 'Icon fill on' : 'Icon fill off';
+  box.setAttribute('aria-label', 'Fill the space inside the icon');
+  box.addEventListener('change', () => {
+    updateCells(keys, { iconFill: box.checked ? input.value : null });
+    renderBulk(keys);
+  });
+  item.querySelector('.defaults__label').prepend(box);
+  return item;
 }
 
 /** One bulk label line: shared text (or a "(multiple)" placeholder), a color
@@ -367,13 +443,17 @@ function seedLineColor(keys, index) {
 
 // ---------------------------------------------------------------- builders
 
+/** A pane section. A null title makes it heading-less, for rows whose own
+ *  controls are already labelled. */
 function group(title, build) {
   const g = document.createElement('div');
-  g.className = 'egroup';
-  const h = document.createElement('h3');
-  h.className = 'egroup__title';
-  h.textContent = title;
-  g.appendChild(h);
+  g.className = title ? 'egroup' : 'egroup egroup--bare';
+  if (title) {
+    const h = document.createElement('h3');
+    h.className = 'egroup__title';
+    h.textContent = title;
+    g.appendChild(h);
+  }
   build(g);
   return g;
 }
@@ -501,9 +581,17 @@ function deleteButton(getKeys, getAt) {
 // Seat, facing and colors sit on one row, so the three things you reach for most
 // are visible together without scrolling.
 
-/** One button that both reports and flips the seat, instead of a two-way pair. */
-function seatToggle(cell) {
+/** The left column of the controls row: the fill toggle over the two preset
+ *  buttons, three tall so the column stands level with the compass and the
+ *  swatches beside it. */
+function fillControls(cell) {
   const wrap = controlGroup('Fill');
+  wrap.append(seatToggle(cell), presetButton(1), presetButton(2));
+  return wrap;
+}
+
+/** One button that both reports and flips the fill, instead of a two-way pair. */
+function seatToggle(cell) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = `btn ${cell.enabled ? 'btn--seat' : 'btn--empty'}`;
@@ -514,8 +602,21 @@ function seatToggle(cell) {
     updateCell(current.r, current.c, { enabled: !cell.enabled });
     render(peekCell(current.r, current.c));
   });
-  wrap.appendChild(btn);
-  return wrap;
+  return btn;
+}
+
+/** A saved square configuration, applied in one press. The presets themselves
+ *  are defined in the settings pane, which does not exist yet — until then the
+ *  buttons are placeholders so the row's shape is settled. */
+function presetButton(n) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn btn--preset';
+  btn.dataset.preset = String(n);
+  btn.textContent = `Preset ${n}`;
+  btn.title = `Preset ${n} — configured in Settings`;
+  btn.disabled = true;
+  return btn;
 }
 
 // Eight directions laid out as a compass, which reads far quicker than a strip
@@ -538,7 +639,9 @@ function buildCompass(chosen, onPick) {
   const grid = document.createElement('div');
   grid.className = 'compass';
   for (const dir of FACINGS) {
-    if (!dir) { grid.appendChild(document.createElement('span')); continue; }
+    // The middle cell turns the facing one step round the compass, which is the
+    // quickest way to nudge a square without hunting for the right arrow.
+    if (!dir) { grid.appendChild(rotateButton(chosen, onPick)); continue; }
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'compass__btn';
@@ -550,6 +653,25 @@ function buildCompass(chosen, onPick) {
     grid.appendChild(b);
   }
   return grid;
+}
+
+/** Turn the facing 45 degrees. With a mixed selection there is nothing to turn
+ *  FROM, so it starts the sweep at the first step. */
+function rotateButton(chosen, onPick) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'compass__btn compass__btn--rotate';
+  b.title = 'Turn 45\u00b0';
+  b.setAttribute('aria-label', 'Turn the facing 45 degrees');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', '#ui-orient-l');
+  svg.appendChild(use);
+  b.appendChild(svg);
+  b.addEventListener('click', () => onPick((((chosen || 0) + 45) % 360 + 360) % 360));
+  return b;
 }
 
 function facingCompass(cell) {

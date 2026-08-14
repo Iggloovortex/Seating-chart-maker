@@ -129,10 +129,14 @@
               stroke-width="1.7" stroke-dasharray="3.4 2.6"/>
       </symbol>
       <!-- Ghost — emptied, but still holding what it had -->
+      <!-- Ghost — a square faded all through, frame and lines alike, so it reads
+           as one translucent thing rather than a solid box holding faint text. -->
       <symbol id="ui-f-ghost" viewBox="0 0 24 24">
-        <rect x="3.5" y="3.5" width="17" height="17" rx="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
-        <path d="M7.5 10h9M7.5 14h5.5" fill="none" stroke="currentColor" stroke-width="1.7"
-              stroke-linecap="round" opacity=".4"/>
+        <g opacity=".45">
+          <rect x="3.5" y="3.5" width="17" height="17" rx="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
+          <path d="M7.5 10h9M7.5 14h5.5" fill="none" stroke="currentColor" stroke-width="1.7"
+                stroke-linecap="round"/>
+        </g>
       </symbol>
       <!-- Labelled — a square carrying label lines -->
       <symbol id="ui-f-labeled" viewBox="0 0 24 24">
@@ -159,6 +163,12 @@
       <symbol id="ui-no-badge" viewBox="0 0 24 24">
         <circle cx="17.2" cy="17.2" r="5.6" fill="var(--surface, #fff)" stroke="currentColor" stroke-width="1.8"/>
         <path d="M13.6 20.8 20.8 13.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </symbol>
+
+      <!-- Corner "and also" badge, the counterpart of ui-no-badge -->
+      <symbol id="ui-yes-badge" viewBox="0 0 24 24">
+        <circle cx="17.2" cy="17.2" r="5.6" fill="var(--surface, #fff)" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M17.2 14.2v6M14.2 17.2h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
       </symbol>
 
       <!-- ===== Actions ===== -->
@@ -343,8 +353,8 @@
           <button id="btn-filter-tables" class="btn btn--icon btn--toggle filterbtn" type="button" aria-pressed="false" title="All tables" aria-label="All tables">
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-f-tables"/></svg>
           </button>
-          <button id="btn-filter-noghost" class="btn btn--icon btn--toggle filterbtn" type="button" aria-pressed="false" title="No ghost — keep emptied squares out of the selection" aria-label="No ghost">
-            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-f-ghost"/><use href="#ui-no-badge"/></svg>
+          <button id="btn-filter-withghost" class="btn btn--icon btn--toggle filterbtn" type="button" aria-pressed="false" title="Include ghost — let the other filters reach emptied squares too" aria-label="Include ghost">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-f-ghost"/><use href="#ui-yes-badge"/></svg>
           </button>
         </div>
         <div class="defaults__rule" aria-hidden="true"></div>

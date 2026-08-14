@@ -1048,9 +1048,13 @@ body {
 /* Seat / facing / colors on one row in the edit pane. */
 .erow--controls {
   align-items: flex-start;
+  justify-content: center;   /* the row sits centred in the pane */
   gap: 14px;
   flex-wrap: wrap;
 }
+/* A heading-less section: the controls inside carry their own labels. */
+.egroup--bare > .erow--controls { margin-top: 0; }
+.btn--preset { font-size: 12px; padding: 6px 8px; }
 .controlgroup {
   display: flex;
   flex-direction: column;
@@ -1092,6 +1096,9 @@ body {
   border-color: var(--accent);
 }
 .compass__btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* The middle cell turns the facing one step instead of naming a direction. */
+.compass__btn--rotate { color: var(--ink-soft); }
+.compass__btn--rotate svg { width: 20px; height: 20px; }
 
 /* Every square colour shown the way the toolbar shows its defaults, stacked two
    by two so the whole group still fits beside Seat and Facing on one row. */

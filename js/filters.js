@@ -3,16 +3,16 @@
 // The selection is DERIVED, not stored. It is rebuilt on every emit from three
 // pieces held in state:
 //
-//   selection = manualAdd ∪ ⋃ active filters − manualDrop   (then the ghost mask)
+//   selection = manualAdd ∪ ⋃ active filters − manualDrop
 //
 // That is what makes a lit toggle live: label a square while "All labeled" is
 // on and it joins the selection on the same tick, and turning a toggle off only
 // gives up the squares no other toggle still claims.
 //
-// "No ghost" is not a filter but a MASK. Turning it on drops ghosts from the
-// selection and keeps them out while it is lit; turning it off puts nothing
-// back, which is why it also clears the ghost filter and purges ghosts from the
-// hand-picked set on the way in.
+// "Include ghost" is not a filter but a WIDENER. Every other filter tests filled
+// squares only, so ghosts — emptied squares that still hold content — never
+// reach them. Lighting it lets the same filters see ghosts too, which is the
+// useful direction: excluding them was already the default and so did nothing.
 
 
 // Set by js/tables.js so a filter click can open select mode.
@@ -24,11 +24,6 @@ function onFilterNeedsSelect(fn) { enterSelectFromFilter = fn; }
 function isGhostCell(cell) {
   return !!(cell && !cell.enabled && hasContent(cell));
 }
-function isGhostKey(k) {
-  const [r, c] = parseKey(k);
-  return isGhostCell(peekCell(r, c));
-}
-
 /** Every square in the grid, whether it has stored data or not. */
 function allGridKeys() {
   const keys = [];
@@ -49,6 +44,11 @@ function cellKeysWhere(pred) {
 
 const labelled = (cell) => (cell.labels || []).some((l) => l.text && l.text.trim());
 
+/** What the content filters count as "in play". Normally that is filled squares
+ *  only; with "Include ghost" lit, emptied squares holding content join them. */
+const inPlay = (cell) =>
+  cell.enabled || (state.filters.has('withghost') && isGhostCell(cell));
+
 // A table fills everything under it, so every one of those squares is unlabelled
 // and icon-less. Left in, they would swamp the "absence" filters, so those two
 // skip squares a table covers.
@@ -60,7 +60,7 @@ const FILTERS = {
   all:       { label: 'All squares',   icon: 'ui-f-all',
                keys: () => allGridKeys() },
   filled:    { label: 'All filled',    icon: 'ui-f-filled',
-               keys: () => cellKeysWhere((cell) => cell.enabled) },
+               keys: () => cellKeysWhere(inPlay) },
   blank:     { label: 'All blank',     icon: 'ui-f-blank',
                keys: () => allGridKeys().filter((k) => {
                  const [r, c] = parseKey(k);
@@ -68,25 +68,25 @@ const FILTERS = {
                  return !cell || !hasContent(cell);
                }) },
   labeled:   { label: 'All labeled',   icon: 'ui-f-labeled',
-               keys: () => cellKeysWhere((cell) => cell.enabled && labelled(cell)) },
+               keys: () => cellKeysWhere((cell) => inPlay(cell) && labelled(cell)) },
   unlabeled: { label: 'All unlabeled', icon: 'ui-f-labeled', negated: true,
                keys: () => cellKeysWhere((cell, r, c) =>
-                 cell.enabled && freeOf((x) => !labelled(x))(cell, r, c)) },
+                 inPlay(cell) && freeOf((x) => !labelled(x))(cell, r, c)) },
   icons:     { label: 'All w/ icons',  icon: 'ui-f-icons',
-               keys: () => cellKeysWhere((cell) => cell.enabled && !!cell.icon) },
+               keys: () => cellKeysWhere((cell) => inPlay(cell) && !!cell.icon) },
   noicons:   { label: 'All w/o icons', icon: 'ui-f-icons', negated: true,
                keys: () => cellKeysWhere((cell, r, c) =>
-                 cell.enabled && freeOf((x) => !x.icon)(cell, r, c)) },
+                 inPlay(cell) && freeOf((x) => !x.icon)(cell, r, c)) },
   ghost:     { label: 'All ghost',     icon: 'ui-f-ghost',
                keys: () => cellKeysWhere(isGhostCell) },
   // Picks TABLES rather than squares, so it has no `keys`.
   tables:    { label: 'All tables',    icon: 'ui-f-tables' },
-  // A mask over the result rather than a source of squares.
-  noghost:   { label: 'No ghost',      icon: 'ui-f-ghost', negated: true },
+  // Widens what the other filters look at rather than matching anything itself.
+  withghost: { label: 'Include ghost', icon: 'ui-f-ghost' },
 };
 
 const FILTER_ORDER = ['all', 'filled', 'blank', 'labeled', 'unlabeled',
-                      'icons', 'noicons', 'ghost', 'tables', 'noghost'];
+                      'icons', 'noicons', 'ghost', 'tables', 'withghost'];
 
 /** Rebuild state.selection. Called from emit() — must not emit itself. */
 function recomputeSelection() {
@@ -97,9 +97,6 @@ function recomputeSelection() {
     for (const k of f.keys()) keys.add(k);
   }
   for (const k of state.manualDrop) keys.delete(k);
-  if (state.filters.has('noghost')) {
-    for (const k of [...keys]) if (isGhostKey(k)) keys.delete(k);
-  }
   for (const k of [...keys]) {
     const [r, c] = parseKey(k);
     if (!inBounds(r, c)) keys.delete(k);
@@ -120,13 +117,6 @@ function toggleFilter(id) {
     if (id === 'tables') {
       if (on) selectAllTables(); else clearTableSelection();
     }
-    if (id === 'noghost' && on) {
-      // Turning the mask on both clears the ghost toggle and forgets any ghost
-      // that was picked by hand, so turning it back off restores nothing.
-      state.filters.delete('ghost');
-      for (const k of [...state.manualAdd]) if (isGhostKey(k)) state.manualAdd.delete(k);
-    }
-    if (id === 'ghost' && on) state.filters.delete('noghost');
   });
   return on;
 }
