@@ -154,11 +154,12 @@ function initTables() {
  *  the halves that have anything in them. */
 function renderSelectionCount(el, squares, tables) {
   if (!squares && !tables) {
-    // The bar is only ever visible in select mode, so on a touch device a plain
-    // tap is what picks a square — long-press opens the editor instead. Both
-    // spellings ship; CSS shows the one matching the pointer (see
-    // .hint-desktop / .hint-touch).
-    el.innerHTML = '<span class="hint-desktop">Ctrl+Click</span>' +
+    // The bar is only ever visible in select mode, where a plain click or tap
+    // already picks a square. Ctrl+click's job is reaching select mode from
+    // OUTSIDE it, past tap-to-fill, so naming it here would point at the wrong
+    // gesture — as would long-press, which opens the editor. Both spellings
+    // ship; CSS shows the one matching the pointer (.hint-desktop/.hint-touch).
+    el.innerHTML = '<span class="hint-desktop">Click</span>' +
                    '<span class="hint-touch">Tap</span> to select';
     return;
   }
