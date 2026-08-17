@@ -154,10 +154,12 @@ function initTables() {
  *  the halves that have anything in them. */
 function renderSelectionCount(el, squares, tables) {
   if (!squares && !tables) {
-    // Both spellings ship; CSS shows the one matching the pointer (see
+    // The bar is only ever visible in select mode, so on a touch device a plain
+    // tap is what picks a square — long-press opens the editor instead. Both
+    // spellings ship; CSS shows the one matching the pointer (see
     // .hint-desktop / .hint-touch).
     el.innerHTML = '<span class="hint-desktop">Ctrl+Click</span>' +
-                   '<span class="hint-touch">Long Press</span> to select';
+                   '<span class="hint-touch">Tap</span> to select';
     return;
   }
   const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
