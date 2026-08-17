@@ -125,15 +125,13 @@ function initTables() {
     openDeleteMenu(box.left, box.bottom + 4, { keys, r, c });
   });
 
-  // The bar reports both halves of the selection, and each control is live only
-  // when it has something to act on.
-  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  // The bar reports whichever halves of the selection are non-empty, and each
+  // control is live only when it has something to act on.
   subscribe(() => {
     if (!active) return;
     const squares = state.selection.size;
     const tables = state.tableSelection.size;
-    countEl.textContent =
-      `${plural(squares, 'square')} & ${plural(tables, 'table')} selected`;
+    renderSelectionCount(countEl, squares, tables);
     syncSelectionButtons();
 
     const filled = squares > 0 && allSelectedFilled();
@@ -149,6 +147,24 @@ function initTables() {
     colorInput.value = agreed('color', state.defaults.tableColor);
     borderInput.value = agreed('border', state.defaults.tableBorder);
   });
+}
+
+/** What the bar says about the selection. With nothing picked it tells you how
+ *  to pick something instead of reporting two zeroes; otherwise it names only
+ *  the halves that have anything in them. */
+function renderSelectionCount(el, squares, tables) {
+  if (!squares && !tables) {
+    // Both spellings ship; CSS shows the one matching the pointer (see
+    // .hint-desktop / .hint-touch).
+    el.innerHTML = '<span class="hint-desktop">Ctrl+Click</span>' +
+                   '<span class="hint-touch">Long Press</span> to select';
+    return;
+  }
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const parts = [];
+  if (squares) parts.push(plural(squares, 'Square'));
+  if (tables) parts.push(plural(tables, 'Table'));
+  el.textContent = parts.join(' & ');
 }
 
 /** True when every selected square is already filled — what makes the fill
