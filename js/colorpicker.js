@@ -177,17 +177,18 @@ function openColorPopover(anchor, value, onPick) {
     const eye = document.createElement('button');
     eye.type = 'button';
     eye.className = 'cpick__eye';
-    // An inline eyedropper — there is no dependable eyedropper emoji, and the
-    // nearest one was a pickaxe.
+    // Bootstrap Icons' eyedropper (MIT). There is no dependable eyedropper emoji
+    // — the placeholder before this was a pickaxe.
     const eyesvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     eyesvg.setAttribute('class', 'cpick__eyeicon');
-    eyesvg.setAttribute('viewBox', '0 0 24 24');
+    eyesvg.setAttribute('viewBox', '0 0 16 16');
+    eyesvg.setAttribute('fill', 'currentColor');
     eyesvg.setAttribute('aria-hidden', 'true');
     eyesvg.innerHTML =
-      '<path d="M17.5 2.5a2.83 2.83 0 0 1 4 4l-2.3 2.3 1 1a1.5 1.5 0 0 1 0 2.1' +
-      'l-.7.7-9 9-4.9 1.1a1 1 0 0 1-1.2-1.2L5.6 16.6l9-9 .7-.7a1.5 1.5 0 0 1 2.1 0' +
-      'l1 1 2.3-2.3-1.9-1.9-2.3 2.3-1-1 2.3-2.3z" fill="none" stroke="currentColor" ' +
-      'stroke-width="1.6" stroke-linejoin="round"/>';
+      '<path d="M13.354.646a1.207 1.207 0 0 0-1.708 0L8.5 3.793l-.646-.647a.5.5 0 1 0-.708.708' +
+      'L8.293 5l-7.147 7.146A.5.5 0 0 0 1 12.5v1.793l-.854.853a.5.5 0 1 0 .708.707L1.707 15H3.5' +
+      'a.5.5 0 0 0 .354-.146L11 7.707l1.146 1.147a.5.5 0 0 0 .708-.708l-.647-.646 3.147-3.146' +
+      'a1.207 1.207 0 0 0 0-1.708zM2 12.707l7-7L10.293 7l-7 7H2z"/>';
     eye.append(eyesvg, document.createTextNode(' Pick from screen'));
     eye.addEventListener('click', async () => {
       try {
