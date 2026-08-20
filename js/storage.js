@@ -3,6 +3,7 @@
 
 
 const LS_KEY = 'seatchart:last-session';
+const CONFIG_KEY = 'seatchart:config';   // app settings, kept apart from chart data
 const FILE_TYPE = 'seatchart';
 
 // ------------------------------------------------------------ localStorage
@@ -32,6 +33,42 @@ function restoreFromCache() {
     if (!raw) return false;
     const data = unwrap(JSON.parse(raw));
     return data ? deserialize(data) : false;
+  } catch {
+    return false;
+  }
+}
+
+// ------------------------------------------------- config persistence
+//
+// The same autosave shape as the chart, but on the config channel and under the
+// config key — so app settings survive reloads without ever entering a
+// .seatchart file or share link.
+
+let configSaveTimer = 0;
+
+function initConfigAutoSave() {
+  subscribeConfig(() => {
+    clearTimeout(configSaveTimer);
+    configSaveTimer = window.setTimeout(saveConfigToCache, 200);
+  });
+}
+
+function saveConfigToCache() {
+  try {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(serializeConfig()));
+  } catch {
+    /* storage full or blocked — non-fatal */
+  }
+}
+
+/** Restore app config. A baked-in seed (an exported site) wins over the store,
+ *  so an exported app opens with the settings it shipped with. */
+function restoreConfig() {
+  if (window.__CONFIG_SEED) return applyConfig(window.__CONFIG_SEED);
+  try {
+    const raw = localStorage.getItem(CONFIG_KEY);
+    if (!raw) return false;
+    return applyConfig(JSON.parse(raw));
   } catch {
     return false;
   }

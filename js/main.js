@@ -71,6 +71,12 @@ bindColorInput(iconFillSwatchEl, () => {
 });
 reflectIconFillDefault();
 
+// ---- App config & settings pane -------------------------------------------
+// Restore config first, so custom paper sizes exist before the paper dropdown
+// is built and the theme/title/favicon are applied before the first paint.
+restoreConfig();
+initSettings();
+
 // ---- Paper, tables ---------------------------------------------------------
 initPaperControls();
 initOrientationControls();
@@ -243,5 +249,6 @@ function reflectControls() {
   renderGrid();
   scheduleTableRefresh();
   initHistory();         // snapshot the restored state as the undo baseline
-  initAutoSave();        // start persisting after the initial restore
+  initAutoSave();        // start persisting the chart after the initial restore
+  initConfigAutoSave();  // and the app config, on its own channel + key
 })();

@@ -300,7 +300,7 @@
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-redo"/></svg>
           </button>
           <span class="iconbar__sep" aria-hidden="true"></span>
-          <button id="btn-settings" class="iconbtn" type="button" disabled title="Settings — not built yet" aria-label="Settings">
+          <button id="btn-settings" class="iconbtn" type="button" title="Settings" aria-label="Settings">
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-settings"/></svg>
           </button>
         </div>
@@ -584,9 +584,34 @@
     </section>
   </div>
 
+  <!-- ===================== Settings modal ===================== -->
+  <!-- Edits app configuration, which is kept apart from chart data: it lives in
+       state.config and is persisted under its own localStorage key, never in a
+       .seatchart file or share link. Body is built by js/settings.js. -->
+  <div class="modal" id="settings" hidden aria-hidden="true">
+    <div class="modal__backdrop" data-close-settings></div>
+    <section class="modal__panel modal__panel--settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <header class="modal__head">
+        <h2 class="modal__title" id="settings-title">Settings</h2>
+        <button class="btn btn--icon" type="button" data-close-settings aria-label="Close">✕</button>
+      </header>
+      <div class="modal__body modal__body--settings" id="settings-body">
+        <!-- populated by js/settings.js -->
+      </div>
+      <footer class="modal__foot">
+        <button class="btn" type="button" data-close-settings>Close</button>
+      </footer>
+    </section>
+  </div>
+
   <!-- Classic scripts (not ES modules) so the app also runs when index.html is
        opened directly via file:// — module scripts are blocked over file://.
        Load order matters: each file defines globals used by later ones. -->
+  <!-- Source map for "Export site". Holds each source file's text so the app can
+       inline itself into a single file even over file://, where a fetch of a
+       sibling file is blocked. REGENERATE with tools/gen-sources.py whenever any
+       source changes, or Export site ships stale code. -->
+  <script src="js/sources.js"></script>
   <script src="js/state.js"></script>
   <script src="js/history.js"></script>
   <script src="js/icons.js"></script>
@@ -600,6 +625,7 @@
   <script src="js/export.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/rows.js"></script>
+  <script src="js/settings.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>
