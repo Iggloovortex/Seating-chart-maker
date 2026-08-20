@@ -70,6 +70,19 @@ function applyConfigEffects() {
 
 // ---------------------------------------------------------------- presets
 
+/** A blank preset — the shape the maker starts from and Clear resets to. */
+function emptyPreset() {
+  return {
+    icon: null,
+    iconColor: DEFAULTS.iconColor,
+    iconFill: null,
+    rotation: 0,
+    fill: DEFAULTS.fill,
+    border: DEFAULTS.border,
+    labels: [],
+  };
+}
+
 /** Snapshot a square's look — icon, colours, facing, label lines — as a preset. */
 function capturePreset(cell) {
   return {
@@ -83,16 +96,39 @@ function capturePreset(cell) {
   };
 }
 
-/** The square a preset is captured FROM: the open editor square if there is one,
- *  otherwise the copied square, so a preset can be saved either way. */
-function currentSquareForPreset() {
-  if (typeof editorSquare === 'function') {
-    const ctx = editorSquare();
-    if (ctx && ctx.cell) return ctx.cell;
+/** A small "which preset?" menu, styled like the delete menu, opened by the
+ *  select bar's Save preset button. `cell` is the square to capture. */
+let presetSaveMenu = null;
+function closePresetSaveMenu() { presetSaveMenu?.remove(); presetSaveMenu = null; }
+function openPresetSaveMenu(x, y, cell) {
+  closePresetSaveMenu();
+  presetSaveMenu = document.createElement('div');
+  presetSaveMenu.className = 'popmenu preset-menu';
+  presetSaveMenu.setAttribute('role', 'menu');
+  for (const n of [1, 2]) {
+    const set = !!state.config.presets[String(n)];
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'popmenu__item';
+    b.setAttribute('role', 'menuitem');
+    b.textContent = set ? `Replace Preset ${n}` : `Save as Preset ${n}`;
+    b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      closePresetSaveMenu();
+      updateConfigPreset(n, capturePreset(cell));
+      if (typeof refreshEditor === 'function') refreshEditor(); // light up the pane's Preset buttons
+    });
+    presetSaveMenu.appendChild(b);
   }
-  if (typeof squareClipboard !== 'undefined' && squareClipboard) return squareClipboard;
-  return null;
+  document.body.appendChild(presetSaveMenu);
+  const box = presetSaveMenu.getBoundingClientRect();
+  presetSaveMenu.style.left = `${Math.min(x, window.innerWidth - box.width - 8)}px`;
+  presetSaveMenu.style.top = `${Math.min(y, window.innerHeight - box.height - 8)}px`;
 }
+document.addEventListener('pointerdown', (e) => {
+  if (presetSaveMenu && !e.target.closest?.('.preset-menu')) closePresetSaveMenu();
+}, true);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePresetSaveMenu(); });
 
 /** Apply preset `n` to `keys` (a single square in the single pane, the whole
  *  selection in the bulk pane). Called from the edit-pane Preset buttons. */
@@ -273,20 +309,13 @@ function presetSection() {
       ? `Preset ${n}: set${p.icon ? ` · ${p.icon}` : ''}${p.labels.length ? ` · ${p.labels.length} line(s)` : ''}`
       : `Preset ${n}: empty`;
 
-    const save = document.createElement('button');
-    save.type = 'button';
-    save.className = 'btn btn--primary';
-    save.textContent = 'Save current square';
-    save.title = 'Capture the open editor square as this preset';
-    save.addEventListener('click', () => {
-      const cell = currentSquareForPreset();
-      if (!cell) {
-        alert('Open a square in the editor first (right-click / long-press a square), then save it as a preset.');
-        return;
-      }
-      updateConfigPreset(n, capturePreset(cell));
-      if (typeof refreshEditor === 'function') refreshEditor();   // enable the pane's Preset buttons
-      renderSettings();
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'btn btn--primary';
+    edit.textContent = p ? 'Edit' : 'Make';
+    edit.title = 'Open an edit pane to build this preset';
+    edit.addEventListener('click', () => {
+      if (typeof openPresetEditor === 'function') openPresetEditor(n);
     });
 
     const clr = document.createElement('button');
@@ -300,12 +329,13 @@ function presetSection() {
       renderSettings();
     });
 
-    row.append(status, save, clr);
+    row.append(status, edit, clr);
     g.appendChild(row);
   }
   g.appendChild(snote(
-    'A preset stores a square’s icon, colours, facing and label lines. Apply it ' +
-    'from the Preset buttons in the edit pane — to the open square, or to the whole selection.'
+    'A preset stores a square’s icon, colours, facing and label lines. Build one here ' +
+    'with Make/Edit, or capture a square with Save preset in the select bar. Apply a preset ' +
+    'from the Preset buttons in the edit pane — to the open square, or the whole selection.'
   ));
   return g;
 }

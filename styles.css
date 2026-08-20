@@ -1281,7 +1281,7 @@ body {
 /* A menu raised at the pointer rather than anchored to a button. Declared AFTER
    .popmenu so its position and stacking win — at .popmenu's z-index it opened
    behind the edit pane, which reads as the Delete button doing nothing. */
-.delete-menu { position: fixed; z-index: 70; }
+.delete-menu, .preset-menu { position: fixed; z-index: 70; }
 .popmenu__item--danger { color: var(--danger); }
 .popmenu__item--danger:hover,
 .popmenu__item--danger:focus-visible { background: var(--danger); color: #fff; }

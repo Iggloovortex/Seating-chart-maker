@@ -8,6 +8,7 @@ const bodyEl = document.getElementById('editor-body');
 const titleEl = document.getElementById('editor-title');
 
 let current = null; // { r, c }
+let presetMode = null; // 1 | 2 while the pane is editing a preset instead of a cell
 
 function initEditor() {
   editorEl.querySelectorAll('[data-close-editor]').forEach((el) =>
@@ -48,6 +49,169 @@ function closeEditor() {
   editorEl.hidden = true;
   editorEl.setAttribute('aria-hidden', 'true');
   current = null;
+  presetMode = null;
+}
+
+// -------------------------------------------------- preset maker
+//
+// The same edit drawer, but bound to a preset in state.config rather than a grid
+// cell. Reuses the decoupled primitives (buildCompass, swatch) — the cell-bound
+// builders can't be, since they write through current.r/current.c.
+
+/** Open the drawer to build/edit preset `n`. Opened from Settings, which closes
+ *  behind it so the drawer isn't fighting the modal for the screen. */
+function openPresetEditor(n) {
+  if (typeof closeSettings === 'function') closeSettings();
+  current = null;
+  presetMode = n;
+  titleEl.textContent = `Preset ${n}`;
+  renderPresetEditor(n);
+  showPane();
+}
+
+/** The preset being edited, always a full object (a never-saved preset reads as
+ *  blank). Writes go straight through updateConfigPreset, so edits persist live. */
+function renderPresetEditor(n) {
+  const key = String(n);
+  const cur = () => state.config.presets[key] || emptyPreset();
+  const setP = (patch) => { updateConfigPreset(n, { ...cur(), ...patch }); renderPresetEditor(n); };
+  const p = cur();
+
+  bodyEl.replaceChildren();
+  document.getElementById('editor-actions').replaceChildren();
+
+  // Facing + colours on one row, matching the square pane (no fill toggle — a
+  // preset is always applied as a filled square).
+  bodyEl.appendChild(group(null, (g) => {
+    const row = document.createElement('div');
+    row.className = 'erow erow--controls';
+
+    const facing = controlGroup('Facing');
+    facing.appendChild(buildCompass(p.rotation || 0, (deg) => setP({ rotation: deg })));
+
+    const colors = controlGroup('Colors');
+    const sw = document.createElement('div');
+    sw.className = 'swatches';
+    sw.append(
+      swatch('Fill', p.fill, (v) => updateConfigPreset(n, { ...cur(), fill: v })),
+      swatch('Border', p.border, (v) => updateConfigPreset(n, { ...cur(), border: v })),
+      swatch('Icon', p.iconColor, (v) => updateConfigPreset(n, { ...cur(), iconColor: v })),
+      presetIconFillSwatch(n, cur),
+    );
+    colors.appendChild(sw);
+
+    row.append(facing, colors);
+    g.appendChild(row);
+  }));
+
+  // Icon.
+  bodyEl.appendChild(group('Icon', (g) => {
+    const picker = document.createElement('div');
+    picker.className = 'icon-picker';
+    const none = document.createElement('button');
+    none.type = 'button';
+    none.className = 'icon-picker__btn icon-picker__btn--none';
+    none.textContent = 'None';
+    none.setAttribute('aria-pressed', String(!p.icon));
+    none.addEventListener('click', () => setP({ icon: null }));
+    picker.appendChild(none);
+    for (const id of ICON_IDS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'icon-picker__btn';
+      btn.title = ICONS[id].label;
+      btn.setAttribute('aria-label', ICONS[id].label);
+      btn.setAttribute('aria-pressed', String(p.icon === id));
+      const svg = iconUse(id, '');
+      if (svg) btn.appendChild(svg);
+      btn.addEventListener('click', () => setP({ icon: id }));
+      picker.appendChild(btn);
+    }
+    g.appendChild(picker);
+  }));
+
+  // Labels — text + colour per line, add/remove.
+  bodyEl.appendChild(group('Labels', (g) => {
+    p.labels.forEach((line, i) => g.appendChild(presetLabelRow(n, cur, line, i)));
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'link-btn';
+    add.textContent = '+ Add label line';
+    add.addEventListener('click', () => {
+      const labels = cur().labels.concat({ text: '', color: defaultLabelColor(cur().labels.length) });
+      setP({ labels });
+    });
+    g.appendChild(add);
+  }));
+
+  // Footer: clear the preset, or done.
+  const foot = document.createElement('div');
+  foot.className = 'editor__foot';
+  const clr = document.createElement('button');
+  clr.type = 'button';
+  clr.className = 'btn btn--ghost';
+  clr.textContent = 'Clear preset';
+  clr.addEventListener('click', () => { updateConfigPreset(n, null); closeEditor(); });
+  const done = document.createElement('button');
+  done.type = 'button';
+  done.className = 'btn btn--primary';
+  done.textContent = 'Done';
+  done.addEventListener('click', closeEditor);
+  foot.append(clr, done);
+  bodyEl.appendChild(foot);
+}
+
+function presetIconFillSwatch(n, cur) {
+  const on = !!cur().iconFill;
+  const item = swatch('Icon fill', cur().iconFill || cur().fill,
+                      (v) => updateConfigPreset(n, { ...cur(), iconFill: v }));
+  const input = item.querySelector('input');
+  input.disabled = !on;
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.className = 'swatch__toggle';
+  box.checked = on;
+  box.setAttribute('aria-label', 'Fill the space inside the icon');
+  box.addEventListener('change', () => {
+    updateConfigPreset(n, { ...cur(), iconFill: box.checked ? input.value : null });
+    renderPresetEditor(n);
+  });
+  item.querySelector('.defaults__label').prepend(box);
+  return item;
+}
+
+function presetLabelRow(n, cur, line, index) {
+  const row = document.createElement('div');
+  row.className = 'erow';
+  const text = document.createElement('input');
+  text.type = 'text';
+  text.className = 'field__input';
+  text.value = line.text;
+  text.placeholder = `Line ${index + 1}`;
+  text.addEventListener('input', () => {
+    const labels = cur().labels.map((l, i) => i === index ? { ...l, text: text.value } : l);
+    updateConfigPreset(n, { ...cur(), labels }); // live, no re-render (keeps focus/caret)
+  });
+  const color = document.createElement('input');
+  color.type = 'color';
+  color.className = 'field__input field__input--color erow__color';
+  color.value = line.color;
+  bindColorInput(color, () => {
+    const labels = cur().labels.map((l, i) => i === index ? { ...l, color: color.value } : l);
+    updateConfigPreset(n, { ...cur(), labels });
+  });
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'btn btn--icon btn--ghost';
+  del.textContent = '✕';
+  del.setAttribute('aria-label', `Remove label line ${index + 1}`);
+  del.addEventListener('click', () => {
+    const labels = cur().labels.filter((_, i) => i !== index);
+    updateConfigPreset(n, { ...cur(), labels });
+    renderPresetEditor(n);
+  });
+  row.append(text, color, del);
+  return row;
 }
 
 /** The single square the pane is open on, or null (bulk pane / pane closed).
