@@ -359,6 +359,7 @@ function copySquareFrom(r, c) {
  *  target's own labels are replaced, so it ends up matching the source. */
 function pasteSquareTo(keys) {
   if (!squareClipboard || !keys.length) return false;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint(); // undo: record before paste
   const f = squareClipboard;
   batch(() => {
     for (const k of keys) {
@@ -443,6 +444,7 @@ function insertLine(axis, index) {
   const isRow = axis === 'row';
   const limit = isRow ? state.grid.rows : state.grid.cols;
   if (index < 0 || index > limit || limit >= 40) return false;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint(); // undo: record before insert
 
   const shift = (k) => {
     const [r, c] = parseKey(k);
@@ -479,6 +481,7 @@ function deleteLine(axis, index) {
   const isRow = axis === 'row';
   const limit = isRow ? state.grid.rows : state.grid.cols;
   if (index < 0 || index >= limit || limit <= 1) return false;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint(); // undo: record before delete
 
   // undefined => the square went with the deleted line
   const shift = (k) => {
@@ -687,6 +690,7 @@ function pruneSelection() {
 function addTable(shape, color) {
   const cellKeys = [...state.selection];
   if (cellKeys.length === 0) return null;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint(); // undo: record before add table
   const table = { id: `t${Date.now().toString(36)}`, cellKeys, shape,
                   color: color || state.defaults.tableColor,
                   border: state.defaults.tableBorder,
@@ -704,6 +708,7 @@ function addTable(shape, color) {
   return table;
 }
 function removeTable(id) {
+  if (typeof historyCheckpoint === 'function') historyCheckpoint(); // undo: record before remove table
   state.tables = state.tables.filter((t) => t.id !== id);
   state.tableSelection.delete(id);
   emit();
@@ -809,6 +814,7 @@ function rotateTables(ids, step = 45) {
 }
 
 function removeTables(ids) {
+  if (typeof historyCheckpoint === 'function') historyCheckpoint(); // undo: record before remove tables
   batch(() => {
     state.tables = state.tables.filter((t) => !ids.includes(t.id));
     for (const id of ids) state.tableSelection.delete(id);
@@ -829,6 +835,7 @@ function pruneTables() {
 /** Empty every square and take the tables with them. Labels, icons and colours
  *  survive — this clears the layout, not the content. */
 function clearGrid() {
+  if (typeof historyCheckpoint === 'function') historyCheckpoint(); // undo: record before Clear Grid
   batch(() => {
     for (const cell of state.cells.values()) cell.enabled = false;
     state.tables = [];
@@ -872,6 +879,9 @@ function serialize() {
 
 function deserialize(data) {
   if (!data || typeof data !== 'object') return false;
+  // undo: record before a file open / import replaces the chart. No-op during an
+  // undo/redo restore or before history init, so it never fights the restore.
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
   batch(() => {
     state.title = typeof data.title === 'string' ? data.title : '';
     state.defaults = {
