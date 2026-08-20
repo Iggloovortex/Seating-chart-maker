@@ -55,6 +55,8 @@ function exportFile(name = 'seating-chart') {
 /** Read a File object and load it into state. Returns a Promise<boolean>. */
 function importFile(file) {
   return file.text().then((text) => {
+    // A .tsv (or any non-JSON sheet) replaces the chart just like a .seatchart.
+    if (looksLikeTsv(file.name, text)) return importTsv(text);
     const data = unwrap(JSON.parse(text));
     if (!data) throw new Error('Not a valid .seatchart file');
     return deserialize(data);
