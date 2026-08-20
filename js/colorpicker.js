@@ -177,7 +177,18 @@ function openColorPopover(anchor, value, onPick) {
     const eye = document.createElement('button');
     eye.type = 'button';
     eye.className = 'cpick__eye';
-    eye.textContent = '⛏ Pick from screen';
+    // An inline eyedropper — there is no dependable eyedropper emoji, and the
+    // nearest one was a pickaxe.
+    const eyesvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    eyesvg.setAttribute('class', 'cpick__eyeicon');
+    eyesvg.setAttribute('viewBox', '0 0 24 24');
+    eyesvg.setAttribute('aria-hidden', 'true');
+    eyesvg.innerHTML =
+      '<path d="M17.5 2.5a2.83 2.83 0 0 1 4 4l-2.3 2.3 1 1a1.5 1.5 0 0 1 0 2.1' +
+      'l-.7.7-9 9-4.9 1.1a1 1 0 0 1-1.2-1.2L5.6 16.6l9-9 .7-.7a1.5 1.5 0 0 1 2.1 0' +
+      'l1 1 2.3-2.3-1.9-1.9-2.3 2.3-1-1 2.3-2.3z" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.6" stroke-linejoin="round"/>';
+    eye.append(eyesvg, document.createTextNode(' Pick from screen'));
     eye.addEventListener('click', async () => {
       try {
         const res = await new window.EyeDropper().open();

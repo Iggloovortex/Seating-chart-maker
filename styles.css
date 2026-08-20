@@ -1381,6 +1381,10 @@ body {
 .cpick__eye {
   appearance: none;
   height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   font: inherit;
   font-size: 12px;
   font-weight: 600;
@@ -1391,6 +1395,7 @@ body {
   cursor: pointer;
 }
 .cpick__eye:hover { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.cpick__eyeicon { width: 15px; height: 15px; flex: 0 0 auto; }
 
 /* Eight facing directions as a compass; the middle cell stays empty. */
 .compass {
