@@ -65,6 +65,19 @@ function applyConfigEffects() {
   const link = document.querySelector('link[rel="icon"]');
   if (link) link.setAttribute('href', state.config.favicon || DEFAULT_FAVICON);
 
+  // Show the uploaded icon in the app header too, not only the browser tab, so
+  // the change is visible immediately. Falls back to the built-in emoji.
+  const logo = document.querySelector('.toolbar__logo');
+  if (logo) {
+    if (state.config.favicon) {
+      let img = logo.querySelector('img');
+      if (!img) { logo.textContent = ''; img = document.createElement('img'); img.alt = ''; logo.appendChild(img); }
+      img.src = state.config.favicon;
+    } else {
+      logo.textContent = '🪑';
+    }
+  }
+
   if (typeof rebuildPaperOptions === 'function') { rebuildPaperOptions(); reflectPaper(); }
 }
 

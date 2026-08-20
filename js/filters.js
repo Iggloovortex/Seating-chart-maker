@@ -91,6 +91,9 @@ const FILTERS = {
                  if (!q) return [];
                  const words = q.toLowerCase().split(/\s+/);
                  return cellKeysWhere((cell) => {
+                   // Search obeys the same in-play rule as the other content
+                   // filters: filled squares only, unless Include ghost is lit.
+                   if (!inPlay(cell)) return false;
                    const hay = cellSearchText(cell);
                    return words.every((w) => hay.includes(w));
                  });

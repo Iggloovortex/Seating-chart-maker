@@ -103,6 +103,7 @@ body {
   margin-right: auto;
 }
 .toolbar__logo { font-size: 20px; line-height: 1; }
+.toolbar__logo img { width: 22px; height: 22px; display: block; object-fit: contain; border-radius: 4px; }
 .toolbar__title { white-space: nowrap; }
 
 .toolbar__group {
@@ -720,6 +721,8 @@ body {
 .modal__head .field__input { min-height: 38px; min-width: 0; }
 .modal__head .btn-rotate { min-height: 38px; flex: 0 0 auto; }
 .modal__head [data-close-preview] { flex: 0 0 auto; }
+/* Settings has no page-settings group to push the ✕ over, so right-align it. */
+.modal__head [data-close-settings] { margin-left: auto; flex: 0 0 auto; }
 @media (max-width: 640px) {
   /* Too narrow for one line: keep Close beside the title and drop the page
      settings onto their own row, rather than stranding Close below them. */
