@@ -25,6 +25,25 @@ function batch(fn) {
   emit();
 }
 
+// ---------------------------------------------------------------- app config
+//
+// Configuration is the app's own settings — theme, custom paper sizes, site
+// icon/title, square presets. It is DISTINCT from chart data: it has its own
+// tiny pub/sub, its own serialize, and (in storage.js) its own localStorage key.
+// It must NEVER travel in serialize() — the .seatchart / share-link payload.
+
+const configListeners = new Set();
+function subscribeConfig(fn) { configListeners.add(fn); return () => configListeners.delete(fn); }
+function emitConfig() { for (const fn of configListeners) fn(state.config); }
+
+const DEFAULT_CONFIG = {
+  theme: 'system',                    // 'system' | 'light' | 'dark'
+  customPapers: [],                   // [{ id, name, w, h, unit }]
+  siteTitle: 'Seating Chart Maker',
+  favicon: null,                      // data: URI, or null to keep the built-in icon
+  presets: { '1': null, '2': null },  // saved square configs, applied from the edit pane
+};
+
 const DEFAULTS = {
   fill: '#dbe7ff',
   border: '#2f6feb',
@@ -95,6 +114,7 @@ const state = {
   manualDrop: new Set(),        // squares un-picked by hand, overriding filters
   tableSelection: new Set(),    // table ids highlighted in select mode
   showTrueSizes: false,         // preview weighted row/col sizes in the grid
+  config: JSON.parse(JSON.stringify(DEFAULT_CONFIG)),   // app settings (see above)
 };
 
 const keyOf = (r, c) => `${r},${c}`;
@@ -907,6 +927,71 @@ function deserialize(data) {
     state.tableSelection = new Set();
     pruneTables();
   });
+  return true;
+}
+
+// ---------------------------------------------------------------- config ops
+//
+// These mutate state.config and emit on the CONFIG channel only, so config
+// changes persist to the config key without being confused with chart edits.
+
+function setConfig(patch) { Object.assign(state.config, patch); emitConfig(); }
+
+function updateConfigPreset(n, preset) { state.config.presets[String(n)] = preset; emitConfig(); }
+
+function addCustomPaper(paper) { state.config.customPapers.push(paper); emitConfig(); }
+
+function removeCustomPaper(id) {
+  state.config.customPapers = state.config.customPapers.filter((p) => p.id !== id);
+  emitConfig();
+}
+
+/** A plain snapshot of config, safe to JSON.stringify for its own localStorage
+ *  key or to bake into an exported site. Never merged into serialize(). */
+function serializeConfig() {
+  const copyPreset = (p) => (p ? { ...p, labels: (p.labels || []).map((l) => ({ ...l })) } : null);
+  return {
+    theme: state.config.theme,
+    customPapers: state.config.customPapers.map((p) => ({ ...p })),
+    siteTitle: state.config.siteTitle,
+    favicon: state.config.favicon,
+    presets: { '1': copyPreset(state.config.presets['1']), '2': copyPreset(state.config.presets['2']) },
+  };
+}
+
+/** Load a config snapshot back into state.config, coercing every field so a
+ *  stale or hand-edited store can never break the app. */
+function applyConfig(data) {
+  if (!data || typeof data !== 'object') return false;
+  const cfg = state.config;
+  cfg.theme = ['system', 'light', 'dark'].includes(data.theme) ? data.theme : 'system';
+  cfg.customPapers = Array.isArray(data.customPapers)
+    ? data.customPapers
+        .filter((p) => p && p.id)
+        .map((p) => ({
+          id: String(p.id),
+          name: String(p.name || 'Custom'),
+          w: Number(p.w) || 11,
+          h: Number(p.h) || 8.5,
+          unit: p.unit === 'mm' ? 'mm' : 'in',
+        }))
+    : [];
+  cfg.siteTitle = typeof data.siteTitle === 'string' && data.siteTitle.trim()
+    ? data.siteTitle : DEFAULT_CONFIG.siteTitle;
+  cfg.favicon = typeof data.favicon === 'string' ? data.favicon : null;
+  const okPreset = (p) => (p && typeof p === 'object') ? {
+    icon: p.icon || null,
+    iconColor: p.iconColor || DEFAULTS.iconColor,
+    iconFill: p.iconFill || null,
+    rotation: p.rotation || 0,
+    fill: p.fill || DEFAULTS.fill,
+    border: p.border || DEFAULTS.border,
+    labels: Array.isArray(p.labels)
+      ? p.labels.map((l) => ({ text: String(l.text || ''), color: l.color || DEFAULTS.labelColor }))
+      : [],
+  } : null;
+  cfg.presets = { '1': okPreset(data.presets?.['1']), '2': okPreset(data.presets?.['2']) };
+  emitConfig();
   return true;
 }
 

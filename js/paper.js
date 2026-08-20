@@ -13,12 +13,41 @@ const PAPER_PRESETS = {
 
 const MM_PER_IN = 25.4;
 
+/** A named custom size from state.config by its id, or null. These are added in
+ *  Settings and appended to the paper dropdown alongside the built-in presets. */
+function customPaperById(id) {
+  return (state.config?.customPapers || []).find((p) => p.id === id) || null;
+}
+
 /** Preset name plus its dimensions the way round the page currently sits, so
  *  the dropdown reads "Letter (11×8.5")" landscape and "Letter (8.5×11")" portrait. */
 function presetLabel(id) {
   const p = PAPER_PRESETS[id];
   const [a, b] = state.landscape ? [p.w, p.h] : [p.h, p.w];
   return `${p.name} (${a}×${b}")`;
+}
+
+/** Dropdown label for any paper id — built-in preset or a named custom size. */
+function paperLabelFor(id) {
+  if (PAPER_PRESETS[id]) return presetLabel(id);
+  const cp = customPaperById(id);
+  if (!cp) return id;
+  const [a, b] = state.landscape ? [cp.w, cp.h] : [cp.h, cp.w];
+  return `${cp.name} (${a}×${b} ${cp.unit})`;
+}
+
+/** Rebuild the paper <select>: presets, then any named custom sizes, then the
+ *  ad-hoc "Custom…" option. Keeps the current choice if it still exists. Called
+ *  when the custom-size list changes in Settings. */
+function rebuildPaperOptions() {
+  const select = document.getElementById('paper-size');
+  if (!select) return;
+  const keep = select.value;
+  select.replaceChildren();
+  for (const id of Object.keys(PAPER_PRESETS)) select.appendChild(new Option(presetLabel(id), id));
+  for (const cp of (state.config?.customPapers || [])) select.appendChild(new Option(paperLabelFor(cp.id), cp.id));
+  select.appendChild(new Option('Custom…', 'custom'));
+  if ([...select.options].some((o) => o.value === keep)) select.value = keep;
 }
 
 /** A custom page's stored w/h read out for the current orientation, and the
@@ -34,8 +63,18 @@ function paperInches() {
   const p = state.paper;
   let w, h;
   if (typeof p === 'string') {
-    const preset = PAPER_PRESETS[p] || PAPER_PRESETS.letter;
-    w = preset.w; h = preset.h;
+    const preset = PAPER_PRESETS[p];
+    if (preset) {
+      w = preset.w; h = preset.h;
+    } else {
+      const cp = customPaperById(p);          // a named custom size from config
+      if (cp) {
+        const factor = cp.unit === 'mm' ? 1 / MM_PER_IN : 1;
+        w = cp.w * factor; h = cp.h * factor;
+      } else {
+        w = PAPER_PRESETS.letter.w; h = PAPER_PRESETS.letter.h;   // deleted size => Letter
+      }
+    }
   } else {
     const factor = p.unit === 'mm' ? 1 / MM_PER_IN : 1;   // custom { w, h, unit }
     w = (p.w || 11) * factor; h = (p.h || 8.5) * factor;
@@ -90,6 +129,7 @@ function refreshPaperOptions() {
   if (!select) return;
   for (const opt of select.options) {
     if (PAPER_PRESETS[opt.value]) opt.textContent = presetLabel(opt.value);
+    else if (customPaperById(opt.value)) opt.textContent = paperLabelFor(opt.value);
   }
 }
 
@@ -119,12 +159,8 @@ function initPaperControls() {
   const unitIn = document.getElementById('paper-unit');
   const customFields = document.querySelectorAll('.field--custom-paper');
 
-  // Populate presets + custom option.
-  select.replaceChildren();
-  for (const id of Object.keys(PAPER_PRESETS)) {
-    select.appendChild(new Option(presetLabel(id), id));
-  }
-  select.appendChild(new Option('Custom…', 'custom'));
+  // Populate presets + named custom sizes + the ad-hoc "Custom…" option.
+  rebuildPaperOptions();
 
   const syncCustomVisibility = () => {
     const isCustom = select.value === 'custom';
@@ -163,7 +199,7 @@ function reflectPaper() {
 
 function reflect(select, wIn, hIn, unitIn, syncCustomVisibility) {
   const p = state.paper;
-  if (typeof p === 'string' && PAPER_PRESETS[p]) {
+  if (typeof p === 'string' && (PAPER_PRESETS[p] || customPaperById(p))) {
     select.value = p;
   } else if (p && typeof p === 'object') {
     select.value = 'custom';

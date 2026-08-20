@@ -50,6 +50,19 @@ function closeEditor() {
   current = null;
 }
 
+/** The single square the pane is open on, or null (bulk pane / pane closed).
+ *  Lets Settings capture the open square as a preset. */
+function editorSquare() {
+  return current ? { r: current.r, c: current.c, cell: peekCell(current.r, current.c) } : null;
+}
+
+/** Re-render the single-square pane in place — used after Settings saves a
+ *  preset, so the pane's Preset buttons switch from disabled to live. */
+function refreshEditor() {
+  if (editorEl.hidden || !current) return;
+  render(peekCell(current.r, current.c));
+}
+
 function render(cell) {
   bodyEl.replaceChildren();
   renderSquareActions();
@@ -290,7 +303,8 @@ function bulkFillControls(keys) {
     updateCells(keys, { enabled: !allFilled });
     renderBulk(keys);
   });
-  wrap.appendChild(fillStack(btn, presetButton(1), presetButton(2)));
+  const apply = (n) => { applyPreset(n, keys); renderBulk(keys); };
+  wrap.appendChild(fillStack(btn, presetButton(1, apply), presetButton(2, apply)));
   return wrap;
 }
 
@@ -586,7 +600,11 @@ function deleteButton(getKeys, getAt) {
  *  swatches beside it. */
 function fillControls(cell) {
   const wrap = controlGroup('Fill');
-  wrap.appendChild(fillStack(seatToggle(cell), presetButton(1), presetButton(2)));
+  const apply = (n) => {
+    applyPreset(n, [keyOf(current.r, current.c)]);
+    render(peekCell(current.r, current.c));
+  };
+  wrap.appendChild(fillStack(seatToggle(cell), presetButton(1, apply), presetButton(2, apply)));
   return wrap;
 }
 
@@ -614,17 +632,20 @@ function seatToggle(cell) {
   return btn;
 }
 
-/** A saved square configuration, applied in one press. The presets themselves
- *  are defined in the settings pane, which does not exist yet — until then the
- *  buttons are placeholders so the row's shape is settled. */
-function presetButton(n) {
+/** A saved square configuration, applied in one press. Presets are captured and
+ *  stored in Settings (state.config.presets). A button is live only when its
+ *  preset is set AND a target is given; `onApply(n)` receives the click. */
+function presetButton(n, onApply) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'btn btn--preset';
   btn.dataset.preset = String(n);
   btn.textContent = `Preset ${n}`;
-  btn.title = `Preset ${n} — configured in Settings`;
-  btn.disabled = true;
+  const preset = state.config && state.config.presets ? state.config.presets[String(n)] : null;
+  const has = !!preset;
+  btn.disabled = !has || !onApply;
+  btn.title = has ? `Apply Preset ${n} (set in Settings)` : `Preset ${n} — set it in Settings`;
+  if (has && onApply) btn.addEventListener('click', () => onApply(n));
   return btn;
 }
 
