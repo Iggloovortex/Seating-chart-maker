@@ -91,6 +91,7 @@ const state = {
   // rebuilt from the three fields below on every emit.
   selection: new Set(),         // keys highlighted in select mode (DERIVED)
   filters: new Set(),           // active filter toggle ids (see js/filters.js)
+  filterQuery: '',              // live search text (view state, never serialized)
   manualAdd: new Set(),         // squares picked by hand
   manualDrop: new Set(),        // squares un-picked by hand, overriding filters
   tableSelection: new Set(),    // table ids highlighted in select mode
