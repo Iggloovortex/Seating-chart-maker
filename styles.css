@@ -1170,12 +1170,227 @@ body {
    boxes read taller than the solid button above them. Keep the edge crisp so
    all three are seen at the size they actually are. */
 .btn--preset { font-size: 12px; }
+/* A live preset button carries a saved square, so it reads as an action: the
+   accent blue, matching .btn--primary. */
+.btn--preset:not(:disabled) {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.btn--preset:not(:disabled):hover { filter: brightness(1.06); }
 .btn--preset:disabled {
   opacity: 1;
   color: var(--ink-soft);
   background: var(--surface-2);
   border-color: var(--line-strong);
 }
+
+/* ============================== Settings modal ============================== */
+/* The shared modal body centres a single object (the preview paper); Settings is
+   a stacked form instead, so it reverts to a left-aligned column. */
+.modal__body--settings {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  place-items: stretch;
+  background: var(--bg);
+  padding: 18px 20px;
+}
+.settings-section {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+.settings-section:first-child { padding-top: 0; border-top: 0; }
+.settings-section__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.settings-note { margin: 0; font-size: 13px; line-height: 1.4; color: var(--ink-soft); }
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.settings-row__name { flex: 1 1 auto; min-width: 0; color: var(--ink); }
+
+/* Label-over-control field, matching the toolbar's stacked fields. */
+.settings-field { display: flex; flex-direction: column; gap: 4px; }
+.settings-field__label { font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+.settings-field .field__input { width: 100%; }
+
+.settings-seg { align-self: flex-start; }
+
+/* Add-paper form: name / W / H / unit / button, wrapping on narrow panels. */
+.settings-addpaper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+.settings-addpaper .settings-field { flex: 0 0 auto; }
+.settings-addpaper .settings-field .field__input { width: 88px; min-height: 38px; }
+.settings-addpaper .settings-field:first-child { flex: 1 1 160px; }
+.settings-addpaper .settings-field:first-child .field__input { width: 100%; }
+
+.settings-row--favicon { flex-wrap: wrap; }
+.settings-favicon {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 3px;
+}
+.settings-file { flex: 1 1 auto; min-width: 0; }
+
+/* Settings preset row: a drawn miniature, then a two-line description, then the
+   Make/Edit and Clear buttons. */
+.settings-row--preset { align-items: center; gap: 10px; }
+.preset-preview {
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.preset-preview--empty {
+  border-style: dashed;
+  background: repeating-linear-gradient(
+    45deg, transparent, transparent 5px,
+    var(--line) 5px, var(--line) 6px);
+}
+.preset-preview__icon { width: 22px; height: 22px; }
+.preset-preview__text {
+  max-width: 100%;
+  padding: 0 2px;
+  font-size: 9px;
+  line-height: 1.1;
+  font-weight: 600;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preset-desc { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.preset-desc__meta { font-size: 12px; color: var(--ink-soft); }
+
+/* ============================== Color picker ============================== */
+/* The themed popover that stands in for the browser's color dialog. Fixed and
+   above every pane (the edit drawer sits at z-index 50, menus at 70). */
+.cpick {
+  position: fixed;
+  z-index: 80;
+  width: 236px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  color: var(--ink);
+}
+.cpick__sv {
+  position: relative;
+  width: 100%;
+  height: 140px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  cursor: crosshair;
+  touch-action: none;
+}
+.cpick__dot {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .5);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.cpick__hue {
+  position: relative;
+  height: 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  cursor: pointer;
+  touch-action: none;
+  background: linear-gradient(to right,
+    #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%);
+}
+.cpick__huethumb {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--line-strong);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.cpick__fields { display: flex; flex-direction: column; gap: 6px; }
+.cpick__row { display: flex; align-items: center; gap: 8px; }
+.cpick__label {
+  flex: 0 0 30px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--ink-soft);
+}
+.cpick__inputs { flex: 1 1 auto; display: flex; gap: 6px; }
+.cpick__field {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 0 6px;
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.cpick__field:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.cpick__hex { text-align: left; letter-spacing: .04em; }
+/* Trim the number spinners so three fit a row cleanly. */
+.cpick__num { -moz-appearance: textfield; padding: 0 2px; }
+.cpick__num::-webkit-outer-spin-button,
+.cpick__num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.cpick__eye {
+  appearance: none;
+  height: 32px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.cpick__eye:hover { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
 /* Eight facing directions as a compass; the middle cell stays empty. */
 .compass {

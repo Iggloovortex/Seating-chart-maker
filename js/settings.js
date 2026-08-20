@@ -315,12 +315,19 @@ function presetSection() {
   for (const n of [1, 2]) {
     const p = state.config.presets[String(n)];
     const row = document.createElement('div');
-    row.className = 'settings-row';
+    row.className = 'settings-row settings-row--preset';
+
+    // A small square that draws the preset the way the grid would: fill, border,
+    // icon (coloured, filled and turned) and the first label line under it.
+    const preview = presetPreview(p);
+
+    const desc = document.createElement('div');
+    desc.className = 'preset-desc';
     const status = document.createElement('span');
-    status.className = 'settings-row__name';
-    status.textContent = p
-      ? `Preset ${n}: set${p.icon ? ` · ${p.icon}` : ''}${p.labels.length ? ` · ${p.labels.length} line(s)` : ''}`
-      : `Preset ${n}: empty`;
+    status.className = 'settings-row__name preset-desc__name';
+    status.textContent = p ? `Preset ${n}: set` : `Preset ${n}: empty`;
+    desc.appendChild(status);
+    if (p) desc.appendChild(presetSummaryLine(p));
 
     const edit = document.createElement('button');
     edit.type = 'button';
@@ -342,7 +349,7 @@ function presetSection() {
       renderSettings();
     });
 
-    row.append(status, edit, clr);
+    row.append(preview, desc, edit, clr);
     g.appendChild(row);
   }
   g.appendChild(snote(
@@ -351,6 +358,51 @@ function presetSection() {
     'from the Preset buttons in the edit pane — to the open square, or the whole selection.'
   ));
   return g;
+}
+
+/** A miniature of the preset, drawn the way the grid draws a square: fill and
+ *  border, the icon coloured/filled/turned, and the first label under it. An
+ *  empty preset shows a dashed placeholder instead. */
+function presetPreview(p) {
+  const box = document.createElement('div');
+  box.className = 'preset-preview';
+  if (!p) {
+    box.classList.add('preset-preview--empty');
+    box.title = 'No preset saved yet';
+    return box;
+  }
+  box.style.background = p.fill || DEFAULTS.fill;
+  box.style.borderColor = p.border || DEFAULTS.border;
+
+  if (p.icon) {
+    const svg = iconUse(p.icon, 'preset-preview__icon', p.iconFill || null);
+    if (svg) {
+      svg.style.color = p.iconColor || DEFAULTS.iconColor;
+      if (p.rotation) svg.style.transform = `rotate(${p.rotation}deg)`;
+      box.appendChild(svg);
+    }
+  }
+  const first = (p.labels || []).find((l) => (l.text || '').trim());
+  if (first) {
+    const t = document.createElement('span');
+    t.className = 'preset-preview__text';
+    t.textContent = first.text;
+    t.style.color = first.color || DEFAULTS.labelColor;
+    box.appendChild(t);
+  }
+  return box;
+}
+
+/** The second line under a set preset: what it carries, spelled out. */
+function presetSummaryLine(p) {
+  const bits = [];
+  if (p.icon) bits.push(p.icon);
+  if (p.labels && p.labels.length) bits.push(`${p.labels.length} line${p.labels.length === 1 ? '' : 's'}`);
+  if (p.rotation) bits.push(`${p.rotation}°`);
+  const el = document.createElement('span');
+  el.className = 'preset-desc__meta';
+  el.textContent = bits.length ? bits.join(' · ') : 'plain square';
+  return el;
 }
 
 // ---------------------------------------------------------------- export site

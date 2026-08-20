@@ -718,6 +718,9 @@ function bindColorInput(input, apply) {
   input.addEventListener('input', apply);
   input.addEventListener('change', apply);
   input.addEventListener('blur', apply);
+  // Swap the browser's un-themed color dialog for the app's own popover. The
+  // native input stays the value holder, so these listeners keep firing.
+  if (typeof enhanceColorInput === 'function') enhanceColorInput(input);
 }
 
 function weightRow(label, value, onChange) {
