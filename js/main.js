@@ -206,7 +206,11 @@ document.getElementById('btn-preview-share')
   .addEventListener('click', (e) => copyShareLink(e.currentTarget, 'btn--ok'));
 
 document.getElementById('btn-clear').addEventListener('click', () => {
-  if (confirm('Clear the whole chart? This cannot be undone.')) clearAll();
+  if (confirm('Clear the whole chart? This wipes the undo history too, so it '
+    + "can't be undone unless you've saved or exported the chart.")) {
+    clearAll();
+    clearHistory();   // New starts fresh: drop the undo/redo stacks
+  }
 });
 
 // ---- Zoom ------------------------------------------------------------------
@@ -238,5 +242,6 @@ function reflectControls() {
   reflectControls();
   renderGrid();
   scheduleTableRefresh();
+  initHistory();         // snapshot the restored state as the undo baseline
   initAutoSave();        // start persisting after the initial restore
 })();
