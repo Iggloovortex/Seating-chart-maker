@@ -165,6 +165,10 @@ function parseTsv(text) {
  *  rotation, colour or border, so imported tables come back as default square
  *  tables grouping the squares that shared a `table` value. */
 function importTsv(text) {
+  // A TSV open replaces the chart but does not go through deserialize(), where
+  // the undo recorder's structural checkpoint lives — so record one here, or an
+  // import could not be undone.
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
   const rows = parseTsv(text);
   let maxRow = 1, maxCol = 1;
   for (const row of rows) {
