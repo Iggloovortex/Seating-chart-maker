@@ -98,7 +98,13 @@ async function renderToCanvas(dpi = 300) {
   }
   for (const s of seats) s.geo = seatGeometry(rectOf, s);
   for (const v of covered) v.geo = coveredGeometry(rectOf, v, footprints);
-  const plan = planContent(ctx, [...desks, ...seats, ...covered]);
+  // A chair's labels fill the square's empty half, so plan their size against the
+  // full square (its labelBox), not the small furniture tile.
+  const planItems = [
+    ...desks.map((d) => isChairCell(d.data) && d.geo.labelBox ? { data: d.data, geo: d.geo.labelBox } : d),
+    ...seats, ...covered,
+  ];
+  const plan = planContent(ctx, planItems);
 
   // Preload icon images (async), keyed by "id|color" — including a chair for empty seats.
   const imgCache = await preloadIcons(desks, seats, covered);
@@ -219,21 +225,71 @@ function chairGeometry(rectOf, { r, c, data }) {
     if (dr && !dc) cx = faced.x + faced.w / 2;
     if (dc && !dr) cy = faced.y + faced.h / 2;
   }
-  return { cx, cy, w: size, h: size };
+  // Labels sit upright in the empty half of the full square — the half OPPOSITE
+  // the furniture — so a name stays readable beside its chair.
+  return { cx, cy, w: size, h: size, labelBox: chairLabelBox(rect, dr, dc), full: Math.min(rect.w, rect.h) };
+}
+
+/** The empty region of a chair's full-size square: the half (or quadrant, for a
+ *  diagonal facing) opposite the furniture tile, where its labels are drawn. */
+function chairLabelBox(rect, dr, dc) {
+  let { x, y, w, h } = rect;
+  if (dr < 0) { y = rect.y + rect.h / 2; h = rect.h / 2; }      // chair hugs top → labels below
+  else if (dr > 0) { h = rect.h / 2; }                          // chair hugs bottom → labels above
+  if (dc < 0) { x = rect.x + rect.w / 2; w = rect.w / 2; }      // chair hugs left → labels right
+  else if (dc > 0) { w = rect.w / 2; }                          // chair hugs right → labels left
+  return { x, y, w, h };
 }
 
 /** A chair: standalone furniture drawn at a fixed fraction of its full-size
  *  square, attached to the edge it faces and centred on the other axis, so it
  *  tucks up to the desk or table it belongs to. */
 function drawChair(ctx, item, imgCache, plan) {
-  const { cx, cy, w: size } = item.geo;
+  const { cx, cy, w: size, labelBox, full } = item.geo;
   roundRect(ctx, cx - size / 2, cy - size / 2, size, size, size * 0.18);
   ctx.fillStyle = item.data.fill || '#dbe7ff';
   ctx.fill();
   ctx.lineWidth = Math.max(1, size * 0.05);
   ctx.strokeStyle = item.data.border || '#2f6feb';
   ctx.stroke();
-  drawContent(ctx, cx, cy, size, size, item.data, imgCache, false, plan);
+  // The furniture carries only its icon, turned to face; the labels live upright
+  // in the square's empty half.
+  drawIconOnly(ctx, cx, cy, size, item.data, imgCache);
+  if (labelBox) drawLabelBox(ctx, labelBox, item.data, plan, full || Math.min(labelBox.w, labelBox.h));
+}
+
+/** Just a cell's icon, centred and turned to its facing — no labels. */
+function drawIconOnly(ctx, cx, cy, size, data, imgCache) {
+  if (!data.icon) return;
+  const img = imgCache.get(iconKey(data.icon, data));
+  if (!img) return;
+  const iconSize = size * 0.64;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(((data.rotation || 0) * Math.PI) / 180);
+  ctx.drawImage(img, -iconSize / 2, -iconSize / 2, iconSize, iconSize);
+  ctx.restore();
+}
+
+/** A label stack drawn upright and centred inside `box`, sized to the whole
+ *  square (`fullMin`) so furniture labels match the chart's other text. */
+function drawLabelBox(ctx, box, data, plan, fullMin) {
+  const labels = labelsOf(data);
+  if (!labels.length) return;
+  const lineH = fullMin * plan.lineFrac;
+  const totalH = labels.length * lineH;
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = contentFont(lineH * FONT_OF_LINE);
+  const cx = box.x + box.w / 2;
+  let y = box.y + box.h / 2 - totalH / 2 + lineH / 2;
+  for (const line of labels) {
+    ctx.fillStyle = line.color || '#1f2933';
+    ctx.fillText(fitText(ctx, line.text, box.w * LABEL_WIDTH), cx, y);
+    y += lineH;
+  }
+  ctx.restore();
 }
 
 /** Where a seat around a table sits: smaller than a desk and shifted toward the

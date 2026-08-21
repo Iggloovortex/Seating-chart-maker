@@ -556,6 +556,18 @@ function placeChairTile(tile, rot) {
   tile.style.top = dr < 0 ? '0' : dr > 0 ? '50%' : '25%';
 }
 
+/** Position a chair's labels in the square's empty half — the region opposite
+ *  the furniture tile — upright and centred there. The DOM twin of the output's
+ *  chairLabelBox. */
+function placeChairLabels(el, rot) {
+  const n = ((Math.round(rot / 45) * 45) % 360 + 360) % 360;
+  const [dr, dc] = FACING_STEP[n] || FACING_STEP[0];
+  el.style.left = dc < 0 ? '50%' : '0';
+  el.style.width = dc === 0 ? '100%' : '50%';
+  el.style.top = dr < 0 ? '50%' : '0';
+  el.style.height = dr === 0 ? '100%' : '50%';
+}
+
 function buildCell(r, c, rects) {
   const key = keyOf(r, c);
   const data = peekCell(r, c);
@@ -613,30 +625,39 @@ function buildCell(r, c, rects) {
       }
     }
 
-    if (data.labels && data.labels.length) {
-      const labels = document.createElement('div');
-      labels.className = 'cell__labels';
+    let labelsEl = null;
+    if (data.labels && data.labels.length && data.labels.some((l) => l.text)) {
+      labelsEl = document.createElement('div');
+      labelsEl.className = 'cell__labels';
       for (const line of data.labels) {
         if (!line.text) continue;
         const span = document.createElement('span');
         span.className = 'cell__label';
         span.textContent = line.text;
         span.style.color = line.color;
-        labels.appendChild(span);
+        labelsEl.appendChild(span);
       }
-      content.appendChild(labels);
     }
 
     if (isChair) {
+      // Furniture tile carries only the icon (turned to face); labels sit upright
+      // in the square's empty half so a name stays readable beside the chair.
+      const rot = (data.rotation || 0) + tableRot;
       const tile = document.createElement('div');
       tile.className = 'cell__chair';
       tile.style.background = data.fill;
       tile.style.borderColor = data.border;
-      placeChairTile(tile, (data.rotation || 0) + tableRot);
+      placeChairTile(tile, rot);
       tile.appendChild(content);
       el.classList.add('cell--chairhost');
       el.appendChild(tile);
+      if (labelsEl) {
+        labelsEl.classList.add('cell__chairlabels');
+        placeChairLabels(labelsEl, rot);
+        el.appendChild(labelsEl);
+      }
     } else {
+      if (labelsEl) content.appendChild(labelsEl);
       el.appendChild(content);
     }
     el.setAttribute('aria-label', ghost

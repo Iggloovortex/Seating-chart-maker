@@ -557,6 +557,20 @@ body {
 }
 .cell__chair .cell__content { padding: 1px; }
 .cell__chair .cell__icon { width: 62%; }
+
+/* A chair's labels sit upright in the empty half of the square (left/top/size
+   set inline by placeChairLabels), so a name reads beside its furniture. */
+.cell__chairlabels {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 1px;
+  z-index: 2;
+  pointer-events: none;
+}
 .cell__labels {
   display: flex;
   flex-direction: column;
