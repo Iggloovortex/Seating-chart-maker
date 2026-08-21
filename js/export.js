@@ -395,6 +395,18 @@ function drawIconOnly(ctx, cx, cy, size, data, imgCache) {
   ctx.restore();
 }
 
+/** A label drawn straight onto the page background — a chair's or a single
+ *  server's, sitting in the square's empty space rather than on a filled shape —
+ *  vanishes when its colour matches the page (white text on a white export).
+ *  When it all but matches, swap it for a readable colour: black on a light
+ *  page, white on a dark one. Labels on a filled desk or slab are untouched. */
+function labelColorOnBg(color) {
+  const c = hexToRgb(color || '#1f2933'), b = hexToRgb(state.exportBg || '#ffffff');
+  if (!c || !b) return color || '#1f2933';
+  if (Math.abs(c.r - b.r) + Math.abs(c.g - b.g) + Math.abs(c.b - b.b) >= 40) return color;
+  return (b.r * 0.299 + b.g * 0.587 + b.b * 0.114) > 150 ? '#000000' : '#ffffff';
+}
+
 /** A label stack centred inside `box`, sized to the whole square (`fullMin`) so
  *  furniture labels match the chart's other text. Turned by `rot` (the facing),
  *  so a side-facing piece reads down its tall column instead of truncating. */
@@ -414,7 +426,7 @@ function drawLabelBox(ctx, box, data, plan, fullMin, rot = 0) {
   ctx.font = contentFont(lineH * FONT_OF_LINE);
   let y = -totalH / 2 + lineH / 2;
   for (const line of labels) {
-    ctx.fillStyle = line.color || '#1f2933';
+    ctx.fillStyle = labelColorOnBg(line.color);
     ctx.fillText(fitText(ctx, line.text, maxW), 0, y);
     y += lineH;
   }
