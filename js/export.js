@@ -303,12 +303,11 @@ function drawServer(ctx, item, imgCache, plan) {
   if (labelBox) drawLabelBox(ctx, labelBox, item.data, plan, full, item.data.rotation || 0);
 }
 
-/** A server rack holding several servers: the full square is split into one
- *  slab per label, stacked and turned to the facing, each slab carrying its
- *  label — just as a stack of label lines on a normal square turns together.
- *  A small server icon sits upright in the square's top-left corner: it never
- *  turns with the rack and is painted over the slabs but under the labels, so a
- *  long name covers it. */
+/** A server rack holding several servers: split into one slab per label, stacked
+ *  and turned to the facing. Every slab is the SAME width — that of the longest
+ *  label — so the rack is only as wide as its names need, centred in the square.
+ *  A small server icon sits upright in the rack's top-left corner: it never turns
+ *  and is painted over the slabs but under the labels, so a long name covers it. */
 function drawServerRack(ctx, item, imgCache, plan) {
   const { rect, full } = item.geo;
   const data = item.data;
@@ -320,30 +319,43 @@ function drawServerRack(ctx, item, imgCache, plan) {
   const cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;
   const rad = ((data.rotation || 0) * Math.PI) / 180;
 
+  // The column is as wide as the longest label needs, capped to the square.
+  ctx.font = contentFont(lineH * FONT_OF_LINE);
+  let widest = 0;
+  for (const l of labels) widest = Math.max(widest, ctx.measureText(l.text).width);
+  const pad = lineH * 0.7;
+  const slabW = Math.min(rect.w - inset * 2, widest + pad * 2);
+  const left = -slabW / 2; // centred
+
   // 1) The slabs, turned to the facing.
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate(rad);
   for (let i = 0; i < n; i++) {
     const top = -rect.h / 2 + i * bandH;
-    const x = -rect.w / 2 + inset, y = top + inset, w = rect.w - inset * 2, h = bandH - inset * 2;
-    roundRect(ctx, x, y, w, h, Math.min(w, h) * 0.22);
+    const y = top + inset, h = bandH - inset * 2;
+    roundRect(ctx, left, y, slabW, h, Math.min(slabW, h) * 0.22);
     ctx.fillStyle = data.fill || '#dbe7ff';
     ctx.fill();
-    ctx.lineWidth = Math.max(1, Math.min(w, h) * 0.06);
+    ctx.lineWidth = Math.max(1, Math.min(slabW, h) * 0.06);
     ctx.strokeStyle = data.border || '#2f6feb';
     ctx.stroke();
   }
   ctx.restore();
 
-  // 2) The upright server icon in the top-left corner (never turns).
+  // 2) The upright server icon at the rack's top-left corner (never turns). The
+  //    corner is a point in the turned frame, mapped back to canvas coordinates.
   const img = imgCache.get(iconKey('server', data));
   if (img) {
-    const isz = Math.min(rect.w, rect.h) * 0.24;
-    ctx.drawImage(img, rect.x + inset * 1.5, rect.y + inset * 1.5, isz, isz);
+    const isz = Math.min(Math.min(rect.w, rect.h) * 0.24, bandH * 0.8, slabW * 0.8);
+    const lx = left + inset, ly = -rect.h / 2 + inset;
+    const px = cx + lx * Math.cos(rad) - ly * Math.sin(rad);
+    const py = cy + lx * Math.sin(rad) + ly * Math.cos(rad);
+    ctx.drawImage(img, px, py, isz, isz);
   }
 
-  // 3) The labels, turned to the facing, painted last so a long one covers the icon.
+  // 3) The labels, centred in each slab and turned, painted last so a long one
+  //    covers the icon.
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate(rad);
@@ -353,7 +365,7 @@ function drawServerRack(ctx, item, imgCache, plan) {
   for (let i = 0; i < n; i++) {
     const top = -rect.h / 2 + i * bandH;
     ctx.fillStyle = labels[i].color || '#1f2933';
-    ctx.fillText(fitText(ctx, labels[i].text, rect.w * LABEL_WIDTH), 0, top + bandH / 2);
+    ctx.fillText(fitText(ctx, labels[i].text, slabW - pad), 0, top + bandH / 2);
   }
   ctx.restore();
 }

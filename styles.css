@@ -561,19 +561,20 @@ body {
 .cell__server .cell__icon { width: 74%; }
 
 /* A rack of servers: the square split into one slab per label, stacked and
-   turned to the facing (transform set inline). Drawn as two turned layers — the
-   slabs, then the labels — with an upright server icon between them, so a long
-   name covers the icon while the slab fills never do. */
+   turned to the facing (transform set inline). The column is only as wide as its
+   longest label (fit-content, every slab stretched to match) and the cell centres
+   it. An upright server icon sits in the top-left corner, over the slab fills but
+   under the labels (label z-index 2 > icon z-index 1), so a long name covers it. */
 .cell__rack {
-  position: absolute;
-  inset: 0;
+  align-self: stretch;      /* full cell height */
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 1px;
 }
-.cell__rack--slabs { z-index: 1; }
-.cell__rack--labels { z-index: 3; pointer-events: none; }
 .cell__rackunit {
   flex: 1 1 0;
   min-height: 0;
@@ -581,21 +582,21 @@ body {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
+  padding: 0 6px;           /* room around the label sets the column width */
   border: 1px solid var(--seat-border);
   border-radius: 6px;
   overflow: hidden;
 }
-.cell__rackunit--label { border-color: transparent; background: transparent; }
-/* The upright server icon: top-left corner, never turns with the rack, painted
-   between the slabs and the labels. */
+.cell__rackunit .cell__label { position: relative; z-index: 2; }
 .cell__rackicon {
   position: absolute;
-  left: 3px;
-  top: 3px;
-  width: 24%;
-  height: auto;
-  aspect-ratio: 1;
-  z-index: 2;
+  left: 1px;
+  top: 1px;
+  width: 18px;
+  height: 18px;
+  transform-origin: top left;   /* counter-rotation (set inline) pivots here */
+  z-index: 1;
+  pointer-events: none;
 }
 
 /* A furniture piece's labels sit upright in the empty part of the square
