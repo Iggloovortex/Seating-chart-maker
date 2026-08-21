@@ -28,10 +28,12 @@ def main():
         with open(os.path.join(ROOT, name), "r", encoding="utf-8") as fh:
             sources[name] = fh.read()
 
-    # Every js/*.js in filename order, except this generator's own output.
+    # Every js/*.js in filename order, except this generator's own output and the
+    # icon-library catalog (iconlib.js is a ~1MB design-time browse catalog; icons
+    # the user actually picks are copied into config, so exports stay small).
     js_dir = os.path.join(ROOT, "js")
     for fname in sorted(os.listdir(js_dir)):
-        if not fname.endswith(".js") or fname == "sources.js":
+        if not fname.endswith(".js") or fname in ("sources.js", "iconlib.js"):
             continue
         with open(os.path.join(js_dir, fname), "r", encoding="utf-8") as fh:
             sources["js/" + fname] = fh.read()

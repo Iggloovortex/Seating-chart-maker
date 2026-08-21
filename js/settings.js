@@ -183,7 +183,16 @@ function customIconsSection() {
   const g = sgroup('Custom icons');
   const icons = state.config.customIcons;
 
-  if (!icons.length) {
+  if (typeof iconLibraryAvailable === 'function' && iconLibraryAvailable()) {
+    const browse = document.createElement('button');
+    browse.type = 'button';
+    browse.className = 'btn btn--primary settings-browse-icons';
+    browse.textContent = 'Browse icon library…';
+    browse.addEventListener('click', () => openIconLibrary());
+    g.appendChild(browse);
+    g.appendChild(snote('Search 2,000+ MIT-licensed Bootstrap Icons and click to add — or paste your ' +
+      'own SVG below. Added icons appear in the edit pane’s Icon picker.'));
+  } else if (!icons.length) {
     g.appendChild(snote('No imported icons yet. Paste an SVG below — for example any icon from ' +
       'Bootstrap Icons (icons.getbootstrap.com), which are MIT-licensed — name it, and Add.'));
   }

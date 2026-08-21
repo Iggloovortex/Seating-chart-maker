@@ -267,6 +267,19 @@ function render(cell) {
       picker.appendChild(btn);
     }
     g.appendChild(picker);
+
+    // Browse the bundled icon library and apply the pick straight to this square.
+    if (typeof iconLibraryAvailable === 'function' && iconLibraryAvailable()) {
+      const browse = document.createElement('button');
+      browse.type = 'button';
+      browse.className = 'link-btn';
+      browse.textContent = '+ Browse icon library';
+      browse.addEventListener('click', () => openIconLibrary((id) => {
+        updateCell(current.r, current.c, { icon: id });
+        render(peekCell(current.r, current.c));
+      }));
+      g.appendChild(browse);
+    }
   }));
 
   // --- Special --------------------------------------------------------------

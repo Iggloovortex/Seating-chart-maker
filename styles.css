@@ -981,6 +981,45 @@ body {
   border-top: 1px solid var(--line);
 }
 
+/* ===================== Icon library browser ===================== */
+.modal__panel--iconlib { width: min(760px, 96vw); height: min(80vh, 720px); }
+/* The shared modal body centres its child (for the preview); the icon grid wants
+   the full width instead. */
+.modal__panel--iconlib .modal__body { display: block; align-self: stretch; width: 100%; }
+.iconlib__search { flex: 1 1 240px; min-width: 0; }
+.iconlib__grid {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+}
+.iconlib__tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  cursor: pointer;
+  overflow: hidden;
+}
+.iconlib__tile:hover { background: var(--surface-2); border-color: var(--line-strong); }
+.iconlib__tile.is-added { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.iconlib__svg { width: 26px; height: 26px; }
+.iconlib__name {
+  max-width: 100%;
+  font-size: 10px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.iconlib__note { margin: 10px 2px 0; font-size: 12px; color: var(--ink-soft); }
+.iconlib__credit { margin-right: auto; align-self: center; font-size: 12px; color: var(--ink-soft); }
+
 .preview__paper {
   background: #fff;
   box-shadow: 0 2px 12px rgba(0,0,0,.25);
