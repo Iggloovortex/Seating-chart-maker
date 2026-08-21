@@ -1365,6 +1365,37 @@ body {
   color: var(--ink);
 }
 .settings-note { margin: 0; font-size: 13px; line-height: 1.4; color: var(--ink-soft); }
+/* A tight subtitle right under a section heading (e.g. the current page size). */
+.settings-subtext { margin: -6px 0 2px; font-size: 12px; color: var(--ink-soft); }
+
+/* Segmented tab switcher at the top of the Settings pane. */
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 6px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+.settings-tab {
+  flex: 1;
+  appearance: none;
+  padding: 8px 10px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.settings-tab:hover { color: var(--ink); }
+.settings-tab[aria-selected="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .1);
+}
 
 .settings-row {
   display: flex;

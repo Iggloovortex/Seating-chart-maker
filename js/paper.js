@@ -27,6 +27,22 @@ function presetLabel(id) {
   return `${p.name} (${a}×${b}")`;
 }
 
+/** The current page as a short label — preset/custom name and dimensions the way
+ *  round it prints, plus its orientation. For the Settings subtext. */
+function currentPaperLabel() {
+  const p = state.paper;
+  let base;
+  if (typeof p === 'string') {
+    base = paperLabelFor(p);
+  } else if (p && typeof p === 'object') {
+    const [a, b] = state.landscape ? [p.w, p.h] : [p.h, p.w];
+    base = `Custom (${a}×${b} ${p.unit || 'in'})`;
+  } else {
+    base = 'Letter';
+  }
+  return `${base} · ${state.landscape ? 'Landscape' : 'Portrait'}`;
+}
+
 /** Dropdown label for any paper id — built-in preset or a named custom size. */
 function paperLabelFor(id) {
   if (PAPER_PRESETS[id]) return presetLabel(id);
@@ -169,10 +185,12 @@ function initPaperControls() {
 
   const apply = () => {
     if (select.value === 'custom') {
-      // The boxes read out the page as it prints; store it the canonical way
-      // round (landscape) so rotating keeps swapping cleanly.
-      const typed = orientedWH(parseFloat(wIn.value) || 11, parseFloat(hIn.value) || 8.5);
-      setPaper({ w: typed.w, h: typed.h, unit: unitIn.value });
+      // W and L are the paper's physical short and long sides, independent of
+      // orientation. Store canonical landscape (w = the long side) and let the
+      // orientation toggle rotate it.
+      const a = parseFloat(wIn.value) || 8.5;
+      const b = parseFloat(hIn.value) || 11;
+      setPaper({ w: Math.max(a, b), h: Math.min(a, b), unit: unitIn.value });
     } else {
       setPaper(select.value);
     }
@@ -213,9 +231,9 @@ function reflect(select, wIn, hIn, unitIn, syncCustomVisibility) {
     select.value = p;
   } else if (p && typeof p === 'object') {
     select.value = 'custom';
-    const { w, h } = orientedWH(p.w, p.h);   // shown the way round it prints
-    wIn.value = w;
-    hIn.value = h;
+    // W = short side, L = long side, whichever way the page is turned.
+    wIn.value = Math.min(p.w, p.h);
+    hIn.value = Math.max(p.w, p.h);
     unitIn.value = p.unit || 'in';
   } else {
     select.value = 'letter';

@@ -175,17 +175,34 @@ function applyPreset(n, keys) {
 
 // ---------------------------------------------------------------- render
 
+// Settings is split into tabs: the chart-side options, and the "Site" tab that
+// packages the app — exporting it and its icon/title branding.
+let settingsTab = 'general';
+const SETTINGS_TABS = [
+  { id: 'general', label: 'General', build: () => [themeSection(), paperSection(), customIconsSection(), presetSection()] },
+  { id: 'site', label: 'Site & export', build: () => [exportSection(), siteSection()] },
+];
+
 function renderSettings() {
   const body = document.getElementById('settings-body');
   if (!body) return;
-  body.replaceChildren(
-    exportSection(),
-    themeSection(),
-    paperSection(),
-    siteSection(),
-    customIconsSection(),
-    presetSection(),
-  );
+  if (!SETTINGS_TABS.some((t) => t.id === settingsTab)) settingsTab = 'general';
+  const tab = SETTINGS_TABS.find((t) => t.id === settingsTab);
+
+  const bar = document.createElement('div');
+  bar.className = 'settings-tabs';
+  bar.setAttribute('role', 'tablist');
+  for (const t of SETTINGS_TABS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'settings-tab';
+    b.textContent = t.label;
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', String(t.id === settingsTab));
+    b.addEventListener('click', () => { settingsTab = t.id; renderSettings(); });
+    bar.appendChild(b);
+  }
+  body.replaceChildren(bar, ...tab.build());
 }
 
 /** Import custom SVG icons — e.g. MIT-licensed Bootstrap Icons. Paste an <svg>,
@@ -286,6 +303,10 @@ function themeSection() {
 
 function paperSection() {
   const g = sgroup('Custom paper sizes');
+  const sub = document.createElement('p');
+  sub.className = 'settings-subtext';
+  sub.textContent = 'Current page: ' + (typeof currentPaperLabel === 'function' ? currentPaperLabel() : '');
+  g.appendChild(sub);
   const papers = state.config.customPapers;
 
   if (!papers.length) {
@@ -296,7 +317,7 @@ function paperSection() {
     row.className = 'settings-row';
     const name = document.createElement('span');
     name.className = 'settings-row__name';
-    name.textContent = `${cp.name} — ${cp.w}×${cp.h} ${cp.unit}`;
+    name.textContent = `${cp.name} — W ${Math.min(cp.w, cp.h)} × L ${Math.max(cp.w, cp.h)} ${cp.unit}`;
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'btn btn--empty';
@@ -315,7 +336,7 @@ function paperSection() {
   form.className = 'settings-addpaper';
   const nameIn = sinput('text', 'e.g. Poster');
   const wIn = sinput('number', 'W'); wIn.min = '1'; wIn.step = '0.1';
-  const hIn = sinput('number', 'H'); hIn.min = '1'; hIn.step = '0.1';
+  const lIn = sinput('number', 'L'); lIn.min = '1'; lIn.step = '0.1';
   const unitIn = document.createElement('select');
   unitIn.className = 'field__input';
   unitIn.append(new Option('in', 'in'), new Option('mm', 'mm'));
@@ -325,16 +346,17 @@ function paperSection() {
   add.textContent = 'Add size';
   add.addEventListener('click', () => {
     const nm = (nameIn.value || '').trim();
-    const w = parseFloat(wIn.value);
-    const h = parseFloat(hIn.value);
-    if (!nm || !(w > 0) || !(h > 0)) { alert('Enter a name, width and height.'); return; }
-    addCustomPaper({ id: 'custom:' + Date.now().toString(36), name: nm, w, h, unit: unitIn.value });
+    const a = parseFloat(wIn.value);
+    const b = parseFloat(lIn.value);
+    if (!nm || !(a > 0) || !(b > 0)) { alert('Enter a name, width (W) and length (L).'); return; }
+    // Store canonical landscape: w = the long side. W and L are physical sides.
+    addCustomPaper({ id: 'custom:' + Date.now().toString(36), name: nm, w: Math.max(a, b), h: Math.min(a, b), unit: unitIn.value });
     renderSettings();
   });
   form.append(
     slabel('Name', nameIn),
     slabel('W', wIn),
-    slabel('H', hIn),
+    slabel('L', lIn),
     slabel('Unit', unitIn),
     add,
   );

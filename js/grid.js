@@ -686,7 +686,9 @@ function buildCell(r, c, rects) {
     if (data.icon) {
       const svg = iconUse(data.icon, 'cell__icon', data.iconFill);
       if (svg) {
-        svg.style.color = data.iconColor || '#1f2933'; // drives currentColor in the icon
+        // A ghost's icon gets the same surface-contrast treatment as its labels,
+        // so a light icon on a ghost stays visible (chiefly in light mode).
+        svg.style.color = ghost ? surfaceLabelColor(data.iconColor || '#1f2933') : (data.iconColor || '#1f2933');
         content.appendChild(svg);
       }
     }
