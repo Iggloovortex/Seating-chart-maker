@@ -5,29 +5,31 @@
 const chart = document.getElementById('chart');
 
 // Live editing grid uses ONE uniform square size for every cell (row/column
-// weights are output-only). The base fits ~2 label lines of 10 characters, so
-// basic use never resizes; when any cell needs more, they all grow together.
+// weights are output-only). The size follows a comfortable base plus the tallest
+// label stack / icon — NOT the longest label, so a single long name shrinks only
+// its own cell's text (fitCellLabels) instead of enlarging every square.
 const CELL_BASE = 88;      // px — fits 2 lines × 10 chars (+icon)
 const CHAR_W = 7.2;        // approx px per label character at the grid font
 const PAD = 16;            // inner padding allowance
 const LINE_H = 16;         // px per label line
 const ICON_RESERVE = 40;   // px reserved for an icon above labels
 
-/** Uniform square cell size (px) needed to hold the largest cell's content. */
+/** Uniform square cell size (px). Sized by a comfortable base plus the tallest
+ *  label stack / icon — deliberately NOT by the longest label, so one long name
+ *  no longer enlarges every square; instead that square's text shrinks to fit it
+ *  (see fitCellLabels). */
 function uniformCellSize() {
   const { cols, rows } = state.grid;
-  let maxChars = 10, maxLines = 2, anyIcon = false;
+  let maxLines = 2, anyIcon = false;
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const d = peekCell(r, c);
       if (!d || !d.enabled) continue;
       if (d.icon) anyIcon = true;
-      const lines = (d.labels || []).filter((l) => l.text);
-      maxLines = Math.max(maxLines, lines.length);
-      for (const l of lines) maxChars = Math.max(maxChars, l.text.length);
+      maxLines = Math.max(maxLines, (d.labels || []).filter((l) => l.text).length);
     }
   }
-  const neededW = maxChars * CHAR_W + PAD;
+  const neededW = 10 * CHAR_W + PAD; // room for a comfortable ~10-char label
   const neededH = PAD + (anyIcon ? ICON_RESERVE : 0) + maxLines * LINE_H;
   return Math.round(Math.max(CELL_BASE, neededW, neededH));
 }
@@ -73,9 +75,36 @@ function renderGrid() {
   }
 
   chart.style.setProperty('--line-out', `${LINE_BTN_OUT}px`);
+  fitCellLabels();
   renderTables();
   renderMoveHandle();
   buildInsertGuides();
+}
+
+/** Natural width of label text at the base font — measured on a canvas, so a
+ *  span's max-width/ellipsis can't mask the true length. */
+let _labelMeasureCtx = null;
+function measureLabelWidth(text) {
+  if (!_labelMeasureCtx) _labelMeasureCtx = document.createElement('canvas').getContext('2d');
+  _labelMeasureCtx.font = '600 12px system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+  return _labelMeasureCtx.measureText(text).width;
+}
+
+/** Shrink each square's label text to fit that square — per square, so one long
+ *  name shrinks only its own cell rather than every square resizing together (as
+ *  the output's single global size does). A no-op for labels that already fit. */
+function fitCellLabels() {
+  const BASE = 12; // .cell__label font-size, px
+  for (const cell of chart.querySelectorAll('.cell')) {
+    const spans = cell.querySelectorAll('.cell__label');
+    if (!spans.length) continue;
+    const avail = cell.clientWidth - 10; // leave a little breathing room
+    if (avail <= 0) continue;
+    let widest = 0;
+    for (const s of spans) widest = Math.max(widest, measureLabelWidth(s.textContent));
+    const px = widest > avail ? Math.max(6, Math.round(BASE * (avail / widest))) : null; // floor so it stays legible
+    for (const s of spans) s.style.fontSize = px ? `${px}px` : '';
+  }
 }
 
 /** Output-accurate rectangles for the true-size preview, at the grid's own unit
