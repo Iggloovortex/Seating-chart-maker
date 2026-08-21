@@ -118,6 +118,7 @@ const state = {
   tables: [],                   // [{ id, cellKeys:[], shape:'round'|'square', color }]
   paper: 'letter',              // preset id or { w, h, unit }
   landscape: true,              // paper orientation; false swaps width/height
+  exportBg: '#ffffff',          // page background of the exported / printed output
   // The selection is derived and must never be assigned to directly: it is
   // rebuilt from the three fields below on every emit.
   selection: new Set(),         // keys highlighted in select mode (DERIVED)
@@ -268,6 +269,9 @@ function resetLineSizes() {
 
 /** Flip the page between landscape and portrait. */
 function toggleOrientation() { state.landscape = !state.landscape; emit(); }
+
+/** The exported page's background colour (Preview re-renders live on emit). */
+function setExportBg(color) { state.exportBg = color || '#ffffff'; emit(); }
 
 function setTitle(title) { state.title = title || ''; emit(); }
 
@@ -906,6 +910,7 @@ function serialize() {
     tables: state.tables.map((t) => ({ ...t, cellKeys: [...t.cellKeys] })),
     paper: state.paper,
     landscape: state.landscape,
+    exportBg: state.exportBg,
   };
 }
 
@@ -946,6 +951,7 @@ function deserialize(data) {
       : [];
     state.paper = data.paper || 'letter';
     state.landscape = data.landscape !== false;
+    state.exportBg = data.exportBg || '#ffffff';
     clearManualSelection();
     state.tableSelection = new Set();
     pruneTables();

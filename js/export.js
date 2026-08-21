@@ -25,8 +25,9 @@ async function renderToCanvas(dpi = 300) {
   canvas.height = pxH;
   const ctx = canvas.getContext('2d');
 
-  // White page background (grid lines intentionally omitted).
-  ctx.fillStyle = '#ffffff';
+  // Page background (grid lines intentionally omitted); white unless the user
+  // set an export background colour.
+  ctx.fillStyle = state.exportBg || '#ffffff';
   ctx.fillRect(0, 0, pxW, pxH);
 
   const { cols, rows } = state.grid;
@@ -685,6 +686,8 @@ async function copyPngLink() {
 async function showPreview() {
   const modal = document.getElementById('preview');
   const paper = document.getElementById('preview-paper');
+  const bg = document.getElementById('export-bg');
+  if (bg) bg.value = state.exportBg || '#ffffff'; // reflect current value each open
   paper.replaceChildren();
   const canvas = await renderToCanvas(150); // lighter dpi for on-screen preview
   paper.appendChild(canvas);

@@ -181,6 +181,16 @@ function initPaperControls() {
   select.addEventListener('change', () => { syncCustomVisibility(); apply(); });
   [wIn, hIn, unitIn].forEach((el) => el.addEventListener('change', apply));
 
+  // Exported page background colour — sits on the same line, applies live to the
+  // open preview (which re-renders on emit).
+  const bgIn = document.getElementById('export-bg');
+  if (bgIn) {
+    bgIn.value = state.exportBg || '#ffffff';
+    if (typeof enhanceColorInput === 'function') enhanceColorInput(bgIn);
+    if (typeof bindColorInput === 'function') bindColorInput(bgIn, () => setExportBg(bgIn.value));
+    else bgIn.addEventListener('change', () => setExportBg(bgIn.value));
+  }
+
   // Reflect current state into the controls (used after load).
   reflect(select, wIn, hIn, unitIn, syncCustomVisibility);
 }
