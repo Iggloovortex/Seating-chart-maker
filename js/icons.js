@@ -68,15 +68,23 @@ function parseIconSvg(text) {
   return inner ? { viewBox, inner } : null;
 }
 
-/** A readable version of `color` for text drawn straight on `bgHex`: when the
- *  two all but match (white on white, dark on dark), swap to black on a light
- *  background or white on a dark one; otherwise keep the chosen colour. Shared by
- *  the grid (vs the theme surface) and the export (vs the page background). */
+/** WCAG relative luminance of an {r,g,b} colour, 0 (black) … 1 (white). */
+function relLuminance(rgb) {
+  const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  return 0.2126 * f(rgb.r) + 0.7152 * f(rgb.g) + 0.0722 * f(rgb.b);
+}
+
+/** A readable version of `color` for text drawn straight on `bgHex`: keep the
+ *  chosen colour when it has enough contrast, otherwise swap to black on a light
+ *  background or white on a dark one — so white on white AND white on a light
+ *  slab both become legible. Shared by the grid and the export. */
 function contrastLabelColor(color, bgHex) {
   const c = hexToRgb(color || '#1f2933'), b = hexToRgb(bgHex || '#ffffff');
   if (!c || !b) return color || '#1f2933';
-  if (Math.abs(c.r - b.r) + Math.abs(c.g - b.g) + Math.abs(c.b - b.b) >= 40) return color;
-  return (b.r * 0.299 + b.g * 0.587 + b.b * 0.114) > 150 ? '#000000' : '#ffffff';
+  const lc = relLuminance(c) + 0.05, lb = relLuminance(b) + 0.05;
+  const ratio = lc > lb ? lc / lb : lb / lc;
+  if (ratio >= 2) return color;               // legible enough — keep the chosen colour
+  return relLuminance(b) > 0.4 ? '#000000' : '#ffffff';
 }
 
 /** Dark or light ink, whichever reads on `bgHex` — for text that always needs to
@@ -84,7 +92,7 @@ function contrastLabelColor(color, bgHex) {
 function readableInk(bgHex) {
   const b = hexToRgb(bgHex || '#ffffff');
   if (!b) return '#1f2933';
-  return (b.r * 0.299 + b.g * 0.587 + b.b * 0.114) > 140 ? '#1f2933' : '#f4f5f7';
+  return relLuminance(b) > 0.4 ? '#1f2933' : '#f4f5f7';
 }
 
 function customIcon(id) {

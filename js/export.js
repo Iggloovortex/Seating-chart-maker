@@ -346,7 +346,7 @@ function drawServerRack(ctx, item, imgCache, plan) {
   // 2) The upright server icon in the square's top-left corner (never turns). The
   //    rack is only as wide as its labels, so the corner is empty space; on a
   //    full-width rack the label painted next covers it instead.
-  const img = imgCache.get(iconKey('server', data));
+  const img = imgCache.get(cornerIconKey(data));
   if (img) {
     const isz = Math.min(rect.w, rect.h) * 0.22;
     ctx.drawImage(img, rect.x + inset, rect.y + inset, isz, isz);
@@ -362,7 +362,8 @@ function drawServerRack(ctx, item, imgCache, plan) {
   ctx.font = contentFont(lineH * FONT_OF_LINE);
   for (let i = 0; i < n; i++) {
     const top = -rect.h / 2 + i * bandH;
-    ctx.fillStyle = labels[i].color || '#1f2933';
+    // A rack label sits on its slab, so keep it legible against the slab fill.
+    ctx.fillStyle = contrastLabelColor(labels[i].color, data.fill || '#dbe7ff');
     ctx.fillText(fitText(ctx, labels[i].text, slabW - pad), 0, top + bandH / 2);
   }
   ctx.restore();
@@ -593,9 +594,24 @@ function drawTable(ctx, table, rectOf) {
   ctx.restore();
 }
 
-/** Icon color for a cell: its dedicated iconColor, falling back to border. */
-function iconColorOf(data) {
+/** A cell's chosen icon colour, before any contrast adjustment. */
+function rawIconColor(data) {
   return data.iconColor || data.border || '#2f6feb';
+}
+
+/** Icon colour as drawn: the chosen colour, flipped when it would vanish on the
+ *  square's fill (a light icon on a light fill), the same way labels are. */
+function iconColorOf(data) {
+  return contrastLabelColor(rawIconColor(data), data.fill || '#dbe7ff');
+}
+
+/** A server rack's corner icon sits on the page, not the fill, so it flips
+ *  against the export background instead. */
+function cornerIconColor(data) {
+  return contrastLabelColor(rawIconColor(data), state.exportBg || '#ffffff');
+}
+function cornerIconKey(data) {
+  return `server-corner|${cornerIconColor(data)}|${data.iconFill || ''}`;
 }
 
 /** Cache key for a drawn icon: the same glyph in a different colour or fill is
@@ -611,6 +627,8 @@ async function preloadIcons(desks, seats, covered = []) {
 
   for (const { data } of [...desks, ...covered]) {
     if (data.icon) want(data.icon, data);
+    // A server rack also needs its corner icon, contrasted against the page.
+    if (isServerCell(data)) needed.set(cornerIconKey(data), iconDataUrl('server', cornerIconColor(data), data.iconFill));
   }
   for (const { data } of seats) {
     if (data.icon) want(data.icon, data);

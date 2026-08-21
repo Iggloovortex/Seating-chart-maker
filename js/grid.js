@@ -613,7 +613,9 @@ function buildServerRack(data, rot) {
     const span = document.createElement('span');
     span.className = 'cell__label';
     span.textContent = line.text;
-    span.style.color = line.color;
+    // The label sits on its slab fill; keep it legible against that colour.
+    span.style.color = typeof contrastLabelColor === 'function'
+      ? contrastLabelColor(line.color, data.fill || '#dbe7ff') : line.color;
     unit.appendChild(span);
     rack.appendChild(unit);
   }
@@ -686,9 +688,11 @@ function buildCell(r, c, rects) {
     if (data.icon) {
       const svg = iconUse(data.icon, 'cell__icon', data.iconFill);
       if (svg) {
-        // A ghost's icon gets the same surface-contrast treatment as its labels,
-        // so a light icon on a ghost stays visible (chiefly in light mode).
-        svg.style.color = ghost ? surfaceLabelColor(data.iconColor || '#1f2933') : (data.iconColor || '#1f2933');
+        // Keep the icon legible: a ghost's icon flips against the surface (like
+        // its labels); a live icon sits on its square/tile fill, so it flips
+        // against that fill when it would otherwise vanish (white on a light fill).
+        const ic = data.iconColor || '#1f2933';
+        svg.style.color = ghost ? surfaceLabelColor(ic) : contrastLabelColor(ic, data.fill || '#dbe7ff');
         content.appendChild(svg);
       }
     }
@@ -719,7 +723,7 @@ function buildCell(r, c, rects) {
       el.classList.add('cell--furniturehost');
       el.appendChild(buildServerRack(data, rot));
       const svg = iconUse('server', 'cell__rackicon');
-      if (svg) { svg.style.color = data.iconColor || '#1f2933'; el.appendChild(svg); }
+      if (svg) { svg.style.color = surfaceLabelColor(data.iconColor || '#1f2933'); el.appendChild(svg); }
     } else if (furniture) {
       // Furniture piece carries only the icon (turned to face); labels sit in the
       // square's empty space (a single server's label turns with the facing).
