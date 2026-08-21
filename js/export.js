@@ -100,9 +100,10 @@ async function renderToCanvas(dpi = 300) {
   for (const s of seats) s.geo = seatGeometry(rectOf, s);
   for (const v of covered) v.geo = coveredGeometry(rectOf, v, footprints);
   // Furniture labels fill the square's empty space, so plan their size against
-  // that space (labelBox), not the small furniture piece.
+  // that space, not the small furniture piece: a chair/single-server uses its
+  // labelBox; a multi-server rack uses one slab (full width, 1/N of the height).
   const planItems = [
-    ...desks.map((d) => isFurnitureCell(d.data) && d.geo.labelBox ? { data: d.data, geo: d.geo.labelBox } : d),
+    ...desks.map((d) => furnitureLabelGeo(d) || d),
     ...seats, ...covered,
   ];
   const plan = planContent(ctx, planItems);
@@ -116,7 +117,7 @@ async function renderToCanvas(dpi = 300) {
   // 2) Connected desks — furniture (chairs, servers) draws as a tucked piece instead.
   for (const d of desks) {
     if (isChairCell(d.data)) drawChair(ctx, d, imgCache, plan);
-    else if (isServerCell(d.data)) drawServer(ctx, d, imgCache, plan);
+    else if (isServerCell(d.data)) (d.geo.units >= 2 ? drawServerRack : drawServer)(ctx, d, imgCache, plan);
     else drawDesk(ctx, rectOf, d, deskSet, imgCache, plan);
   }
 
@@ -282,11 +283,12 @@ function serverGeometry(rectOf, { r, c, data }) {
     box =      { x: rect.x + half(rect.w), y: rect.y, w: half(rect.w), h: rect.h };
     labelBox = { x: rect.x,               y: rect.y, w: half(rect.w), h: rect.h };
   }
-  return { box, labelBox, full: Math.min(rect.w, rect.h) };
+  return { rect, box, labelBox, full: Math.min(rect.w, rect.h), units: labelsOf(data).length };
 }
 
-/** A server: a half-square slab tucked to the faced edge, its icon centred and
- *  turned to face, its labels upright in the other half. */
+/** A single server: a half-square slab tucked to the faced edge, its icon
+ *  centred and turned to face, its one label rotated to the facing in the other
+ *  half — just as a normal square's label turns. */
 function drawServer(ctx, item, imgCache, plan) {
   const { box, labelBox, full } = item.geo;
   const inset = Math.min(box.w, box.h) * 0.05;
@@ -298,7 +300,52 @@ function drawServer(ctx, item, imgCache, plan) {
   ctx.strokeStyle = item.data.border || '#2f6feb';
   ctx.stroke();
   drawIconOnly(ctx, x + w / 2, y + h / 2, Math.min(w, h), item.data, imgCache);
-  if (labelBox) drawLabelBox(ctx, labelBox, item.data, plan, full);
+  if (labelBox) drawLabelBox(ctx, labelBox, item.data, plan, full, item.data.rotation || 0);
+}
+
+/** A server rack holding several servers: the full square is split into one
+ *  slab per label, stacked and turned to the facing, each slab carrying its
+ *  label — just as a stack of label lines on a normal square turns together.
+ *  No icon: the slabs themselves say it is a rack. */
+function drawServerRack(ctx, item, _imgCache, plan) {
+  const { rect, full } = item.geo;
+  const data = item.data;
+  const labels = labelsOf(data);
+  const n = labels.length;
+  const bandH = rect.h / n;
+  const inset = Math.min(rect.w, bandH) * 0.06;
+  const lineH = Math.min(full * plan.lineFrac, bandH * 0.72);
+
+  ctx.save();
+  ctx.translate(rect.x + rect.w / 2, rect.y + rect.h / 2);
+  ctx.rotate(((data.rotation || 0) * Math.PI) / 180);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = contentFont(lineH * FONT_OF_LINE);
+  for (let i = 0; i < n; i++) {
+    const top = -rect.h / 2 + i * bandH;
+    const x = -rect.w / 2 + inset, y = top + inset, w = rect.w - inset * 2, h = bandH - inset * 2;
+    roundRect(ctx, x, y, w, h, Math.min(w, h) * 0.22);
+    ctx.fillStyle = data.fill || '#dbe7ff';
+    ctx.fill();
+    ctx.lineWidth = Math.max(1, Math.min(w, h) * 0.06);
+    ctx.strokeStyle = data.border || '#2f6feb';
+    ctx.stroke();
+    ctx.fillStyle = labels[i].color || '#1f2933';
+    ctx.fillText(fitText(ctx, labels[i].text, rect.w * LABEL_WIDTH), 0, top + bandH / 2);
+  }
+  ctx.restore();
+}
+
+/** The rectangle a furniture square's labels are sized against, for planContent:
+ *  a chair/single-server uses its labelBox; a multi-server rack uses one slab
+ *  (full width, 1/N of the height). Null for a non-furniture square. */
+function furnitureLabelGeo(d) {
+  if (!isFurnitureCell(d.data)) return null;
+  if (isServerCell(d.data) && d.geo.units >= 2) {
+    return { data: d.data, geo: { w: d.geo.rect.w, h: d.geo.rect.h / d.geo.units } };
+  }
+  return d.geo.labelBox ? { data: d.data, geo: d.geo.labelBox } : null;
 }
 
 /** Just a cell's icon, centred and turned to its facing — no labels. */
@@ -314,22 +361,27 @@ function drawIconOnly(ctx, cx, cy, size, data, imgCache) {
   ctx.restore();
 }
 
-/** A label stack drawn upright and centred inside `box`, sized to the whole
- *  square (`fullMin`) so furniture labels match the chart's other text. */
-function drawLabelBox(ctx, box, data, plan, fullMin) {
+/** A label stack centred inside `box`, sized to the whole square (`fullMin`) so
+ *  furniture labels match the chart's other text. Turned by `rot` (the facing),
+ *  so a side-facing piece reads down its tall column instead of truncating. */
+function drawLabelBox(ctx, box, data, plan, fullMin, rot = 0) {
   const labels = labelsOf(data);
   if (!labels.length) return;
   const lineH = fullMin * plan.lineFrac;
   const totalH = labels.length * lineH;
+  const norm = ((Math.round(rot / 45) * 45) % 360 + 360) % 360;
+  const vertical = norm === 90 || norm === 270;
+  const maxW = (vertical ? box.h : box.w) * LABEL_WIDTH;
   ctx.save();
+  ctx.translate(box.x + box.w / 2, box.y + box.h / 2);
+  ctx.rotate((rot * Math.PI) / 180);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.font = contentFont(lineH * FONT_OF_LINE);
-  const cx = box.x + box.w / 2;
-  let y = box.y + box.h / 2 - totalH / 2 + lineH / 2;
+  let y = -totalH / 2 + lineH / 2;
   for (const line of labels) {
     ctx.fillStyle = line.color || '#1f2933';
-    ctx.fillText(fitText(ctx, line.text, box.w * LABEL_WIDTH), cx, y);
+    ctx.fillText(fitText(ctx, line.text, maxW), 0, y);
     y += lineH;
   }
   ctx.restore();

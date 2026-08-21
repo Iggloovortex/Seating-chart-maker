@@ -329,8 +329,9 @@ function render(cell) {
 const SPECIAL_SQUARE_NOTES = {
   chair: 'This square is a chair: a small piece of furniture tucked against and lined up ' +
     'with the square it faces. Its label sits in the empty space. The square stays full size.',
-  server: 'This square is a server: a half-square slab filling the half it faces. Its labels ' +
-    'sit in the other half. The square stays full size.',
+  server: 'This square is a server rack. One label shows the server icon and a slab tucked ' +
+    'to the side it faces. Add more labels and each becomes its own server slab, filling the ' +
+    'square. Labels turn with the facing, like a normal square.',
 };
 
 /** The Special square section — only when the square carries a furniture icon.

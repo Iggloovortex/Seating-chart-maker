@@ -595,6 +595,29 @@ function placeServerLabels(el, rot) {
   else { el.style.width = '100%'; el.style.left = '0'; el.style.height = '50%'; el.style.top = dr < 0 ? '50%' : '0'; }
 }
 
+/** A rack of servers: the square split into one slab per non-empty label,
+ *  stacked and turned to the facing, each slab carrying its label. The DOM twin
+ *  of drawServerRack. */
+function buildServerRack(data, rot) {
+  const rack = document.createElement('div');
+  rack.className = 'cell__rack';
+  rack.style.transform = `rotate(${rot}deg)`;
+  for (const line of data.labels) {
+    if (!line.text) continue;
+    const unit = document.createElement('div');
+    unit.className = 'cell__rackunit';
+    unit.style.background = data.fill;
+    unit.style.borderColor = data.border;
+    const span = document.createElement('span');
+    span.className = 'cell__label';
+    span.textContent = line.text;
+    span.style.color = line.color;
+    unit.appendChild(span);
+    rack.appendChild(unit);
+  }
+  return rack;
+}
+
 function buildCell(r, c, rects) {
   const key = keyOf(r, c);
   const data = peekCell(r, c);
@@ -666,9 +689,17 @@ function buildCell(r, c, rects) {
       }
     }
 
-    if (furniture) {
-      // Furniture piece carries only the icon (turned to face); labels sit
-      // upright in the square's empty space so a name stays readable beside it.
+    const labelCount = data.labels ? data.labels.filter((l) => l.text).length : 0;
+
+    if (furniture === 'server' && labelCount >= 2) {
+      // A rack of several servers: one slab per label, stacked and turned to the
+      // facing, no icon — the DOM twin of drawServerRack.
+      const rot = (data.rotation || 0) + tableRot;
+      el.classList.add('cell--furniturehost');
+      el.appendChild(buildServerRack(data, rot));
+    } else if (furniture) {
+      // Furniture piece carries only the icon (turned to face); labels sit in the
+      // square's empty space (a single server's label turns with the facing).
       const rot = (data.rotation || 0) + tableRot;
       const tile = document.createElement('div');
       tile.className = `cell__furniture cell__${furniture}`;
@@ -681,7 +712,7 @@ function buildCell(r, c, rects) {
       el.appendChild(tile);
       if (labelsEl) {
         labelsEl.classList.add('cell__furniturelabels');
-        if (furniture === 'server') placeServerLabels(labelsEl, rot);
+        if (furniture === 'server') { placeServerLabels(labelsEl, rot); labelsEl.style.transform = `rotate(${rot}deg)`; }
         else placeChairLabels(labelsEl, rot);
         el.appendChild(labelsEl);
       }

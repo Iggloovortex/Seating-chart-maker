@@ -558,6 +558,29 @@ body {
 .cell__furniture .cell__icon { width: 62%; }
 .cell__server .cell__icon { width: 74%; }
 
+/* A rack of servers: the square split into one slab per label, stacked and
+   turned to the facing (transform set inline). No icon — the slabs say "rack". */
+.cell__rack {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 1px;
+  z-index: 2;
+}
+.cell__rackunit {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1px solid var(--seat-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
 /* A furniture piece's labels sit upright in the empty part of the square
    (left/top/size set inline), so a name reads beside its furniture. */
 .cell__furniturelabels {
