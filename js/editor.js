@@ -255,6 +255,7 @@ function render(cell) {
     picker.appendChild(none);
 
     for (const id of ICON_IDS) {
+      if (isSpecialIcon(id)) continue; // special icons live in the Special section
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'icon-picker__btn';
@@ -269,11 +270,10 @@ function render(cell) {
     g.appendChild(picker);
   }));
 
-  // --- Special square -----------------------------------------------------
-  // Some icons turn the square into furniture: a piece drawn inside a full-size
-  // square, tucked against the edge it faces, with the labels in the empty space.
-  const special = specialSquareSection(cell);
-  if (special) bodyEl.appendChild(special);
+  // --- Special --------------------------------------------------------------
+  // A permanent home for the special icons — the ones that turn the square into
+  // furniture (a piece tucked to the faced edge, labels in the empty space).
+  bodyEl.appendChild(specialSection(cell));
 
   // --- Labels (each line has its own color) --------------------------------
   bodyEl.appendChild(group('Labels', (g) => {
@@ -301,12 +301,15 @@ function render(cell) {
 
   // --- Row / column size (empty row & column height) ----------------------
   bodyEl.appendChild(group('Size (this row & column)', (g) => {
-    g.appendChild(weightRow('Row height ×', rowWeight(current.r), (v) => setRowWeight(current.r, v)));
-    g.appendChild(weightRow('Col width ×', colWeight(current.c), (v) => setColWeight(current.c, v)));
+    const row = document.createElement('div');
+    row.className = 'erow erow--size';
+    row.append(
+      sizeEntry('Row ×', rowWeight(current.r), (v) => setRowWeight(current.r, v)),
+      sizeEntry('Col ×', colWeight(current.c), (v) => setColWeight(current.c, v)),
+    );
+    g.appendChild(row);
     const note = document.createElement('p');
-    note.className = 'egroup__title';
-    note.style.textTransform = 'none';
-    note.style.fontWeight = '400';
+    note.className = 'egroup__note';
     note.style.marginTop = '6px';
     note.textContent = 'In the output, this resizes only the empty spaces in this row/column — filled squares stay full size, which offsets them. The editing grid stays uniform.';
     g.appendChild(note);
@@ -324,8 +327,13 @@ function render(cell) {
   bodyEl.appendChild(foot);
 }
 
-/** How each furniture icon behaves, shown in the Special square section so the
- *  reader knows why the icon renders small and tucked rather than as a desk. */
+/** The special icons — the ones that turn a square into furniture and so live in
+ *  the Special section rather than the Icon picker. */
+const SPECIAL_ICON_IDS = Object.keys(FURNITURE_ICONS);
+function isSpecialIcon(id) { return !!FURNITURE_ICONS[id]; }
+
+/** How each special icon behaves, shown in the Special section so the reader
+ *  knows why the icon renders tucked rather than as a desk. */
 const SPECIAL_SQUARE_NOTES = {
   chair: 'This square is a chair: a small piece of furniture tucked against and lined up ' +
     'with the square it faces. Its label sits in the empty space. The square stays full size.',
@@ -334,18 +342,58 @@ const SPECIAL_SQUARE_NOTES = {
     'square. Labels turn with the facing, like a normal square.',
 };
 
-/** The Special square section — only when the square carries a furniture icon.
- *  Explains the tucked rendering and points at Facing, which aims it. */
-function specialSquareSection(cell) {
-  const kind = cell && cell.icon;
-  const text = kind && SPECIAL_SQUARE_NOTES[kind];
-  if (!text) return null;
-  return group('Special square', (g) => {
-    const note = document.createElement('p');
-    note.className = 'egroup__note';
-    note.textContent = text + ' Use Facing above to aim it.';
-    g.appendChild(note);
+/** The Special section — a permanent home for the special icons. Picking one
+ *  turns the square into that furniture; picking it again clears it. When one is
+ *  active, its behaviour note appears and points at Facing, which aims it. */
+function specialSection(cell) {
+  return group('Special', (g) => {
+    const picker = document.createElement('div');
+    picker.className = 'icon-picker';
+    for (const id of SPECIAL_ICON_IDS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'icon-picker__btn';
+      btn.title = ICONS[id].label;
+      btn.setAttribute('aria-label', ICONS[id].label);
+      btn.setAttribute('aria-pressed', String(cell.icon === id));
+      const svg = iconUse(id, '');
+      if (svg) btn.appendChild(svg);
+      btn.addEventListener('click', () => {
+        const next = cell.icon === id ? null : id; // clicking the active one clears it
+        updateCell(current.r, current.c, { icon: next });
+        render(peekCell(current.r, current.c));
+      });
+      picker.appendChild(btn);
+    }
+    g.appendChild(picker);
+
+    const text = cell && cell.icon && SPECIAL_SQUARE_NOTES[cell.icon];
+    if (text) {
+      const note = document.createElement('p');
+      note.className = 'egroup__note';
+      note.textContent = text + ' Use Facing above to aim it.';
+      g.appendChild(note);
+    }
   });
+}
+
+/** One compact label + number entry for the Size row, so both sit on one line. */
+function sizeEntry(label, value, onChange) {
+  const wrap = document.createElement('label');
+  wrap.className = 'sizeentry';
+  const span = document.createElement('span');
+  span.className = 'sizeentry__label';
+  span.textContent = label;
+  const num = document.createElement('input');
+  num.type = 'number';
+  num.className = 'field__input field__input--num';
+  num.min = '0.2';
+  num.step = '0.1';
+  num.value = value;
+  num.inputMode = 'decimal';
+  num.addEventListener('change', () => onChange(parseFloat(num.value) || 1));
+  wrap.append(span, num);
+  return wrap;
 }
 
 // ---------------------------------------------------------------- bulk render

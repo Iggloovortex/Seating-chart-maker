@@ -857,6 +857,20 @@ body {
   line-height: 1.4;
   color: var(--ink-soft);
 }
+
+/* Size section: both entries on one line. */
+.erow--size { gap: 16px; }
+.sizeentry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.sizeentry__label { white-space: nowrap; }
+.sizeentry .field__input--num { width: 100%; min-width: 0; flex: 1; }
 .erow {
   display: flex;
   align-items: center;
