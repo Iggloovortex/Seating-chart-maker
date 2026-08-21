@@ -268,17 +268,16 @@ function render(cell) {
     }
     g.appendChild(picker);
 
-    // The chair icon makes the square a chair: furniture that draws smaller than
-    // a desk, so it fits inside a thinned walkway. There is no size to set — the
-    // walkway's own width is what a chair has to fit, and it already follows it.
+    // The chair icon makes the square a chair: a small piece of furniture drawn
+    // inside a full-size square, tucked against the edge it faces.
     if (cell.icon === 'chair') {
       const note = document.createElement('p');
       note.className = 'egroup__title';
       note.style.textTransform = 'none';
       note.style.fontWeight = '400';
       note.style.marginTop = '6px';
-      note.textContent = 'Chairs take their row/column size in the output, so they fit walkway paths, ' +
-        'and line up with the square they face.';
+      note.textContent = 'A chair draws as a small piece of furniture inside its square, ' +
+        'tucked against and lined up with the square it faces. The square itself stays full size.';
       g.appendChild(note);
     }
   }));

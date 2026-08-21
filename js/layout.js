@@ -1,9 +1,10 @@
 // layout.js — the geometry rules shared by the canvas output and the grid's
 // "true sizes" preview, so the two can never drift apart.
 //
-// Desks always claim one full unit. Only EMPTY squares — and chairs, which are
-// furniture rather than desks — take their row/column weight. That lets a single
-// square be thinned into a walkway without the seats around it shrinking too.
+// Desks, chairs and seats always claim one full unit. Only EMPTY squares take
+// their row/column weight. That lets a single square be thinned into a walkway
+// without the seats around it shrinking too. (A chair keeps its full square and
+// draws a small piece of furniture inside it — see js/export.js.)
 
 
 /** Bounding box of a set of "r,c" keys. */
@@ -46,22 +47,14 @@ function layoutRules() {
     return best;
   };
 
-  // A square counts as a chair when it carries the chair icon, or when it is a
-  // bare seat around a table (no icon, no labels) — those already render as an
-  // empty chair, so they are furniture too.
-  const chairLike = (r, c) => {
-    const d = peekCell(r, c);
-    if (!d || !d.enabled) return false;
-    if (d.icon === 'chair') return true;
-    const bare = !d.icon && !(d.labels || []).some((l) => l.text && l.text.trim());
-    return bare && !!seatTableOf(r, c);
-  };
-
-  const sizedByWeight = (r, c) => !isEnabled(r, c) || chairLike(r, c);
+  // Only empty squares take their row/column weight. A filled square — desk,
+  // chair or seat — always claims one full unit; a chair simply draws a small
+  // piece of furniture inside its full square rather than shrinking the square.
+  const sizedByWeight = (r, c) => !isEnabled(r, c);
   const wUnits = (r, c) => (sizedByWeight(r, c) ? colWeight(c) : 1); // cell width in units
   const hUnits = (r, c) => (sizedByWeight(r, c) ? rowWeight(r) : 1); // cell height in units
 
-  return { footprints, insideAnyFootprint, seatTableOf, chairLike, sizedByWeight, wUnits, hUnits };
+  return { footprints, insideAnyFootprint, seatTableOf, sizedByWeight, wUnits, hUnits };
 }
 
 /** Overall size of the layout in units: the widest row and the tallest column. */

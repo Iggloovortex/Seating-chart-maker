@@ -3,7 +3,7 @@
 
 
 const MAX_DIM = 4000;      // cap canvas pixels for memory safety
-const CHAIR_SCALE = 0.7;   // a chair's share of its square — furniture, not a desk
+const CHAIR_SCALE = 0.5;   // a chair's share of its (full-size) square — furniture, not a desk
 
 /** Which neighbouring square each rotation faces, as [rowStep, colStep]. */
 const FACING_STEP = {
@@ -40,10 +40,10 @@ async function renderToCanvas(dpi = 300) {
   const areaW = pxW - margin * 2;
   const areaH = pxH - margin * 2 - titleBand;
 
-  // Empty-space sizing: every SEATED square renders at one uniform size, while
-  // each EMPTY square (and each chair) shrinks/grows to its column-width ×
-  // row-height weights. See js/layout.js — the grid's "true sizes" preview uses
-  // the very same rules, so what is shown there is what prints here.
+  // Empty-space sizing: every FILLED square renders at one uniform size, while
+  // each EMPTY square shrinks/grows to its column-width × row-height weights.
+  // See js/layout.js — the grid's "true sizes" preview uses the very same rules,
+  // so what is shown there is what prints here.
   const rules = layoutRules();
   const { insideAnyFootprint, seatTableOf, footprints } = rules;
 
@@ -222,9 +222,9 @@ function chairGeometry(rectOf, { r, c, data }) {
   return { cx, cy, w: size, h: size };
 }
 
-/** A chair: standalone furniture drawn at a fixed fraction of its square, so a
- *  chair standing in a thinned row/column shrinks with it and stays inside the
- *  walkway. */
+/** A chair: standalone furniture drawn at a fixed fraction of its full-size
+ *  square, attached to the edge it faces and centred on the other axis, so it
+ *  tucks up to the desk or table it belongs to. */
 function drawChair(ctx, item, imgCache, plan) {
   const { cx, cy, w: size } = item.geo;
   roundRect(ctx, cx - size / 2, cy - size / 2, size, size, size * 0.18);

@@ -538,6 +538,25 @@ body {
   aspect-ratio: 1;
   flex: 0 0 auto;
 }
+
+/* A chair's furniture tile: half the square, tucked to the faced edge (left/top
+   set inline by placeChairTile). The square around it stays plain, so the chair
+   reads as a small piece of furniture rather than a filled desk. */
+.cell__chair {
+  position: absolute;
+  width: 50%;
+  height: 50%;
+  box-sizing: border-box;
+  border: 1px solid var(--seat-border);
+  border-radius: 18%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  z-index: 2;
+}
+.cell__chair .cell__content { padding: 1px; }
+.cell__chair .cell__icon { width: 62%; }
 .cell__labels {
   display: flex;
   flex-direction: column;

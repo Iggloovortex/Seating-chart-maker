@@ -546,6 +546,16 @@ function attachMoveDrag(handle, geo) {
   handle.addEventListener('pointercancel', finish);
 }
 
+/** Position a chair's furniture tile (50% of the square) against the edge it
+ *  faces, centred on the other axis — the DOM twin of chairGeometry in the
+ *  output. Diagonal facings tuck into the matching corner. */
+function placeChairTile(tile, rot) {
+  const n = ((Math.round(rot / 45) * 45) % 360 + 360) % 360;
+  const [dr, dc] = FACING_STEP[n] || FACING_STEP[0];
+  tile.style.left = dc < 0 ? '0' : dc > 0 ? '50%' : '25%';
+  tile.style.top = dr < 0 ? '0' : dr > 0 ? '50%' : '25%';
+}
+
 function buildCell(r, c, rects) {
   const key = keyOf(r, c);
   const data = peekCell(r, c);
@@ -578,7 +588,12 @@ function buildCell(r, c, rects) {
   const ghost = !!(data && !data.enabled && hasContent(data));
 
   if (data && (data.enabled || ghost)) {
-    if (data.enabled) {
+    // A chair keeps its full-size square but draws a small piece of furniture
+    // inside it, tucked against the edge it faces — matching the output. So the
+    // square itself is NOT filled desk-style; the little chair tile is.
+    const isChair = data.enabled && data.icon === 'chair';
+
+    if (data.enabled && !isChair) {
       el.classList.add('cell--on');
       el.style.background = data.fill;
       el.style.borderColor = data.border;
@@ -594,8 +609,6 @@ function buildCell(r, c, rects) {
       const svg = iconUse(data.icon, 'cell__icon', data.iconFill);
       if (svg) {
         svg.style.color = data.iconColor || '#1f2933'; // drives currentColor in the icon
-        // Chairs preview at their chair size, matching the scaled-down output.
-        if (data.icon === 'chair') svg.style.width = `${Math.round(60 * CHAIR_SCALE)}%`;
         content.appendChild(svg);
       }
     }
@@ -613,7 +626,19 @@ function buildCell(r, c, rects) {
       }
       content.appendChild(labels);
     }
-    el.appendChild(content);
+
+    if (isChair) {
+      const tile = document.createElement('div');
+      tile.className = 'cell__chair';
+      tile.style.background = data.fill;
+      tile.style.borderColor = data.border;
+      placeChairTile(tile, (data.rotation || 0) + tableRot);
+      tile.appendChild(content);
+      el.classList.add('cell--chairhost');
+      el.appendChild(tile);
+    } else {
+      el.appendChild(content);
+    }
     el.setAttribute('aria-label', ghost
       ? `Empty seat row ${r + 1}, column ${c + 1}, previously ${ariaLabel(r, c, data)}`
       : ariaLabel(r, c, data));
