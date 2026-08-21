@@ -84,13 +84,14 @@ async function renderToCanvas(dpi = 300) {
       else desks.push({ r, c, data });
     }
   }
-  // Chairs are standalone furniture, so they never merge into a desk block.
-  const deskSet = new Set(desks.filter((d) => !isChairCell(d.data)).map((d) => keyOf(d.r, d.c)));
+  // Furniture (chairs, servers) is standalone, so it never merges into a desk block.
+  const deskSet = new Set(desks.filter((d) => !isFurnitureCell(d.data)).map((d) => keyOf(d.r, d.c)));
 
   // Work out where every piece of content will sit BEFORE painting any of it,
   // so one text size and one icon size can be chosen for the whole chart.
   for (const d of desks) {
     if (isChairCell(d.data)) d.geo = chairGeometry(rectOf, d);
+    else if (isServerCell(d.data)) d.geo = serverGeometry(rectOf, d);
     else {
       const { x, y, w, h } = rectOf(d.r, d.c);
       d.geo = { cx: x + w / 2, cy: y + h / 2, w, h };
@@ -98,10 +99,10 @@ async function renderToCanvas(dpi = 300) {
   }
   for (const s of seats) s.geo = seatGeometry(rectOf, s);
   for (const v of covered) v.geo = coveredGeometry(rectOf, v, footprints);
-  // A chair's labels fill the square's empty half, so plan their size against the
-  // full square (its labelBox), not the small furniture tile.
+  // Furniture labels fill the square's empty space, so plan their size against
+  // that space (labelBox), not the small furniture piece.
   const planItems = [
-    ...desks.map((d) => isChairCell(d.data) && d.geo.labelBox ? { data: d.data, geo: d.geo.labelBox } : d),
+    ...desks.map((d) => isFurnitureCell(d.data) && d.geo.labelBox ? { data: d.data, geo: d.geo.labelBox } : d),
     ...seats, ...covered,
   ];
   const plan = planContent(ctx, planItems);
@@ -112,9 +113,10 @@ async function renderToCanvas(dpi = 300) {
   // 1) Table shapes (drawn solid; the editing grid shows them semi-transparent).
   for (const table of state.tables) drawTable(ctx, table, rectOf);
 
-  // 2) Connected desks — chairs draw as small furniture instead.
+  // 2) Connected desks — furniture (chairs, servers) draws as a tucked piece instead.
   for (const d of desks) {
     if (isChairCell(d.data)) drawChair(ctx, d, imgCache, plan);
+    else if (isServerCell(d.data)) drawServer(ctx, d, imgCache, plan);
     else drawDesk(ctx, rectOf, d, deskSet, imgCache, plan);
   }
 
@@ -255,6 +257,48 @@ function drawChair(ctx, item, imgCache, plan) {
   // in the square's empty half.
   drawIconOnly(ctx, cx, cy, size, item.data, imgCache);
   if (labelBox) drawLabelBox(ctx, labelBox, item.data, plan, full || Math.min(labelBox.w, labelBox.h));
+}
+
+/** Where a server sits: a half-square slab hugging the edge it faces, filling
+ *  the full width (or height) of that half, with its labels in the other half.
+ *  A diagonal facing collapses to its vertical side so the slab stays a clean
+ *  half rather than a quarter. */
+function serverGeometry(rectOf, { r, c, data }) {
+  const rect = rectOf(r, c);
+  let [dr, dc] = FACING_STEP[data.rotation || 0] || FACING_STEP[0];
+  if (dr && dc) dc = 0;
+  const half = (v) => v / 2;
+  let box, labelBox;
+  if (dr < 0) {        // faces up → slab on top
+    box =      { x: rect.x, y: rect.y,               w: rect.w, h: half(rect.h) };
+    labelBox = { x: rect.x, y: rect.y + half(rect.h), w: rect.w, h: half(rect.h) };
+  } else if (dr > 0) { // faces down → slab on bottom
+    box =      { x: rect.x, y: rect.y + half(rect.h), w: rect.w, h: half(rect.h) };
+    labelBox = { x: rect.x, y: rect.y,               w: rect.w, h: half(rect.h) };
+  } else if (dc < 0) { // faces left → slab on the left
+    box =      { x: rect.x,               y: rect.y, w: half(rect.w), h: rect.h };
+    labelBox = { x: rect.x + half(rect.w), y: rect.y, w: half(rect.w), h: rect.h };
+  } else {             // faces right → slab on the right
+    box =      { x: rect.x + half(rect.w), y: rect.y, w: half(rect.w), h: rect.h };
+    labelBox = { x: rect.x,               y: rect.y, w: half(rect.w), h: rect.h };
+  }
+  return { box, labelBox, full: Math.min(rect.w, rect.h) };
+}
+
+/** A server: a half-square slab tucked to the faced edge, its icon centred and
+ *  turned to face, its labels upright in the other half. */
+function drawServer(ctx, item, imgCache, plan) {
+  const { box, labelBox, full } = item.geo;
+  const inset = Math.min(box.w, box.h) * 0.05;
+  const x = box.x + inset, y = box.y + inset, w = box.w - inset * 2, h = box.h - inset * 2;
+  roundRect(ctx, x, y, w, h, Math.min(w, h) * 0.16);
+  ctx.fillStyle = item.data.fill || '#dbe7ff';
+  ctx.fill();
+  ctx.lineWidth = Math.max(1, Math.min(w, h) * 0.05);
+  ctx.strokeStyle = item.data.border || '#2f6feb';
+  ctx.stroke();
+  drawIconOnly(ctx, x + w / 2, y + h / 2, Math.min(w, h), item.data, imgCache);
+  if (labelBox) drawLabelBox(ctx, labelBox, item.data, plan, full);
 }
 
 /** Just a cell's icon, centred and turned to its facing — no labels. */

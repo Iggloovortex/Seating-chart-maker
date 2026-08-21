@@ -267,20 +267,13 @@ function render(cell) {
       picker.appendChild(btn);
     }
     g.appendChild(picker);
-
-    // The chair icon makes the square a chair: a small piece of furniture drawn
-    // inside a full-size square, tucked against the edge it faces.
-    if (cell.icon === 'chair') {
-      const note = document.createElement('p');
-      note.className = 'egroup__title';
-      note.style.textTransform = 'none';
-      note.style.fontWeight = '400';
-      note.style.marginTop = '6px';
-      note.textContent = 'A chair draws as a small piece of furniture inside its square, ' +
-        'tucked against and lined up with the square it faces. The square itself stays full size.';
-      g.appendChild(note);
-    }
   }));
+
+  // --- Special square -----------------------------------------------------
+  // Some icons turn the square into furniture: a piece drawn inside a full-size
+  // square, tucked against the edge it faces, with the labels in the empty space.
+  const special = specialSquareSection(cell);
+  if (special) bodyEl.appendChild(special);
 
   // --- Labels (each line has its own color) --------------------------------
   bodyEl.appendChild(group('Labels', (g) => {
@@ -329,6 +322,29 @@ function render(cell) {
   done.addEventListener('click', closeEditor);
   foot.appendChild(done);
   bodyEl.appendChild(foot);
+}
+
+/** How each furniture icon behaves, shown in the Special square section so the
+ *  reader knows why the icon renders small and tucked rather than as a desk. */
+const SPECIAL_SQUARE_NOTES = {
+  chair: 'This square is a chair: a small piece of furniture tucked against and lined up ' +
+    'with the square it faces. Its label sits in the empty space. The square stays full size.',
+  server: 'This square is a server: a half-square slab filling the half it faces. Its labels ' +
+    'sit in the other half. The square stays full size.',
+};
+
+/** The Special square section — only when the square carries a furniture icon.
+ *  Explains the tucked rendering and points at Facing, which aims it. */
+function specialSquareSection(cell) {
+  const kind = cell && cell.icon;
+  const text = kind && SPECIAL_SQUARE_NOTES[kind];
+  if (!text) return null;
+  return group('Special square', (g) => {
+    const note = document.createElement('p');
+    note.className = 'egroup__note';
+    note.textContent = text + ' Use Facing above to aim it.';
+    g.appendChild(note);
+  });
 }
 
 // ---------------------------------------------------------------- bulk render

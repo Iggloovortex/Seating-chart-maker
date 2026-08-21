@@ -539,28 +539,28 @@ body {
   flex: 0 0 auto;
 }
 
-/* A chair's furniture tile: half the square, tucked to the faced edge (left/top
-   set inline by placeChairTile). The square around it stays plain, so the chair
-   reads as a small piece of furniture rather than a filled desk. */
-.cell__chair {
+/* A furniture piece (chair, server) tucked to the faced edge; its size and
+   position are set inline (placeChairTile / placeServerTile). The square around
+   it stays plain, so it reads as furniture rather than a filled desk. */
+.cell__furniture {
   position: absolute;
-  width: 50%;
-  height: 50%;
   box-sizing: border-box;
   border: 1px solid var(--seat-border);
-  border-radius: 18%;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   z-index: 2;
 }
-.cell__chair .cell__content { padding: 1px; }
-.cell__chair .cell__icon { width: 62%; }
+.cell__chair { width: 50%; height: 50%; border-radius: 18%; }
+.cell__server { border-radius: 10%; }
+.cell__furniture .cell__content { padding: 1px; }
+.cell__furniture .cell__icon { width: 62%; }
+.cell__server .cell__icon { width: 74%; }
 
-/* A chair's labels sit upright in the empty half of the square (left/top/size
-   set inline by placeChairLabels), so a name reads beside its furniture. */
-.cell__chairlabels {
+/* A furniture piece's labels sit upright in the empty part of the square
+   (left/top/size set inline), so a name reads beside its furniture. */
+.cell__furniturelabels {
   position: absolute;
   display: flex;
   flex-direction: column;
@@ -811,6 +811,12 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .04em;
+  color: var(--ink-soft);
+}
+.egroup__note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
   color: var(--ink-soft);
 }
 .erow {

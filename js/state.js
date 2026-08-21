@@ -57,10 +57,22 @@ const DEFAULTS = {
   colWeight: 1,
 };
 
-/** A square acts as a "chair" when its icon is the chair: it is furniture
- *  rather than a desk, so it can shrink to fit a walkway. */
+/** "Furniture" squares carry a special icon that renders as a piece tucked to
+ *  the edge the square faces, with labels in the empty space, rather than a
+ *  full desk. A chair is a small square; a server is a half-square slab. */
+const FURNITURE_ICONS = { chair: 'chair', server: 'server' };
+function furnitureKind(cell) {
+  return cell && cell.enabled && FURNITURE_ICONS[cell.icon] ? cell.icon : null;
+}
+function isFurnitureCell(cell) { return !!furnitureKind(cell); }
+
+/** A square acts as a "chair" when its icon is the chair: furniture rather than
+ *  a desk. */
 function isChairCell(cell) {
   return !!(cell && cell.enabled && cell.icon === 'chair');
+}
+function isServerCell(cell) {
+  return !!(cell && cell.enabled && cell.icon === 'server');
 }
 function isChairAt(r, c) { return isChairCell(peekCell(r, c)); }
 

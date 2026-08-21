@@ -571,6 +571,30 @@ function placeChairLabels(el, rot) {
   else { el.style.top = '70%'; el.style.height = '30%'; }
 }
 
+/** Which orthogonal half a server slab fills, given its facing — a diagonal
+ *  collapses to its vertical side, mirroring serverGeometry in the output. */
+function serverHalf(rot) {
+  const n = ((Math.round(rot / 45) * 45) % 360 + 360) % 360;
+  let [dr, dc] = FACING_STEP[n] || FACING_STEP[0];
+  if (dr && dc) dc = 0;
+  return [dr, dc];
+}
+
+/** Position a server's half-square slab against the edge it faces. */
+function placeServerTile(tile, rot) {
+  const [dr, dc] = serverHalf(rot);
+  if (dr || !dc) { tile.style.width = '100%'; tile.style.left = '0'; }
+  if (dc) { tile.style.width = '50%'; tile.style.left = dc < 0 ? '0' : '50%'; tile.style.height = '100%'; tile.style.top = '0'; }
+  if (dr) { tile.style.height = '50%'; tile.style.top = dr < 0 ? '0' : '50%'; }
+}
+
+/** Position a server's labels in the other half of the square. */
+function placeServerLabels(el, rot) {
+  const [dr, dc] = serverHalf(rot);
+  if (dc) { el.style.width = '50%'; el.style.left = dc < 0 ? '50%' : '0'; el.style.height = '100%'; el.style.top = '0'; }
+  else { el.style.width = '100%'; el.style.left = '0'; el.style.height = '50%'; el.style.top = dr < 0 ? '50%' : '0'; }
+}
+
 function buildCell(r, c, rects) {
   const key = keyOf(r, c);
   const data = peekCell(r, c);
@@ -603,12 +627,12 @@ function buildCell(r, c, rects) {
   const ghost = !!(data && !data.enabled && hasContent(data));
 
   if (data && (data.enabled || ghost)) {
-    // A chair keeps its full-size square but draws a small piece of furniture
-    // inside it, tucked against the edge it faces — matching the output. So the
-    // square itself is NOT filled desk-style; the little chair tile is.
-    const isChair = data.enabled && data.icon === 'chair';
+    // Furniture (chair, server) keeps its full-size square but draws a piece of
+    // furniture inside it, tucked against the edge it faces — matching the
+    // output. So the square itself is NOT filled desk-style; the furniture is.
+    const furniture = data.enabled ? furnitureKind(data) : null;
 
-    if (data.enabled && !isChair) {
+    if (data.enabled && !furniture) {
       el.classList.add('cell--on');
       el.style.background = data.fill;
       el.style.borderColor = data.border;
@@ -642,21 +666,23 @@ function buildCell(r, c, rects) {
       }
     }
 
-    if (isChair) {
-      // Furniture tile carries only the icon (turned to face); labels sit upright
-      // in the square's empty half so a name stays readable beside the chair.
+    if (furniture) {
+      // Furniture piece carries only the icon (turned to face); labels sit
+      // upright in the square's empty space so a name stays readable beside it.
       const rot = (data.rotation || 0) + tableRot;
       const tile = document.createElement('div');
-      tile.className = 'cell__chair';
+      tile.className = `cell__furniture cell__${furniture}`;
       tile.style.background = data.fill;
       tile.style.borderColor = data.border;
-      placeChairTile(tile, rot);
+      if (furniture === 'server') placeServerTile(tile, rot);
+      else placeChairTile(tile, rot);
       tile.appendChild(content);
-      el.classList.add('cell--chairhost');
+      el.classList.add('cell--furniturehost');
       el.appendChild(tile);
       if (labelsEl) {
-        labelsEl.classList.add('cell__chairlabels');
-        placeChairLabels(labelsEl, rot);
+        labelsEl.classList.add('cell__furniturelabels');
+        if (furniture === 'server') placeServerLabels(labelsEl, rot);
+        else placeChairLabels(labelsEl, rot);
         el.appendChild(labelsEl);
       }
     } else {
