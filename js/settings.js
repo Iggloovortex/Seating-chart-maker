@@ -33,6 +33,14 @@ function initSettings() {
   // text fields are never clobbered mid-edit.
   subscribeConfig(applyConfigEffects);
   applyConfigEffects();
+
+  // With the theme on "System", an OS light/dark switch changes the grid surface
+  // but fires no config event — re-render so surface-flipped labels keep up.
+  if (window.matchMedia) {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      if (state.config.theme === 'system' && typeof renderGrid === 'function') renderGrid();
+    });
+  }
 }
 
 function openSettings() {
@@ -79,6 +87,10 @@ function applyConfigEffects() {
   }
 
   if (typeof rebuildPaperOptions === 'function') { rebuildPaperOptions(); reflectPaper(); }
+
+  // The grid recolors furniture/ghost labels against the theme surface at render
+  // time, so a theme change (or a newly imported icon) needs a re-render.
+  if (typeof renderGrid === 'function') renderGrid();
 }
 
 // ---------------------------------------------------------------- presets

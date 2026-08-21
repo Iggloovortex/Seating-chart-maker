@@ -55,9 +55,9 @@ async function renderToCanvas(dpi = 300) {
   const originY = margin + titleBand;                     // top-anchored, beneath the title
   const rects = layoutRects(rules, unit, originX, originY);
 
-  // Title at the top, centered.
+  // Title at the top, centered — inked to read on the page background.
   if (title) {
-    ctx.fillStyle = '#1f2933';
+    ctx.fillStyle = readableInk(state.exportBg);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = `700 ${Math.round(titleBand * 0.5)}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
@@ -235,13 +235,12 @@ function chairGeometry(rectOf, { r, c, data }) {
 }
 
 /** Where a chair's labels are drawn: always the FULL square width (so a long
- *  name never truncates), in the widest free band — the half opposite a
- *  top/bottom chair, or a strip beneath a side chair, which is centred
- *  vertically and so leaves only the top and bottom clear. */
+ *  name never truncates), in the free band, hugging the tile — `anchor` pulls the
+ *  stack to the tile-side edge of the band rather than floating in its middle. */
 function chairLabelBox(rect, dr) {
-  if (dr < 0) return { x: rect.x, y: rect.y + rect.h / 2, w: rect.w, h: rect.h / 2 };   // chair top → labels below
-  if (dr > 0) return { x: rect.x, y: rect.y, w: rect.w, h: rect.h / 2 };                // chair bottom → labels above
-  return { x: rect.x, y: rect.y + rect.h * 0.7, w: rect.w, h: rect.h * 0.3 };           // side chair → strip beneath
+  if (dr < 0) return { x: rect.x, y: rect.y + rect.h / 2, w: rect.w, h: rect.h / 2, anchor: 'start' }; // tile top → hug below
+  if (dr > 0) return { x: rect.x, y: rect.y, w: rect.w, h: rect.h / 2, anchor: 'end' };                // tile bottom → hug above
+  return { x: rect.x, y: rect.y + rect.h * 0.68, w: rect.w, h: rect.h * 0.32, anchor: 'center' };      // side → strip beneath
 }
 
 /** A chair: standalone furniture drawn at a fixed fraction of its full-size
@@ -344,15 +343,13 @@ function drawServerRack(ctx, item, imgCache, plan) {
   }
   ctx.restore();
 
-  // 2) The upright server icon at the rack's top-left corner (never turns). The
-  //    corner is a point in the turned frame, mapped back to canvas coordinates.
+  // 2) The upright server icon in the square's top-left corner (never turns). The
+  //    rack is only as wide as its labels, so the corner is empty space; on a
+  //    full-width rack the label painted next covers it instead.
   const img = imgCache.get(iconKey('server', data));
   if (img) {
-    const isz = Math.min(Math.min(rect.w, rect.h) * 0.24, bandH * 0.8, slabW * 0.8);
-    const lx = left + inset, ly = -rect.h / 2 + inset;
-    const px = cx + lx * Math.cos(rad) - ly * Math.sin(rad);
-    const py = cy + lx * Math.sin(rad) + ly * Math.cos(rad);
-    ctx.drawImage(img, px, py, isz, isz);
+    const isz = Math.min(rect.w, rect.h) * 0.22;
+    ctx.drawImage(img, rect.x + inset, rect.y + inset, isz, isz);
   }
 
   // 3) The labels, centred in each slab and turned, painted last so a long one
@@ -401,10 +398,7 @@ function drawIconOnly(ctx, cx, cy, size, data, imgCache) {
  *  When it all but matches, swap it for a readable colour: black on a light
  *  page, white on a dark one. Labels on a filled desk or slab are untouched. */
 function labelColorOnBg(color) {
-  const c = hexToRgb(color || '#1f2933'), b = hexToRgb(state.exportBg || '#ffffff');
-  if (!c || !b) return color || '#1f2933';
-  if (Math.abs(c.r - b.r) + Math.abs(c.g - b.g) + Math.abs(c.b - b.b) >= 40) return color;
-  return (b.r * 0.299 + b.g * 0.587 + b.b * 0.114) > 150 ? '#000000' : '#ffffff';
+  return contrastLabelColor(color, state.exportBg || '#ffffff');
 }
 
 /** A label stack centred inside `box`, sized to the whole square (`fullMin`) so
@@ -418,8 +412,14 @@ function drawLabelBox(ctx, box, data, plan, fullMin, rot = 0) {
   const norm = ((Math.round(rot / 45) * 45) % 360 + 360) % 360;
   const vertical = norm === 90 || norm === 270;
   const maxW = (vertical ? box.h : box.w) * LABEL_WIDTH;
+  // Anchor the stack to a tile-side edge of the box when asked, so it hugs the
+  // furniture instead of centring in the free space.
+  const pad = lineH * 0.35;
+  const stackCy = box.anchor === 'start' ? box.y + totalH / 2 + pad
+    : box.anchor === 'end' ? box.y + box.h - totalH / 2 - pad
+    : box.y + box.h / 2;
   ctx.save();
-  ctx.translate(box.x + box.w / 2, box.y + box.h / 2);
+  ctx.translate(box.x + box.w / 2, stackCy);
   ctx.rotate((rot * Math.PI) / 180);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';

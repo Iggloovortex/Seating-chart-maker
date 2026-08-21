@@ -588,14 +588,16 @@ body {
   overflow: hidden;
 }
 .cell__rackunit .cell__label { position: relative; z-index: 2; }
+/* Upright server icon in the square's empty top-left corner (the rack is centred
+   and only as wide as its labels, so the corner is free). */
 .cell__rackicon {
   position: absolute;
-  left: 1px;
-  top: 1px;
-  width: 18px;
-  height: 18px;
-  transform-origin: top left;   /* counter-rotation (set inline) pivots here */
-  z-index: 1;
+  left: 3px;
+  top: 3px;
+  width: 22%;
+  height: 22%;
+  color: var(--ink);
+  z-index: 4;
   pointer-events: none;
 }
 

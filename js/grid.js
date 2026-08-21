@@ -40,6 +40,7 @@ const TABLE_BADGE = 24; // .table-remove size, in px
 /** Full re-render of the grid. Called on any state change. */
 function renderGrid() {
   const { cols, rows } = state.grid;
+  refreshGridSurface();
 
   // All cells share one square size, so the grid stays uniform as content grows.
   const size = uniformCellSize();
@@ -562,13 +563,13 @@ function placeChairTile(tile, rot) {
 function placeChairLabels(el, rot) {
   const n = ((Math.round(rot / 45) * 45) % 360 + 360) % 360;
   const [dr] = FACING_STEP[n] || FACING_STEP[0];
-  // Always the full square width so a long name never truncates; sit in the
-  // widest free band (opposite a top/bottom chair, beneath a side chair).
+  // Always the full square width so a long name never truncates; sit in the free
+  // band and hug the chair tile (anchor toward it) rather than floating away.
   el.style.left = '0';
   el.style.width = '100%';
-  if (dr < 0) { el.style.top = '50%'; el.style.height = '50%'; }
-  else if (dr > 0) { el.style.top = '0'; el.style.height = '50%'; }
-  else { el.style.top = '70%'; el.style.height = '30%'; }
+  if (dr < 0) { el.style.top = '50%'; el.style.height = '50%'; el.style.justifyContent = 'flex-start'; }
+  else if (dr > 0) { el.style.top = '0'; el.style.height = '50%'; el.style.justifyContent = 'flex-end'; }
+  else { el.style.top = '68%'; el.style.height = '32%'; el.style.justifyContent = 'center'; }
 }
 
 /** Which orthogonal half a server slab fills, given its facing — a diagonal
@@ -596,16 +597,13 @@ function placeServerLabels(el, rot) {
 }
 
 /** A rack of servers: the square split into one slab per non-empty label,
- *  stacked and turned to the facing. The slabs and labels are two turned layers
- *  with an upright server icon sandwiched between — the icon sits in the top-left
- *  corner, never turns, and a long name (painted above it) covers it. The DOM
- *  twin of drawServerRack. */
+ *  stacked and turned to the facing. Fit-content wide — every slab stretches to
+ *  the widest label — so the column is only as wide as its longest name and the
+ *  cell centres it. The DOM twin of drawServerRack. */
 function buildServerRack(data, rot) {
   const rack = document.createElement('div');
   rack.className = 'cell__rack';
   rack.style.transform = `rotate(${rot}deg)`;
-  // The rack is fit-content wide: every slab stretches to the widest label, so
-  // the column is only as wide as its longest name. The cell centres it.
   for (const line of data.labels) {
     if (!line.text) continue;
     const unit = document.createElement('div');
@@ -619,15 +617,21 @@ function buildServerRack(data, rot) {
     unit.appendChild(span);
     rack.appendChild(unit);
   }
-  // Upright server icon in the rack's top-left corner: counter-rotated so it does
-  // not turn with the rack; sits over the slabs but under the labels.
-  const svg = iconUse('server', 'cell__rackicon');
-  if (svg) {
-    svg.style.color = data.iconColor || '#1f2933';
-    svg.style.transform = `rotate(${-rot}deg)`;
-    rack.appendChild(svg);
-  }
   return rack;
+}
+
+// The theme surface a bare (furniture/ghost) label sits on, refreshed each full
+// render so a label that would vanish on it (white on white in light mode) can be
+// flipped to a readable colour — the grid twin of the export's page-background flip.
+let GRID_SURFACE = '#ffffff';
+function refreshGridSurface() {
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--surface').trim();
+  if (v) GRID_SURFACE = v;
+}
+/** Recolor a label placed directly on the grid surface so it stays legible in
+ *  both light and dark themes. */
+function surfaceLabelColor(color) {
+  return typeof contrastLabelColor === 'function' ? contrastLabelColor(color, GRID_SURFACE) : color;
 }
 
 function buildCell(r, c, rects) {
@@ -696,7 +700,9 @@ function buildCell(r, c, rects) {
         const span = document.createElement('span');
         span.className = 'cell__label';
         span.textContent = line.text;
-        span.style.color = line.color;
+        // Furniture and ghost labels sit on the bare grid surface, so keep them
+        // legible in both themes; a desk label sits on its own fill and is left be.
+        span.style.color = (furniture || ghost) ? surfaceLabelColor(line.color) : line.color;
         labelsEl.appendChild(span);
       }
     }
@@ -705,10 +711,13 @@ function buildCell(r, c, rects) {
 
     if (furniture === 'server' && labelCount >= 2) {
       // A rack of several servers: one slab per label, stacked and turned to the
-      // facing, no icon — the DOM twin of drawServerRack.
+      // facing — the DOM twin of drawServerRack. The server icon sits upright in
+      // the square's empty corner (the rack is only as wide as its labels).
       const rot = (data.rotation || 0) + tableRot;
       el.classList.add('cell--furniturehost');
       el.appendChild(buildServerRack(data, rot));
+      const svg = iconUse('server', 'cell__rackicon');
+      if (svg) { svg.style.color = data.iconColor || '#1f2933'; el.appendChild(svg); }
     } else if (furniture) {
       // Furniture piece carries only the icon (turned to face); labels sit in the
       // square's empty space (a single server's label turns with the facing).

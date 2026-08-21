@@ -289,10 +289,13 @@ function render(cell) {
 
   // --- Labels (each line has its own color) --------------------------------
   bodyEl.appendChild(group('Labels', (g) => {
+    // There is always one label line to type into — blank by default. An empty
+    // line is excluded from the grid, the output and content checks, so a
+    // never-filled default line costs nothing.
+    if (cell.labels.length === 0) cell.labels.push({ text: '', color: defaultLabelColor(0) });
     const list = document.createElement('div');
     list.id = 'label-list';
-    const labels = cell.labels.length ? cell.labels : [];
-    labels.forEach((line, i) => list.appendChild(labelRow(line, i)));
+    cell.labels.forEach((line, i) => list.appendChild(labelRow(line, i)));
     g.appendChild(list);
 
     const add = document.createElement('button');

@@ -90,10 +90,14 @@ function renderIconLibResults(query) {
   grid.replaceChildren();
   const q = query.trim().toLowerCase();
   const names = Object.keys(ICON_LIBRARY);
-  const matches = (q ? names.filter((n) => n.includes(q)) : names);
+  // "*" or "all" shows the whole set (uncapped); an empty box shows the first
+  // page; anything else filters by name.
+  const showAll = q === '*' || q === 'all';
+  const matches = (!q || showAll) ? names : names.filter((n) => n.includes(q));
+  const cap = showAll ? matches.length : ICON_LIB_CAP;
   const have = new Set(((state.config && state.config.customIcons) || []).map((c) => c.id));
 
-  for (const name of matches.slice(0, ICON_LIB_CAP)) {
+  for (const name of matches.slice(0, cap)) {
     const id = 'bi:' + name;
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -111,10 +115,11 @@ function renderIconLibResults(query) {
   }
 
   const total = matches.length;
+  const shown = Math.min(cap, total);
   note.textContent = total === 0
     ? 'No icons match “' + query + '”.'
-    : total > ICON_LIB_CAP
-      ? 'Showing ' + ICON_LIB_CAP + ' of ' + total + ' matches — keep typing to narrow it down.'
+    : shown < total
+      ? 'Showing ' + shown + ' of ' + total + ' — keep typing, or search “*” for all.'
       : total + ' icon' + (total === 1 ? '' : 's') + '. Click one to add it.';
 }
 

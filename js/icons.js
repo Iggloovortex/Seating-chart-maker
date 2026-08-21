@@ -68,6 +68,25 @@ function parseIconSvg(text) {
   return inner ? { viewBox, inner } : null;
 }
 
+/** A readable version of `color` for text drawn straight on `bgHex`: when the
+ *  two all but match (white on white, dark on dark), swap to black on a light
+ *  background or white on a dark one; otherwise keep the chosen colour. Shared by
+ *  the grid (vs the theme surface) and the export (vs the page background). */
+function contrastLabelColor(color, bgHex) {
+  const c = hexToRgb(color || '#1f2933'), b = hexToRgb(bgHex || '#ffffff');
+  if (!c || !b) return color || '#1f2933';
+  if (Math.abs(c.r - b.r) + Math.abs(c.g - b.g) + Math.abs(c.b - b.b) >= 40) return color;
+  return (b.r * 0.299 + b.g * 0.587 + b.b * 0.114) > 150 ? '#000000' : '#ffffff';
+}
+
+/** Dark or light ink, whichever reads on `bgHex` — for text that always needs to
+ *  stand out (a chart title), not just when it happens to match. */
+function readableInk(bgHex) {
+  const b = hexToRgb(bgHex || '#ffffff');
+  if (!b) return '#1f2933';
+  return (b.r * 0.299 + b.g * 0.587 + b.b * 0.114) > 140 ? '#1f2933' : '#f4f5f7';
+}
+
 function customIcon(id) {
   const list = state.config && state.config.customIcons;
   return list ? list.find((c) => c.id === id) : null;
