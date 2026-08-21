@@ -28,24 +28,40 @@ function libIconSvg(inner, className) {
 
 let iconLibModal = null;
 let iconLibOnPick = null;
+const iconLibSelected = new Set(); // catalog names chosen this session, loaded on Done
 
-/** Open the library. `onPick(id)` (optional) fires after an icon is added — the
- *  editor passes one to also apply the icon to the open square. */
+/** Open the library. `onPick(id)` (optional) fires after Done — the editor passes
+ *  one to also apply the first chosen icon to the open square. */
 function openIconLibrary(onPick) {
   if (!iconLibraryAvailable()) return;
   iconLibOnPick = onPick || null;
+  iconLibSelected.clear();
   if (!iconLibModal) iconLibModal = buildIconLibModal();
   iconLibModal.hidden = false;
   iconLibModal.setAttribute('aria-hidden', 'false');
   const search = iconLibModal.querySelector('#icon-lib-search');
   search.value = '';
   renderIconLibResults('');
+  renderIconLibSelected();
   search.focus();
 }
 
 function closeIconLibrary() {
   if (iconLibModal) { iconLibModal.hidden = true; iconLibModal.setAttribute('aria-hidden', 'true'); }
   iconLibOnPick = null;
+}
+
+/** Done: add every selected icon to the config (if not already there), then hand
+ *  the first one to the editor's onPick, if any. */
+function loadSelectedIcons() {
+  const chosen = [...iconLibSelected];
+  for (const name of chosen) {
+    const id = 'bi:' + name;
+    if (!customIcon(id)) addCustomIcon({ id, label: prettyIconName(name), viewBox: '0 0 16 16', inner: ICON_LIBRARY[name] });
+  }
+  const cb = iconLibOnPick, first = chosen[0];
+  closeIconLibrary();
+  if (cb && first) cb('bi:' + first);
 }
 
 function buildIconLibModal() {
@@ -67,21 +83,44 @@ function buildIconLibModal() {
         '<div class="iconlib__grid" id="icon-lib-grid"></div>' +
         '<p class="iconlib__note" id="icon-lib-note"></p>' +
       '</div>' +
-      '<footer class="modal__foot">' +
+      '<footer class="modal__foot iconlib__foot">' +
         '<span class="iconlib__credit">Bootstrap Icons — MIT licensed</span>' +
-        '<button class="btn" type="button" data-close-iconlib>Done</button>' +
+        '<div class="iconlib__selectedbar">' +
+          '<div class="iconlib__selected" id="icon-lib-selected"></div>' +
+          '<button class="btn btn--primary" type="button" id="icon-lib-done">Done</button>' +
+        '</div>' +
       '</footer>' +
     '</section>';
   document.body.appendChild(modal);
 
   modal.querySelectorAll('[data-close-iconlib]').forEach((el) =>
     el.addEventListener('click', closeIconLibrary));
+  modal.querySelector('#icon-lib-done').addEventListener('click', loadSelectedIcons);
   const search = modal.querySelector('#icon-lib-search');
   search.addEventListener('input', () => renderIconLibResults(search.value));
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !modal.hidden) { e.stopPropagation(); closeIconLibrary(); }
   });
   return modal;
+}
+
+/** The strip of currently-selected icons in the footer; clicking one removes it. */
+function renderIconLibSelected() {
+  const strip = iconLibModal.querySelector('#icon-lib-selected');
+  const done = iconLibModal.querySelector('#icon-lib-done');
+  strip.replaceChildren();
+  for (const name of iconLibSelected) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'iconlib__chip';
+    chip.title = 'Remove ' + name;
+    chip.setAttribute('aria-label', 'Remove ' + prettyIconName(name));
+    chip.appendChild(libIconSvg(ICON_LIBRARY[name], 'iconlib__chipsvg'));
+    chip.addEventListener('click', () => toggleLibraryIcon(name));
+    strip.appendChild(chip);
+  }
+  const n = iconLibSelected.size;
+  done.textContent = n ? `Add ${n} icon${n === 1 ? '' : 's'}` : 'Done';
 }
 
 function renderIconLibResults(query) {
@@ -102,15 +141,18 @@ function renderIconLibResults(query) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'iconlib__tile';
+    btn.dataset.name = name;
     btn.title = name;
     btn.setAttribute('aria-label', prettyIconName(name));
+    btn.setAttribute('aria-pressed', String(iconLibSelected.has(name)));
     if (have.has(id)) btn.classList.add('is-added');
+    if (iconLibSelected.has(name)) btn.classList.add('is-selected');
     btn.appendChild(libIconSvg(ICON_LIBRARY[name], 'iconlib__svg'));
-    const cap = document.createElement('span');
-    cap.className = 'iconlib__name';
-    cap.textContent = name;
-    btn.appendChild(cap);
-    btn.addEventListener('click', () => pickLibraryIcon(name, btn));
+    const nameEl = document.createElement('span');
+    nameEl.className = 'iconlib__name';
+    nameEl.textContent = name;
+    btn.appendChild(nameEl);
+    btn.addEventListener('click', () => toggleLibraryIcon(name));
     grid.appendChild(btn);
   }
 
@@ -120,14 +162,19 @@ function renderIconLibResults(query) {
     ? 'No icons match “' + query + '”.'
     : shown < total
       ? 'Showing ' + shown + ' of ' + total + ' — keep typing, or search “*” for all.'
-      : total + ' icon' + (total === 1 ? '' : 's') + '. Click one to add it.';
+      : total + ' icon' + (total === 1 ? '' : 's') + '. Click to select, then Add.';
 }
 
-function pickLibraryIcon(name, btn) {
-  const id = 'bi:' + name;
-  if (!customIcon(id)) {
-    addCustomIcon({ id, label: prettyIconName(name), viewBox: '0 0 16 16', inner: ICON_LIBRARY[name] });
+/** Toggle an icon in the pending selection and reflect it on its tile + the
+ *  footer strip. Nothing is added to the config until Done. */
+function toggleLibraryIcon(name) {
+  if (iconLibSelected.has(name)) iconLibSelected.delete(name);
+  else iconLibSelected.add(name);
+  const tile = iconLibModal.querySelector(`.iconlib__tile[data-name="${CSS.escape(name)}"]`);
+  if (tile) {
+    const on = iconLibSelected.has(name);
+    tile.classList.toggle('is-selected', on);
+    tile.setAttribute('aria-pressed', String(on));
   }
-  if (btn) btn.classList.add('is-added');
-  if (typeof iconLibOnPick === 'function') { const cb = iconLibOnPick; closeIconLibrary(); cb(id); }
+  renderIconLibSelected();
 }

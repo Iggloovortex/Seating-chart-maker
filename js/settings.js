@@ -21,6 +21,8 @@ function initSettings() {
     btn.title = 'Settings';
     btn.addEventListener('click', openSettings);
   }
+  const themeBtn = document.getElementById('btn-theme');
+  if (themeBtn) themeBtn.addEventListener('click', () => setConfig({ theme: effectiveDark() ? 'light' : 'dark' }));
   document.querySelectorAll('[data-close-settings]').forEach((el) =>
     el.addEventListener('click', closeSettings)
   );
@@ -38,9 +40,29 @@ function initSettings() {
   // but fires no config event — re-render so surface-flipped labels keep up.
   if (window.matchMedia) {
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-      if (state.config.theme === 'system' && typeof renderGrid === 'function') renderGrid();
+      if (state.config.theme === 'system') { updateThemeToggle(); if (typeof renderGrid === 'function') renderGrid(); }
     });
   }
+}
+
+/** Whether the app is effectively showing its dark palette right now. */
+function effectiveDark() {
+  const t = state.config.theme;
+  if (t === 'dark') return true;
+  if (t === 'light') return false;
+  return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+}
+
+/** The toolbar toggle shows what a click will DO: a bright sun to switch to light
+ *  (when dark now), or a dark-purple moon to switch to dark (when light now). */
+function updateThemeToggle() {
+  const btn = document.getElementById('btn-theme');
+  if (!btn) return;
+  const dark = effectiveDark();
+  btn.querySelector('use')?.setAttribute('href', dark ? '#ui-sun' : '#ui-moon');
+  btn.style.color = dark ? '#f7c948' : '#6b46c1';
+  btn.title = dark ? 'Switch to light theme' : 'Switch to dark theme';
+  btn.setAttribute('aria-label', btn.title);
 }
 
 function openSettings() {
@@ -87,6 +109,7 @@ function applyConfigEffects() {
   }
 
   if (typeof rebuildPaperOptions === 'function') { rebuildPaperOptions(); reflectPaper(); }
+  updateThemeToggle();
 
   // The grid recolors furniture/ghost labels against the theme surface at render
   // time, so a theme change (or a newly imported icon) needs a re-render.
@@ -175,34 +198,36 @@ function applyPreset(n, keys) {
 
 // ---------------------------------------------------------------- render
 
-// Settings is split into tabs: the chart-side options, and the "Site" tab that
-// packages the app — exporting it and its icon/title branding.
+// Settings is split into tabs (rendered into the header, under the title): the
+// chart-side options (presets, custom icons) and the "Site" tab that packages the
+// app — export, its icon/title branding, appearance and paper sizes.
 let settingsTab = 'general';
 const SETTINGS_TABS = [
-  { id: 'general', label: 'General', build: () => [themeSection(), paperSection(), customIconsSection(), presetSection()] },
-  { id: 'site', label: 'Site & export', build: () => [exportSection(), siteSection()] },
+  { id: 'general', label: 'General', build: () => [presetSection(), customIconsSection()] },
+  { id: 'site', label: 'Site & export', build: () => [exportSection(), siteSection(), themeSection(), paperSection()] },
 ];
 
 function renderSettings() {
   const body = document.getElementById('settings-body');
+  const tabsBar = document.getElementById('settings-tabs');
   if (!body) return;
   if (!SETTINGS_TABS.some((t) => t.id === settingsTab)) settingsTab = 'general';
   const tab = SETTINGS_TABS.find((t) => t.id === settingsTab);
 
-  const bar = document.createElement('div');
-  bar.className = 'settings-tabs';
-  bar.setAttribute('role', 'tablist');
-  for (const t of SETTINGS_TABS) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'settings-tab';
-    b.textContent = t.label;
-    b.setAttribute('role', 'tab');
-    b.setAttribute('aria-selected', String(t.id === settingsTab));
-    b.addEventListener('click', () => { settingsTab = t.id; renderSettings(); });
-    bar.appendChild(b);
+  if (tabsBar) {
+    tabsBar.replaceChildren();
+    for (const t of SETTINGS_TABS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'settings-tab';
+      b.textContent = t.label;
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', String(t.id === settingsTab));
+      b.addEventListener('click', () => { settingsTab = t.id; renderSettings(); });
+      tabsBar.appendChild(b);
+    }
   }
-  body.replaceChildren(bar, ...tab.build());
+  body.replaceChildren(...tab.build());
 }
 
 /** Import custom SVG icons — e.g. MIT-licensed Bootstrap Icons. Paste an <svg>,
@@ -225,23 +250,28 @@ function customIconsSection() {
     g.appendChild(snote('No imported icons yet. Paste an SVG below — for example any icon from ' +
       'Bootstrap Icons (icons.getbootstrap.com), which are MIT-licensed — name it, and Add.'));
   }
-  for (const ic of icons) {
-    const row = document.createElement('div');
-    row.className = 'settings-row';
-    const prev = document.createElement('span');
-    prev.className = 'settings-icon-preview';
-    const svg = iconUse(ic.id, 'settings-icon-preview__svg');
-    if (svg) prev.appendChild(svg);
-    const name = document.createElement('span');
-    name.className = 'settings-row__name';
-    name.textContent = ic.label;
-    const del = document.createElement('button');
-    del.type = 'button';
-    del.className = 'btn btn--empty';
-    del.textContent = 'Delete';
-    del.addEventListener('click', () => { removeCustomIcon(ic.id); renderSettings(); });
-    row.append(prev, name, del);
-    g.appendChild(row);
+  if (icons.length) {
+    const list = document.createElement('div');
+    list.className = 'settings-list';
+    for (const ic of icons) {
+      const row = document.createElement('div');
+      row.className = 'settings-row';
+      const prev = document.createElement('span');
+      prev.className = 'settings-icon-preview';
+      const svg = iconUse(ic.id, 'settings-icon-preview__svg');
+      if (svg) prev.appendChild(svg);
+      const name = document.createElement('span');
+      name.className = 'settings-row__name';
+      name.textContent = ic.label;
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'btn btn--empty';
+      del.textContent = 'Delete';
+      del.addEventListener('click', () => { removeCustomIcon(ic.id); renderSettings(); });
+      row.append(prev, name, del);
+      list.appendChild(row);
+    }
+    g.appendChild(list);
   }
 
   // Add form: name + pasted SVG + Add.
@@ -311,24 +341,30 @@ function paperSection() {
 
   if (!papers.length) {
     g.appendChild(snote('No custom sizes yet — add one below to see it in the Export dialog.'));
-  }
-  for (const cp of papers) {
-    const row = document.createElement('div');
-    row.className = 'settings-row';
-    const name = document.createElement('span');
-    name.className = 'settings-row__name';
-    name.textContent = `${cp.name} — W ${Math.min(cp.w, cp.h)} × L ${Math.max(cp.w, cp.h)} ${cp.unit}`;
-    const del = document.createElement('button');
-    del.type = 'button';
-    del.className = 'btn btn--empty';
-    del.textContent = 'Delete';
-    del.addEventListener('click', () => {
-      if (state.paper === cp.id) setPaper('letter');   // open chart falls back to Letter
-      removeCustomPaper(cp.id);
-      renderSettings();
-    });
-    row.append(name, del);
-    g.appendChild(row);
+  } else {
+    // Added items sit on their own panel so they read as saved entries, distinct
+    // from the controls around them.
+    const list = document.createElement('div');
+    list.className = 'settings-list';
+    for (const cp of papers) {
+      const row = document.createElement('div');
+      row.className = 'settings-row';
+      const name = document.createElement('span');
+      name.className = 'settings-row__name';
+      name.textContent = `${cp.name} — W ${Math.min(cp.w, cp.h)} × L ${Math.max(cp.w, cp.h)} ${cp.unit}`;
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'btn btn--empty';
+      del.textContent = 'Delete';
+      del.addEventListener('click', () => {
+        if (state.paper === cp.id) setPaper('letter');   // open chart falls back to Letter
+        removeCustomPaper(cp.id);
+        renderSettings();
+      });
+      row.append(name, del);
+      list.appendChild(row);
+    }
+    g.appendChild(list);
   }
 
   // Add form
@@ -409,7 +445,7 @@ function siteSection() {
 }
 
 function presetSection() {
-  const g = sgroup('Square presets');
+  const g = sgroup('Presets');
   for (const n of [1, 2]) {
     const p = state.config.presets[String(n)];
     const row = document.createElement('div');
@@ -451,9 +487,7 @@ function presetSection() {
     g.appendChild(row);
   }
   g.appendChild(snote(
-    'A preset stores a square’s icon, colours, facing and label lines. Build one here ' +
-    'with Make/Edit, or capture a square with Save preset in the select bar. Apply a preset ' +
-    'from the Preset buttons in the edit pane — to the open square, or the whole selection.'
+    'A saved square look — icon, colours, facing and labels — applied from the edit pane’s Preset buttons.'
   ));
   return g;
 }

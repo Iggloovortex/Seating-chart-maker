@@ -1014,7 +1014,9 @@ body {
   overflow: hidden;
 }
 .iconlib__tile:hover { background: var(--surface-2); border-color: var(--line-strong); }
-.iconlib__tile.is-added { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.iconlib__tile.is-added { border-color: var(--line-strong); }
+.iconlib__tile.is-selected { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); box-shadow: inset 0 0 0 1px var(--accent); }
+.iconlib__tile.is-selected .iconlib__name { color: var(--accent-ink); }
 .iconlib__svg { width: 26px; height: 26px; }
 .iconlib__name {
   max-width: 100%;
@@ -1025,7 +1027,40 @@ body {
   text-overflow: ellipsis;
 }
 .iconlib__note { margin: 10px 2px 0; font-size: 12px; color: var(--ink-soft); }
-.iconlib__credit { margin-right: auto; align-self: center; font-size: 12px; color: var(--ink-soft); }
+/* Footer stacks: the MIT credit on top, then the selected-icons strip beside Done. */
+.iconlib__foot { flex-direction: column; align-items: stretch; gap: 8px; }
+.iconlib__credit { font-size: 12px; color: var(--ink-soft); }
+.iconlib__selectedbar { display: flex; align-items: center; gap: 10px; }
+.iconlib__selected {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px;
+  min-height: 40px;
+  align-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.iconlib__selected:empty::before { content: 'No icons selected yet'; font-size: 12px; color: var(--ink-soft); padding: 0 6px; }
+.iconlib__chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.iconlib__chip:hover { border-color: var(--danger); color: var(--danger); }
+.iconlib__chipsvg { width: 18px; height: 18px; }
+.iconlib__selectedbar .btn { flex: 0 0 auto; }
 
 .preview__paper {
   background: #fff;
@@ -1374,11 +1409,13 @@ body {
 .settings-subtext { margin: -6px 0 2px; font-size: 12px; color: var(--ink-soft); }
 
 /* Segmented tab switcher at the top of the Settings pane. */
+/* Settings header: the title row, then the tab switcher beneath it. */
+.modal__head--settings { flex-direction: column; align-items: stretch; gap: 12px; }
+.modal__headrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .settings-tabs {
   display: flex;
   gap: 4px;
   padding: 4px;
-  margin-bottom: 6px;
   background: var(--surface-2);
   border-radius: var(--radius-sm);
 }
@@ -1408,6 +1445,19 @@ body {
   gap: 10px;
 }
 .settings-row__name { flex: 1 1 auto; min-width: 0; color: var(--ink); }
+
+/* Saved entries (custom papers, custom icons) sit on their own inset panel, so
+   they read as a distinct list from the controls that add and describe them. */
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+}
+.settings-list .settings-row { padding: 6px 0; border-top: 1px solid var(--line); }
+.settings-list .settings-row:first-child { border-top: 0; }
 
 /* Label-over-control field, matching the toolbar's stacked fields. */
 .settings-field { display: flex; flex-direction: column; gap: 4px; }

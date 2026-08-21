@@ -252,6 +252,14 @@
         <circle cx="10.6" cy="10.6" r="6.6" fill="none" stroke="currentColor" stroke-width="1.8"/>
         <path d="M15.4 15.4 20.6 20.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
       </symbol>
+      <symbol id="ui-sun" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="4.4" fill="currentColor"/>
+        <path d="M12 1.8v3M12 19.2v3M1.8 12h3M19.2 12h3M4.9 4.9l2.1 2.1M16.97 16.97l2.12 2.12M19.1 4.9l-2.13 2.13M7.03 16.97l-2.12 2.12"
+              fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="ui-moon" viewBox="0 0 24 24">
+        <path d="M20.5 14.6A8.2 8.2 0 1 1 9.4 3.5a6.5 6.5 0 0 0 11.1 11.1z" fill="currentColor"/>
+      </symbol>
     </defs>
   </svg>
 
@@ -279,6 +287,11 @@
           </button>
           <button id="btn-print" class="iconbtn iconbtn--print" type="button" title="Print / PDF" aria-label="Print or save as PDF">
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-print"/></svg>
+          </button>
+          <span class="iconbar__sep" aria-hidden="true"></span>
+          <!-- Dark / light toggle: a bright sun (click to go light) or a purple moon (click to go dark). -->
+          <button id="btn-theme" class="iconbtn iconbtn--theme" type="button" title="Toggle dark / light" aria-label="Toggle dark or light theme">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-moon"/></svg>
           </button>
           <input id="file-input" type="file" accept=".seatchart,application/json,.tsv,text/tab-separated-values" hidden />
         </div>
@@ -598,9 +611,12 @@
   <div class="modal" id="settings" hidden aria-hidden="true">
     <div class="modal__backdrop" data-close-settings></div>
     <section class="modal__panel modal__panel--settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-      <header class="modal__head">
-        <h2 class="modal__title" id="settings-title">Settings</h2>
-        <button class="btn btn--icon" type="button" data-close-settings aria-label="Close">✕</button>
+      <header class="modal__head modal__head--settings">
+        <div class="modal__headrow">
+          <h2 class="modal__title" id="settings-title">Settings</h2>
+          <button class="btn btn--icon" type="button" data-close-settings aria-label="Close">✕</button>
+        </div>
+        <div class="settings-tabs" id="settings-tabs" role="tablist"></div>
       </header>
       <div class="modal__body modal__body--settings" id="settings-body">
         <!-- populated by js/settings.js -->
