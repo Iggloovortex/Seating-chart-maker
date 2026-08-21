@@ -15,6 +15,79 @@ const ICONS = {
 };
 const ICON_IDS = Object.keys(ICONS);
 
+// ---------------------------------------------------------------- imported icons
+//
+// The user can import their own SVG icons — e.g. MIT-licensed Bootstrap Icons —
+// which are stored in state.config.customIcons and rendered alongside the built
+// in set. Imported markup is sanitized down to plain shape elements so nothing
+// scriptable ever reaches the DOM.
+
+const CUSTOM_ICON_TAGS = new Set(['g', 'path', 'circle', 'ellipse', 'rect', 'line', 'polyline', 'polygon']);
+const CUSTOM_ICON_ATTRS = new Set([
+  'd', 'cx', 'cy', 'r', 'rx', 'ry', 'x', 'y', 'width', 'height', 'x1', 'y1', 'x2', 'y2', 'points',
+  'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit',
+  'fill-rule', 'clip-rule', 'transform', 'opacity', 'fill-opacity', 'stroke-opacity',
+]);
+
+/** Parse an imported <svg> (such as a Bootstrap Icon) into a safe
+ *  { viewBox, inner }: `inner` is a sanitized markup string of shape elements and
+ *  safe attributes only. Returns null when the text is not a usable <svg>. */
+function parseIconSvg(text) {
+  let doc;
+  try { doc = new DOMParser().parseFromString(String(text).trim(), 'image/svg+xml'); }
+  catch { return null; }
+  if (doc.querySelector('parsererror')) return null;
+  const svg = doc.querySelector('svg');
+  if (!svg) return null;
+
+  let viewBox = svg.getAttribute('viewBox');
+  if (!viewBox || !/^[-\d.\s]+$/.test(viewBox)) {
+    const w = parseFloat(svg.getAttribute('width')) || 16;
+    const h = parseFloat(svg.getAttribute('height')) || 16;
+    viewBox = `0 0 ${w} ${h}`;
+  }
+
+  const clean = (el) => {
+    const tag = el.tagName.toLowerCase();
+    if (!CUSTOM_ICON_TAGS.has(tag)) return '';
+    let attrs = '';
+    for (const a of el.attributes) {
+      const name = a.name.toLowerCase();
+      if (!CUSTOM_ICON_ATTRS.has(name)) continue;
+      if (/url\(|javascript:|expression/i.test(a.value)) continue;
+      attrs += ` ${name}="${a.value.replace(/"/g, '&quot;')}"`;
+    }
+    let inner = '';
+    for (const child of el.children) inner += clean(child);
+    return `<${tag}${attrs}>${inner}</${tag}>`;
+  };
+
+  let inner = '';
+  for (const child of svg.children) inner += clean(child);
+  inner = inner.trim();
+  return inner ? { viewBox, inner } : null;
+}
+
+function customIcon(id) {
+  const list = state.config && state.config.customIcons;
+  return list ? list.find((c) => c.id === id) : null;
+}
+function isCustomIcon(id) { return !!customIcon(id); }
+
+/** Human label for any icon id — built-in or imported. */
+function iconLabel(id) {
+  return (ICONS[id] && ICONS[id].label) || (customIcon(id) && customIcon(id).label) || id;
+}
+function iconExists(id) { return !!(ICONS[id] || customIcon(id)); }
+
+/** Ids offered in the editor's Icon picker: the built-in non-furniture icons,
+ *  then every imported icon. */
+function pickableIconIds() {
+  const builtin = ICON_IDS.filter((id) => !(typeof FURNITURE_ICONS !== 'undefined' && FURNITURE_ICONS[id]));
+  const custom = ((state.config && state.config.customIcons) || []).map((c) => c.id);
+  return builtin.concat(custom);
+}
+
 /** Inner SVG markup for each symbol, keyed by symbol id. Mirrors the <symbol>s
  *  in index.html so the canvas exporter can rasterize icons without the DOM. */
 const SYMBOL_MARKUP = {
@@ -62,6 +135,17 @@ const SYMBOL_MARKUP = {
  *  `fill` paints the space enclosed by the icon's strokes; leave it out and the
  *  icon stays an outline, which is the default. */
 function iconUse(id, className = 'cell__icon', fill = null) {
+  // Imported icons carry their own markup and fill with the icon colour
+  // (currentColor), driven by the svg's `color` set by the caller.
+  const custom = customIcon(id);
+  if (custom) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', className);
+    svg.setAttribute('viewBox', custom.viewBox);
+    svg.setAttribute('fill', 'currentColor');
+    svg.innerHTML = custom.inner; // sanitized shapes only
+    return svg;
+  }
   const meta = ICONS[id];
   if (!meta) return null;
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -76,6 +160,13 @@ function iconUse(id, className = 'cell__icon', fill = null) {
 
 /** A standalone SVG data-URL for a given icon + color — used by the canvas exporter. */
 function iconDataUrl(id, color, fill = null) {
+  const custom = customIcon(id);
+  if (custom) {
+    const inner = custom.inner.replaceAll('currentColor', color);
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${custom.viewBox}" fill="${color}">${inner}</svg>`;
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  }
   const meta = ICONS[id];
   if (!meta) return null;
   const inner = SYMBOL_MARKUP[meta.symbol]

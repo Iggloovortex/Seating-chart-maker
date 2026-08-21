@@ -42,6 +42,7 @@ const DEFAULT_CONFIG = {
   siteTitle: 'Seating Chart Maker',
   favicon: null,                      // data: URI, or null to keep the built-in icon
   presets: { '1': null, '2': null },  // saved square configs, applied from the edit pane
+  customIcons: [],                    // imported SVG icons: [{ id, label, viewBox, inner }]
 };
 
 const DEFAULTS = {
@@ -975,6 +976,12 @@ function removeCustomPaper(id) {
   emitConfig();
 }
 
+function addCustomIcon(icon) { state.config.customIcons.push(icon); emitConfig(); }
+function removeCustomIcon(id) {
+  state.config.customIcons = state.config.customIcons.filter((c) => c.id !== id);
+  emitConfig();
+}
+
 /** A plain snapshot of config, safe to JSON.stringify for its own localStorage
  *  key or to bake into an exported site. Never merged into serialize(). */
 function serializeConfig() {
@@ -985,6 +992,7 @@ function serializeConfig() {
     siteTitle: state.config.siteTitle,
     favicon: state.config.favicon,
     presets: { '1': copyPreset(state.config.presets['1']), '2': copyPreset(state.config.presets['2']) },
+    customIcons: state.config.customIcons.map((c) => ({ ...c })),
   };
 }
 
@@ -1020,6 +1028,16 @@ function applyConfig(data) {
       : [],
   } : null;
   cfg.presets = { '1': okPreset(data.presets?.['1']), '2': okPreset(data.presets?.['2']) };
+  cfg.customIcons = Array.isArray(data.customIcons)
+    ? data.customIcons
+        .filter((c) => c && c.id && typeof c.inner === 'string')
+        .map((c) => ({
+          id: String(c.id),
+          label: String(c.label || 'Icon'),
+          viewBox: /^[-\d.\s]+$/.test(String(c.viewBox || '')) ? String(c.viewBox) : '0 0 16 16',
+          inner: String(c.inner),
+        }))
+    : [];
   emitConfig();
   return true;
 }

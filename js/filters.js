@@ -108,8 +108,8 @@ function cellSearchText(cell) {
   for (const l of cell.labels || []) if (l.text) parts.push(l.text);
   if (cell.icon) {
     parts.push(cell.icon);
-    const meta = ICONS[cell.icon];
-    if (meta && meta.label) parts.push(meta.label);
+    if (typeof iconLabel === 'function') parts.push(iconLabel(cell.icon));
+    else if (ICONS[cell.icon]) parts.push(ICONS[cell.icon].label);
   }
   return parts.join(' ').toLowerCase();
 }

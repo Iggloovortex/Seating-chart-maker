@@ -254,13 +254,12 @@ function render(cell) {
     none.addEventListener('click', () => { updateCell(current.r, current.c, { icon: null }); render(peekCell(current.r, current.c)); });
     picker.appendChild(none);
 
-    for (const id of ICON_IDS) {
-      if (isSpecialIcon(id)) continue; // special icons live in the Special section
+    for (const id of pickableIconIds()) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'icon-picker__btn';
-      btn.title = ICONS[id].label;
-      btn.setAttribute('aria-label', ICONS[id].label);
+      btn.title = iconLabel(id);
+      btn.setAttribute('aria-label', iconLabel(id));
       btn.setAttribute('aria-pressed', String(cell.icon === id));
       const svg = iconUse(id, '');
       if (svg) btn.appendChild(svg);
@@ -459,12 +458,13 @@ function renderBulk(keys) {
     none.addEventListener('click', () => updateCells(keys, { icon: null }));
     picker.appendChild(none);
 
-    for (const id of ICON_IDS) {
+    const bulkIds = ICON_IDS.concat(((state.config && state.config.customIcons) || []).map((c) => c.id));
+    for (const id of bulkIds) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'icon-picker__btn';
-      btn.title = ICONS[id].label;
-      btn.setAttribute('aria-label', ICONS[id].label);
+      btn.title = iconLabel(id);
+      btn.setAttribute('aria-label', iconLabel(id));
       const svg = iconUse(id, '');
       if (svg) btn.appendChild(svg);
       btn.addEventListener('click', () => updateCells(keys, { icon: id }));

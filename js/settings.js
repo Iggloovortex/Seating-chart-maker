@@ -171,8 +171,63 @@ function renderSettings() {
     themeSection(),
     paperSection(),
     siteSection(),
+    customIconsSection(),
     presetSection(),
   );
+}
+
+/** Import custom SVG icons — e.g. MIT-licensed Bootstrap Icons. Paste an <svg>,
+ *  name it, Add; imported markup is sanitized to plain shapes before it is
+ *  stored. Icons appear in the edit pane's Icon picker. */
+function customIconsSection() {
+  const g = sgroup('Custom icons');
+  const icons = state.config.customIcons;
+
+  if (!icons.length) {
+    g.appendChild(snote('No imported icons yet. Paste an SVG below — for example any icon from ' +
+      'Bootstrap Icons (icons.getbootstrap.com), which are MIT-licensed — name it, and Add.'));
+  }
+  for (const ic of icons) {
+    const row = document.createElement('div');
+    row.className = 'settings-row';
+    const prev = document.createElement('span');
+    prev.className = 'settings-icon-preview';
+    const svg = iconUse(ic.id, 'settings-icon-preview__svg');
+    if (svg) prev.appendChild(svg);
+    const name = document.createElement('span');
+    name.className = 'settings-row__name';
+    name.textContent = ic.label;
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'btn btn--empty';
+    del.textContent = 'Delete';
+    del.addEventListener('click', () => { removeCustomIcon(ic.id); renderSettings(); });
+    row.append(prev, name, del);
+    g.appendChild(row);
+  }
+
+  // Add form: name + pasted SVG + Add.
+  const form = document.createElement('div');
+  form.className = 'settings-addicon';
+  const nameIn = sinput('text', 'Name (e.g. Printer)');
+  const svgIn = document.createElement('textarea');
+  svgIn.className = 'field__input settings-svg';
+  svgIn.rows = 3;
+  svgIn.placeholder = '<svg viewBox="0 0 16 16">…</svg>';
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.className = 'btn btn--primary';
+  add.textContent = 'Add icon';
+  add.addEventListener('click', () => {
+    const parsed = parseIconSvg(svgIn.value);
+    if (!parsed) { alert('That doesn’t look like an SVG icon. Paste the full <svg>…</svg> markup.'); return; }
+    const label = (nameIn.value || '').trim() || 'Icon';
+    addCustomIcon({ id: 'custom:' + Date.now().toString(36), label, viewBox: parsed.viewBox, inner: parsed.inner });
+    renderSettings();
+  });
+  form.append(slabel('Name', nameIn), slabel('SVG', svgIn), add);
+  g.appendChild(form);
+  return g;
 }
 
 function exportSection() {
