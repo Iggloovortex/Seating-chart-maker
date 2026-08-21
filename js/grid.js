@@ -565,7 +565,20 @@ function placeChairLabels(el, rot) {
   const [dr, dc] = serverHalf(rot);
   if (dr < 0) { el.style.left = '0'; el.style.width = '100%'; el.style.top = '50%'; el.style.height = '50%'; el.style.justifyContent = 'flex-start'; }
   else if (dr > 0) { el.style.left = '0'; el.style.width = '100%'; el.style.top = '0'; el.style.height = '50%'; el.style.justifyContent = 'flex-end'; }
-  else { el.style.width = '50%'; el.style.left = dc < 0 ? '50%' : '0'; el.style.top = '0'; el.style.height = '100%'; el.style.justifyContent = 'center'; el.classList.add('cell__furniturelabels--vert'); }
+  else { placeVertFurnitureLabels(el, dc); }
+}
+
+/** A turned (side-facing) furniture label: a full-height strip whose centre — the
+ *  rotation pivot — sits just outside the tile, so the vertical name hugs the
+ *  piece rather than floating in the far half. dc<0 faces left (tile left), dc>0
+ *  faces right (tile right). */
+function placeVertFurnitureLabels(el, dc) {
+  el.style.top = '0';
+  el.style.height = '100%';
+  el.style.width = '40%';
+  el.style.left = dc < 0 ? '38%' : '22%'; // centre ~58% (hug left tile) or ~42% (hug right tile)
+  el.style.justifyContent = 'center';
+  el.classList.add('cell__furniturelabels--vert');
 }
 
 /** Which orthogonal half a server slab fills, given its facing — a diagonal
@@ -588,7 +601,7 @@ function placeServerTile(tile, rot) {
 /** Position a server's labels in the other half of the square. */
 function placeServerLabels(el, rot) {
   const [dr, dc] = serverHalf(rot);
-  if (dc) { el.style.width = '50%'; el.style.left = dc < 0 ? '50%' : '0'; el.style.height = '100%'; el.style.top = '0'; el.classList.add('cell__furniturelabels--vert'); }
+  if (dc) { placeVertFurnitureLabels(el, dc); }
   else { el.style.width = '100%'; el.style.left = '0'; el.style.height = '50%'; el.style.top = dr < 0 ? '50%' : '0'; }
 }
 

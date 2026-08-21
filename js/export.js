@@ -239,10 +239,10 @@ function chairGeometry(rectOf, { r, c, data }) {
  *  half hugging a vertical-facing chair, or the far half (full height) beside a
  *  side-facing chair, whose label reads vertically once turned. */
 function chairLabelBox(rect, dr, dc) {
-  if (dr < 0) return { x: rect.x, y: rect.y + rect.h / 2, w: rect.w, h: rect.h / 2, anchor: 'start' }; // tile top → hug below
-  if (dr > 0) return { x: rect.x, y: rect.y, w: rect.w, h: rect.h / 2, anchor: 'end' };                // tile bottom → hug above
-  if (dc < 0) return { x: rect.x + rect.w / 2, y: rect.y, w: rect.w / 2, h: rect.h, anchor: 'center' };// faces left → right half
-  return { x: rect.x, y: rect.y, w: rect.w / 2, h: rect.h, anchor: 'center' };                          // faces right → left half
+  if (dr < 0) return { x: rect.x, y: rect.y + rect.h / 2, w: rect.w, h: rect.h / 2, anchor: 'top' };    // tile top → hug just below
+  if (dr > 0) return { x: rect.x, y: rect.y, w: rect.w, h: rect.h / 2, anchor: 'bottom' };              // tile bottom → hug just above
+  if (dc < 0) return { x: rect.x + rect.w / 2, y: rect.y, w: rect.w / 2, h: rect.h, anchor: 'left' };   // faces left → right half, hug left
+  return { x: rect.x, y: rect.y, w: rect.w / 2, h: rect.h, anchor: 'right' };                            // faces right → left half, hug right
 }
 
 /** A chair: standalone furniture drawn at a fixed fraction of its full-size
@@ -271,18 +271,18 @@ function serverGeometry(rectOf, { r, c, data }) {
   if (dr && dc) dc = 0;
   const half = (v) => v / 2;
   let box, labelBox;
-  if (dr < 0) {        // faces up → slab on top
+  if (dr < 0) {        // faces up → slab on top, label hugs just below it
     box =      { x: rect.x, y: rect.y,               w: rect.w, h: half(rect.h) };
-    labelBox = { x: rect.x, y: rect.y + half(rect.h), w: rect.w, h: half(rect.h) };
+    labelBox = { x: rect.x, y: rect.y + half(rect.h), w: rect.w, h: half(rect.h), anchor: 'top' };
   } else if (dr > 0) { // faces down → slab on bottom
     box =      { x: rect.x, y: rect.y + half(rect.h), w: rect.w, h: half(rect.h) };
-    labelBox = { x: rect.x, y: rect.y,               w: rect.w, h: half(rect.h) };
+    labelBox = { x: rect.x, y: rect.y,               w: rect.w, h: half(rect.h), anchor: 'bottom' };
   } else if (dc < 0) { // faces left → slab on the left
     box =      { x: rect.x,               y: rect.y, w: half(rect.w), h: rect.h };
-    labelBox = { x: rect.x + half(rect.w), y: rect.y, w: half(rect.w), h: rect.h };
+    labelBox = { x: rect.x + half(rect.w), y: rect.y, w: half(rect.w), h: rect.h, anchor: 'left' };
   } else {             // faces right → slab on the right
     box =      { x: rect.x + half(rect.w), y: rect.y, w: half(rect.w), h: rect.h };
-    labelBox = { x: rect.x,               y: rect.y, w: half(rect.w), h: rect.h };
+    labelBox = { x: rect.x,               y: rect.y, w: half(rect.w), h: rect.h, anchor: 'right' };
   }
   return { rect, box, labelBox, full: Math.min(rect.w, rect.h), units: labelsOf(data).length };
 }
@@ -415,13 +415,17 @@ function drawLabelBox(ctx, box, data, plan, fullMin, rot = 0) {
   const vertical = norm === 90 || norm === 270;
   const maxW = (vertical ? box.h : box.w) * LABEL_WIDTH;
   // Anchor the stack to a tile-side edge of the box when asked, so it hugs the
-  // furniture instead of centring in the free space.
+  // furniture instead of centring in the free space. Vertical facings hug the
+  // top/bottom edge; a turned (side) label hugs the left/right edge — the stack
+  // runs along the rotated axis, so its half-depth is totalH/2 either way.
   const pad = lineH * 0.35;
-  const stackCy = box.anchor === 'start' ? box.y + totalH / 2 + pad
-    : box.anchor === 'end' ? box.y + box.h - totalH / 2 - pad
-    : box.y + box.h / 2;
+  let stackX = box.x + box.w / 2, stackY = box.y + box.h / 2;
+  if (box.anchor === 'top') stackY = box.y + totalH / 2 + pad;
+  else if (box.anchor === 'bottom') stackY = box.y + box.h - totalH / 2 - pad;
+  else if (box.anchor === 'left') stackX = box.x + totalH / 2 + pad;
+  else if (box.anchor === 'right') stackX = box.x + box.w - totalH / 2 - pad;
   ctx.save();
-  ctx.translate(box.x + box.w / 2, stackCy);
+  ctx.translate(stackX, stackY);
   ctx.rotate((rot * Math.PI) / 180);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
