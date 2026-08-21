@@ -306,8 +306,10 @@ function drawServer(ctx, item, imgCache, plan) {
 /** A server rack holding several servers: the full square is split into one
  *  slab per label, stacked and turned to the facing, each slab carrying its
  *  label — just as a stack of label lines on a normal square turns together.
- *  No icon: the slabs themselves say it is a rack. */
-function drawServerRack(ctx, item, _imgCache, plan) {
+ *  A small server icon sits upright in the square's top-left corner: it never
+ *  turns with the rack and is painted over the slabs but under the labels, so a
+ *  long name covers it. */
+function drawServerRack(ctx, item, imgCache, plan) {
   const { rect, full } = item.geo;
   const data = item.data;
   const labels = labelsOf(data);
@@ -315,13 +317,13 @@ function drawServerRack(ctx, item, _imgCache, plan) {
   const bandH = rect.h / n;
   const inset = Math.min(rect.w, bandH) * 0.06;
   const lineH = Math.min(full * plan.lineFrac, bandH * 0.72);
+  const cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;
+  const rad = ((data.rotation || 0) * Math.PI) / 180;
 
+  // 1) The slabs, turned to the facing.
   ctx.save();
-  ctx.translate(rect.x + rect.w / 2, rect.y + rect.h / 2);
-  ctx.rotate(((data.rotation || 0) * Math.PI) / 180);
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = contentFont(lineH * FONT_OF_LINE);
+  ctx.translate(cx, cy);
+  ctx.rotate(rad);
   for (let i = 0; i < n; i++) {
     const top = -rect.h / 2 + i * bandH;
     const x = -rect.w / 2 + inset, y = top + inset, w = rect.w - inset * 2, h = bandH - inset * 2;
@@ -331,6 +333,25 @@ function drawServerRack(ctx, item, _imgCache, plan) {
     ctx.lineWidth = Math.max(1, Math.min(w, h) * 0.06);
     ctx.strokeStyle = data.border || '#2f6feb';
     ctx.stroke();
+  }
+  ctx.restore();
+
+  // 2) The upright server icon in the top-left corner (never turns).
+  const img = imgCache.get(iconKey('server', data));
+  if (img) {
+    const isz = Math.min(rect.w, rect.h) * 0.24;
+    ctx.drawImage(img, rect.x + inset * 1.5, rect.y + inset * 1.5, isz, isz);
+  }
+
+  // 3) The labels, turned to the facing, painted last so a long one covers the icon.
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rad);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = contentFont(lineH * FONT_OF_LINE);
+  for (let i = 0; i < n; i++) {
+    const top = -rect.h / 2 + i * bandH;
     ctx.fillStyle = labels[i].color || '#1f2933';
     ctx.fillText(fitText(ctx, labels[i].text, rect.w * LABEL_WIDTH), 0, top + bandH / 2);
   }

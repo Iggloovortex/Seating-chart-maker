@@ -596,26 +596,40 @@ function placeServerLabels(el, rot) {
 }
 
 /** A rack of servers: the square split into one slab per non-empty label,
- *  stacked and turned to the facing, each slab carrying its label. The DOM twin
- *  of drawServerRack. */
+ *  stacked and turned to the facing. The slabs and labels are two turned layers
+ *  with an upright server icon sandwiched between — the icon sits in the top-left
+ *  corner, never turns, and a long name (painted above it) covers it. The DOM
+ *  twin of drawServerRack. */
 function buildServerRack(data, rot) {
-  const rack = document.createElement('div');
-  rack.className = 'cell__rack';
-  rack.style.transform = `rotate(${rot}deg)`;
+  const frag = document.createDocumentFragment();
+  const slabs = document.createElement('div');
+  slabs.className = 'cell__rack cell__rack--slabs';
+  slabs.style.transform = `rotate(${rot}deg)`;
+  const labels = document.createElement('div');
+  labels.className = 'cell__rack cell__rack--labels';
+  labels.style.transform = `rotate(${rot}deg)`;
   for (const line of data.labels) {
     if (!line.text) continue;
-    const unit = document.createElement('div');
-    unit.className = 'cell__rackunit';
-    unit.style.background = data.fill;
-    unit.style.borderColor = data.border;
+    const slab = document.createElement('div');
+    slab.className = 'cell__rackunit';
+    slab.style.background = data.fill;
+    slab.style.borderColor = data.border;
+    slabs.appendChild(slab);
+
+    const lab = document.createElement('div');
+    lab.className = 'cell__rackunit cell__rackunit--label';
     const span = document.createElement('span');
     span.className = 'cell__label';
     span.textContent = line.text;
     span.style.color = line.color;
-    unit.appendChild(span);
-    rack.appendChild(unit);
+    lab.appendChild(span);
+    labels.appendChild(lab);
   }
-  return rack;
+  frag.appendChild(slabs);
+  const svg = iconUse('server', 'cell__rackicon');
+  if (svg) { svg.style.color = data.iconColor || '#1f2933'; frag.appendChild(svg); }
+  frag.appendChild(labels);
+  return frag;
 }
 
 function buildCell(r, c, rects) {

@@ -559,7 +559,9 @@ body {
 .cell__server .cell__icon { width: 74%; }
 
 /* A rack of servers: the square split into one slab per label, stacked and
-   turned to the facing (transform set inline). No icon — the slabs say "rack". */
+   turned to the facing (transform set inline). Drawn as two turned layers — the
+   slabs, then the labels — with an upright server icon between them, so a long
+   name covers the icon while the slab fills never do. */
 .cell__rack {
   position: absolute;
   inset: 0;
@@ -567,8 +569,9 @@ body {
   flex-direction: column;
   gap: 2px;
   padding: 1px;
-  z-index: 2;
 }
+.cell__rack--slabs { z-index: 1; }
+.cell__rack--labels { z-index: 3; pointer-events: none; }
 .cell__rackunit {
   flex: 1 1 0;
   min-height: 0;
@@ -579,6 +582,18 @@ body {
   border: 1px solid var(--seat-border);
   border-radius: 6px;
   overflow: hidden;
+}
+.cell__rackunit--label { border-color: transparent; background: transparent; }
+/* The upright server icon: top-left corner, never turns with the rack, painted
+   between the slabs and the labels. */
+.cell__rackicon {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 24%;
+  height: auto;
+  aspect-ratio: 1;
+  z-index: 2;
 }
 
 /* A furniture piece's labels sit upright in the empty part of the square
