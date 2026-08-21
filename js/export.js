@@ -229,18 +229,20 @@ function chairGeometry(rectOf, { r, c, data }) {
     if (dr && !dc) cx = faced.x + faced.w / 2;
     if (dc && !dr) cy = faced.y + faced.h / 2;
   }
-  // Labels sit upright in the full square's empty space, so a long name reads
-  // beside its chair without truncating.
-  return { cx, cy, w: size, h: size, labelBox: chairLabelBox(rect, dr), full: Math.min(rect.w, rect.h) };
+  // Labels turn with the chair (like its icon), sitting in the region opposite
+  // the tile — a top/bottom band for a vertical facing, the far half for a side
+  // facing so the now-vertical name has full height and never truncates.
+  return { cx, cy, w: size, h: size, labelBox: chairLabelBox(rect, dr, dc), full: Math.min(rect.w, rect.h) };
 }
 
-/** Where a chair's labels are drawn: always the FULL square width (so a long
- *  name never truncates), in the free band, hugging the tile — `anchor` pulls the
- *  stack to the tile-side edge of the band rather than floating in its middle. */
-function chairLabelBox(rect, dr) {
+/** Where a chair's labels are drawn, opposite the tile: a full-width top/bottom
+ *  half hugging a vertical-facing chair, or the far half (full height) beside a
+ *  side-facing chair, whose label reads vertically once turned. */
+function chairLabelBox(rect, dr, dc) {
   if (dr < 0) return { x: rect.x, y: rect.y + rect.h / 2, w: rect.w, h: rect.h / 2, anchor: 'start' }; // tile top → hug below
   if (dr > 0) return { x: rect.x, y: rect.y, w: rect.w, h: rect.h / 2, anchor: 'end' };                // tile bottom → hug above
-  return { x: rect.x, y: rect.y + rect.h * 0.68, w: rect.w, h: rect.h * 0.32, anchor: 'center' };      // side → strip beneath
+  if (dc < 0) return { x: rect.x + rect.w / 2, y: rect.y, w: rect.w / 2, h: rect.h, anchor: 'center' };// faces left → right half
+  return { x: rect.x, y: rect.y, w: rect.w / 2, h: rect.h, anchor: 'center' };                          // faces right → left half
 }
 
 /** A chair: standalone furniture drawn at a fixed fraction of its full-size
@@ -254,10 +256,9 @@ function drawChair(ctx, item, imgCache, plan) {
   ctx.lineWidth = Math.max(1, size * 0.05);
   ctx.strokeStyle = item.data.border || '#2f6feb';
   ctx.stroke();
-  // The furniture carries only its icon, turned to face; the labels live upright
-  // in the square's empty half.
+  // The furniture carries its icon and its labels, both turned to the facing.
   drawIconOnly(ctx, cx, cy, size, item.data, imgCache);
-  if (labelBox) drawLabelBox(ctx, labelBox, item.data, plan, full || Math.min(labelBox.w, labelBox.h));
+  if (labelBox) drawLabelBox(ctx, labelBox, item.data, plan, full || Math.min(labelBox.w, labelBox.h), item.data.rotation || 0);
 }
 
 /** Where a server sits: a half-square slab hugging the edge it faces, filling

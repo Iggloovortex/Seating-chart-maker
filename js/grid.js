@@ -557,19 +557,15 @@ function placeChairTile(tile, rot) {
   tile.style.top = dr < 0 ? '0' : dr > 0 ? '50%' : '25%';
 }
 
-/** Position a chair's labels in the square's empty half — the region opposite
- *  the furniture tile — upright and centred there. The DOM twin of the output's
- *  chairLabelBox. */
+/** Position a chair's labels in the region opposite the tile — a full-width
+ *  top/bottom band for a vertical facing (hugging the tile), or the far half
+ *  (full height) beside a side-facing chair, whose label reads vertically once
+ *  the element is turned by the facing. The DOM twin of the output's chairLabelBox. */
 function placeChairLabels(el, rot) {
-  const n = ((Math.round(rot / 45) * 45) % 360 + 360) % 360;
-  const [dr] = FACING_STEP[n] || FACING_STEP[0];
-  // Always the full square width so a long name never truncates; sit in the free
-  // band and hug the chair tile (anchor toward it) rather than floating away.
-  el.style.left = '0';
-  el.style.width = '100%';
-  if (dr < 0) { el.style.top = '50%'; el.style.height = '50%'; el.style.justifyContent = 'flex-start'; }
-  else if (dr > 0) { el.style.top = '0'; el.style.height = '50%'; el.style.justifyContent = 'flex-end'; }
-  else { el.style.top = '68%'; el.style.height = '32%'; el.style.justifyContent = 'center'; }
+  const [dr, dc] = serverHalf(rot);
+  if (dr < 0) { el.style.left = '0'; el.style.width = '100%'; el.style.top = '50%'; el.style.height = '50%'; el.style.justifyContent = 'flex-start'; }
+  else if (dr > 0) { el.style.left = '0'; el.style.width = '100%'; el.style.top = '0'; el.style.height = '50%'; el.style.justifyContent = 'flex-end'; }
+  else { el.style.width = '50%'; el.style.left = dc < 0 ? '50%' : '0'; el.style.top = '0'; el.style.height = '100%'; el.style.justifyContent = 'center'; el.classList.add('cell__furniturelabels--vert'); }
 }
 
 /** Which orthogonal half a server slab fills, given its facing — a diagonal
@@ -592,7 +588,7 @@ function placeServerTile(tile, rot) {
 /** Position a server's labels in the other half of the square. */
 function placeServerLabels(el, rot) {
   const [dr, dc] = serverHalf(rot);
-  if (dc) { el.style.width = '50%'; el.style.left = dc < 0 ? '50%' : '0'; el.style.height = '100%'; el.style.top = '0'; }
+  if (dc) { el.style.width = '50%'; el.style.left = dc < 0 ? '50%' : '0'; el.style.height = '100%'; el.style.top = '0'; el.classList.add('cell__furniturelabels--vert'); }
   else { el.style.width = '100%'; el.style.left = '0'; el.style.height = '50%'; el.style.top = dr < 0 ? '50%' : '0'; }
 }
 
@@ -739,8 +735,9 @@ function buildCell(r, c, rects) {
       el.appendChild(tile);
       if (labelsEl) {
         labelsEl.classList.add('cell__furniturelabels');
-        if (furniture === 'server') { placeServerLabels(labelsEl, rot); labelsEl.style.transform = `rotate(${rot}deg)`; }
+        if (furniture === 'server') placeServerLabels(labelsEl, rot);
         else placeChairLabels(labelsEl, rot);
+        labelsEl.style.transform = `rotate(${rot}deg)`; // labels turn with the piece
         el.appendChild(labelsEl);
       }
     } else {

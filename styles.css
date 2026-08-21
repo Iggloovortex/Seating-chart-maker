@@ -601,8 +601,8 @@ body {
   pointer-events: none;
 }
 
-/* A furniture piece's labels sit upright in the empty part of the square
-   (left/top/size set inline), so a name reads beside its furniture. */
+/* A furniture piece's labels sit in the empty part of the square (left/top/size
+   set inline) and turn with the piece, so a name reads beside its furniture. */
 .cell__furniturelabels {
   position: absolute;
   display: flex;
@@ -614,6 +614,11 @@ body {
   z-index: 2;
   pointer-events: none;
 }
+/* A side-facing label is turned 90°, so it lays out in a narrow box but reads
+   down the square's full height — let the text overflow that box (the cell still
+   clips it) instead of ellipsizing on the pre-rotation width. */
+.cell__furniturelabels--vert { overflow: visible; }
+.cell__furniturelabels--vert .cell__label { max-width: none; overflow: visible; text-overflow: clip; }
 .cell__labels {
   display: flex;
   flex-direction: column;
