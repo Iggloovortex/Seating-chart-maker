@@ -561,11 +561,14 @@ function placeChairTile(tile, rot) {
  *  chairLabelBox. */
 function placeChairLabels(el, rot) {
   const n = ((Math.round(rot / 45) * 45) % 360 + 360) % 360;
-  const [dr, dc] = FACING_STEP[n] || FACING_STEP[0];
-  el.style.left = dc < 0 ? '50%' : '0';
-  el.style.width = dc === 0 ? '100%' : '50%';
-  el.style.top = dr < 0 ? '50%' : '0';
-  el.style.height = dr === 0 ? '100%' : '50%';
+  const [dr] = FACING_STEP[n] || FACING_STEP[0];
+  // Always the full square width so a long name never truncates; sit in the
+  // widest free band (opposite a top/bottom chair, beneath a side chair).
+  el.style.left = '0';
+  el.style.width = '100%';
+  if (dr < 0) { el.style.top = '50%'; el.style.height = '50%'; }
+  else if (dr > 0) { el.style.top = '0'; el.style.height = '50%'; }
+  else { el.style.top = '70%'; el.style.height = '30%'; }
 }
 
 function buildCell(r, c, rects) {

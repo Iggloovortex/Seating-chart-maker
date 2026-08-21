@@ -225,20 +225,19 @@ function chairGeometry(rectOf, { r, c, data }) {
     if (dr && !dc) cx = faced.x + faced.w / 2;
     if (dc && !dr) cy = faced.y + faced.h / 2;
   }
-  // Labels sit upright in the empty half of the full square — the half OPPOSITE
-  // the furniture — so a name stays readable beside its chair.
-  return { cx, cy, w: size, h: size, labelBox: chairLabelBox(rect, dr, dc), full: Math.min(rect.w, rect.h) };
+  // Labels sit upright in the full square's empty space, so a long name reads
+  // beside its chair without truncating.
+  return { cx, cy, w: size, h: size, labelBox: chairLabelBox(rect, dr), full: Math.min(rect.w, rect.h) };
 }
 
-/** The empty region of a chair's full-size square: the half (or quadrant, for a
- *  diagonal facing) opposite the furniture tile, where its labels are drawn. */
-function chairLabelBox(rect, dr, dc) {
-  let { x, y, w, h } = rect;
-  if (dr < 0) { y = rect.y + rect.h / 2; h = rect.h / 2; }      // chair hugs top → labels below
-  else if (dr > 0) { h = rect.h / 2; }                          // chair hugs bottom → labels above
-  if (dc < 0) { x = rect.x + rect.w / 2; w = rect.w / 2; }      // chair hugs left → labels right
-  else if (dc > 0) { w = rect.w / 2; }                          // chair hugs right → labels left
-  return { x, y, w, h };
+/** Where a chair's labels are drawn: always the FULL square width (so a long
+ *  name never truncates), in the widest free band — the half opposite a
+ *  top/bottom chair, or a strip beneath a side chair, which is centred
+ *  vertically and so leaves only the top and bottom clear. */
+function chairLabelBox(rect, dr) {
+  if (dr < 0) return { x: rect.x, y: rect.y + rect.h / 2, w: rect.w, h: rect.h / 2 };   // chair top → labels below
+  if (dr > 0) return { x: rect.x, y: rect.y, w: rect.w, h: rect.h / 2 };                // chair bottom → labels above
+  return { x: rect.x, y: rect.y + rect.h * 0.7, w: rect.w, h: rect.h * 0.3 };           // side chair → strip beneath
 }
 
 /** A chair: standalone furniture drawn at a fixed fraction of its full-size
