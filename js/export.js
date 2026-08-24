@@ -194,7 +194,7 @@ function drawDesk(ctx, rectOf, { r, c, data }, deskSet, imgCache, plan) {
   if (!has(r, c - 1)) { ctx.moveTo(x, y); ctx.lineTo(x, y + h); }           // left
   ctx.stroke();
 
-  drawContent(ctx, x + w / 2, y + h / 2, w, h, data, imgCache, false, plan);
+  drawContent(ctx, x + w / 2, y + h / 2, w, h, data, imgCache, false, plan, undefined, 0, data.fill || '#dbe7ff');
 }
 
 /** Where a chair sits and how big it is. Split out from drawChair so the layout
@@ -473,7 +473,7 @@ function drawTableSeat(ctx, item, imgCache, plan) {
   ctx.lineWidth = Math.max(1, size * 0.05);
   ctx.strokeStyle = item.data.border || '#2f6feb';
   ctx.stroke();
-  drawContent(ctx, cx, cy, size, size, item.data, imgCache, true, plan);
+  drawContent(ctx, cx, cy, size, size, item.data, imgCache, true, plan, undefined, 0, item.data.fill || '#dbe7ff');
 }
 
 /** A square the table covers. Its content is centred on the part of the square
@@ -502,7 +502,7 @@ function coveredGeometry(rectOf, { r, c }, footprints) {
 
 /** Draw a seat's icon (above) and label lines (each its own color), rotated.
  *  When `forceChair` and the seat is otherwise empty, draw a chair icon. */
-function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, extraRot = 0) {
+function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, extraRot = 0, labelBg = null) {
   const labels = labelsOf(data);
   let iconId = data.icon;
   if (!iconId && labels.length === 0 && forceChair) iconId = 'chair';
@@ -539,7 +539,9 @@ function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, 
   ctx.textBaseline = 'middle';
   ctx.font = contentFont(lineH * FONT_OF_LINE);
   for (const line of labels) {
-    ctx.fillStyle = line.color || '#1f2933';
+    // On a filled square (desk/seat) keep the label legible against its own fill;
+    // a table-covered square passes no bg and keeps its chosen colour.
+    ctx.fillStyle = labelBg ? contrastLabelColor(line.color, labelBg) : (line.color || '#1f2933');
     ctx.fillText(fitText(ctx, line.text, w * LABEL_WIDTH), 0, cursorY + lineH / 2);
     cursorY += lineH;
   }

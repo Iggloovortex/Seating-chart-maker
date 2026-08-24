@@ -749,9 +749,11 @@ function buildCell(r, c, rects) {
         const span = document.createElement('span');
         span.className = 'cell__label';
         span.textContent = line.text;
-        // Furniture and ghost labels sit on the bare grid surface, so keep them
-        // legible in both themes; a desk label sits on its own fill and is left be.
-        span.style.color = (furniture || ghost) ? surfaceLabelColor(line.color) : line.color;
+        // Furniture/ghost labels sit on the bare grid surface; a desk label sits
+        // on its own fill. Either way, flip it when it would vanish on that bg.
+        span.style.color = (furniture || ghost)
+          ? surfaceLabelColor(line.color)
+          : (typeof contrastLabelColor === 'function' ? contrastLabelColor(line.color, data.fill || '#dbe7ff') : line.color);
         labelsEl.appendChild(span);
       }
     }
