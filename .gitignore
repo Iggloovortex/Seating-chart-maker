@@ -1,1 +1,10 @@
 /.claude/worktrees/
+
+# Local-only dev/scratch notes — never committed, never pulled into clones or the
+# product. (Note: the remote container reset wipes untracked files, so use the
+# committed CLAUDE.md for anything that must survive a reset.)
+CLAUDE.local.md
+NOTES.local.md
+*.local.md
+/.notes/
+
