@@ -136,6 +136,7 @@ const state = {
   tables: [],                   // [{ id, cellKeys:[], shape:'round'|'square', color }]
   merges: [],                   // [{ id, keys:[], kind:'poly'|'unit' }] — see merge ops
                                 //   content lives on the anchor cell (sorted keys[0])
+  walls: {},                    // edge -> type. Key "h:r,c" / "v:r,c"; see wall ops
   paper: 'letter',              // preset id or { w, h, unit }
   landscape: true,              // paper orientation; false swaps width/height
   exportBg: '#ffffff',          // page background of the exported / printed output
@@ -188,6 +189,7 @@ function setGrid(cols, rows) {
   }
   pruneTables();
   pruneMerges();
+  pruneWalls();
   pruneSelection();
   state.rowWeights.length = rows;
   state.colWeights.length = cols;
@@ -608,6 +610,11 @@ function insertLine(axis, index) {
     remapSelection(shift);
     for (const t of state.tables) t.cellKeys = t.cellKeys.map(shift);
     for (const m of state.merges) m.keys = sortCellKeys(m.keys.map(shift));
+    // Walls sit on edges: a line inserted at `index` pushes every edge at or past
+    // it one step along the same axis.
+    remapWalls((o, r, c) => isRow
+      ? [r >= index ? r + 1 : r, c]
+      : [r, c >= index ? c + 1 : c]);
     const weights = isRow ? state.rowWeights : state.colWeights;
     weights.splice(index, 0, undefined);          // the new line takes the default
     if (isRow) state.grid = { ...state.grid, rows: state.grid.rows + 1 };
@@ -655,6 +662,17 @@ function deleteLine(axis, index) {
     for (const m of state.merges) {
       m.keys = sortCellKeys(m.keys.map(shift).filter((k) => k !== undefined));
     }
+    // Walls: the deleted line's two bounding edges collapse onto one; edges past
+    // it move back one. An edge that spanned a removed cell (v on a removed row,
+    // h on a removed column) goes with it.
+    remapWalls((o, r, c) => {
+      if (isRow) {
+        if (o === 'v' && r === index) return null;
+        return [r > index ? r - 1 : r, c];
+      }
+      if (o === 'h' && c === index) return null;
+      return [r, c > index ? c - 1 : c];
+    });
     const weights = isRow ? state.rowWeights : state.colWeights;
     weights.splice(index, 1);
     if (isRow) state.grid = { ...state.grid, rows: state.grid.rows - 1 };
@@ -663,6 +681,7 @@ function deleteLine(axis, index) {
     state.colWeights.length = state.grid.cols;
     pruneTables();      // a table that lived entirely on that line is gone now
     pruneMerges();      // and a merge left with fewer than two cells
+    pruneWalls();       // and any edge now outside the smaller grid
     pruneSelection();
   });
   return true;
@@ -1052,6 +1071,68 @@ function pruneMerges() {
   for (const m of state.merges) m.keys = sortCellKeys(m.keys);
 }
 
+// ---------------------------------------------------------------- walls
+//
+// Walls, railings, doors and windows are drawn ON the seams between squares (and
+// on the grid's outer border) — not inside a square. Each lives on one cell EDGE,
+// keyed in state.walls as a plain map: "h:r,c" is the horizontal edge above row r
+// spanning column c (r in 0..rows, the top edge of cell (r,c)); "v:r,c" is the
+// vertical edge left of column c spanning row r (c in 0..cols, the left edge of
+// cell (r,c)). The value is the wall type.
+
+const WALL_TYPES = ['wall', 'hollow', 'railing', 'door', 'window'];
+
+function wallKey(o, r, c) { return `${o}:${r},${c}`; }
+
+/** True when an edge is a real grid seam or border. */
+function wallEdgeInBounds(o, r, c) {
+  const { rows, cols } = state.grid;
+  if (o === 'h') return r >= 0 && r <= rows && c >= 0 && c < cols;
+  if (o === 'v') return c >= 0 && c <= cols && r >= 0 && r < rows;
+  return false;
+}
+
+function wallAt(o, r, c) { return state.walls[wallKey(o, r, c)] || null; }
+
+/** Place (or, with a null/unknown type, clear) the wall on one edge. */
+function setWall(o, r, c, type) {
+  if (!wallEdgeInBounds(o, r, c)) return;
+  const key = wallKey(o, r, c);
+  if (type && WALL_TYPES.includes(type)) state.walls[key] = type;
+  else delete state.walls[key];
+  emit();
+}
+
+function clearWalls() {
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  state.walls = {};
+  emit();
+}
+
+function hasWalls() { return Object.keys(state.walls).length > 0; }
+
+/** Drop any wall whose edge no longer exists (after a grid resize). */
+function pruneWalls() {
+  for (const key of Object.keys(state.walls)) {
+    const [o, rc] = key.split(':');
+    const [r, c] = rc.split(',').map(Number);
+    if (!wallEdgeInBounds(o, r, c)) delete state.walls[key];
+  }
+}
+
+/** Rebuild the wall map through a shift on each edge's (o, r, c). `shift` returns
+ *  a new [r, c] or null to drop the edge. Used by row/column insert and delete. */
+function remapWalls(shift) {
+  const next = {};
+  for (const [key, type] of Object.entries(state.walls)) {
+    const [o, rc] = key.split(':');
+    const [r, c] = rc.split(',').map(Number);
+    const moved = shift(o, r, c);
+    if (moved) next[wallKey(o, moved[0], moved[1])] = type;
+  }
+  state.walls = next;
+}
+
 // ---------------------------------------------------------------- reset
 
 /** Empty every square on the grid. Non-destructive, like any unseating: labels,
@@ -1078,6 +1159,7 @@ function clearAll() {
     state.cells.clear();
     state.tables = [];
     state.merges = [];
+    state.walls = {};
     clearManualSelection();
     state.tableSelection.clear();
     state.rowWeights = [];
@@ -1100,6 +1182,7 @@ function serialize() {
     colWeights: [...state.colWeights],
     tables: state.tables.map((t) => ({ ...t, cellKeys: [...t.cellKeys] })),
     merges: state.merges.map((m) => ({ id: m.id, kind: m.kind, keys: [...m.keys] })),
+    walls: { ...state.walls },
     paper: state.paper,
     landscape: state.landscape,
     exportBg: state.exportBg,
@@ -1162,6 +1245,14 @@ function deserialize(data) {
                          kind: m.kind === 'unit' ? 'unit' : 'poly',
                          keys: sortCellKeys(m.keys.map(String)) }))
       : [];
+    state.walls = {};
+    if (data.walls && typeof data.walls === 'object') {
+      for (const [key, type] of Object.entries(data.walls)) {
+        if (!WALL_TYPES.includes(type)) continue;
+        const m = /^([hv]):(\d+),(\d+)$/.exec(key);
+        if (m && wallEdgeInBounds(m[1], Number(m[2]), Number(m[3]))) state.walls[key] = type;
+      }
+    }
     state.paper = data.paper || 'letter';
     state.landscape = data.landscape !== false;
     state.exportBg = data.exportBg || '#ffffff';

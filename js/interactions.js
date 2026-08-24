@@ -68,6 +68,8 @@ function initInteractions(chartEl) {
 
   chartEl.addEventListener('pointerdown', (e) => {
     if (e.button === 2) return; // right-click handled via contextmenu
+    // In walls mode the grid's edge layer handles clicks; squares don't respond.
+    if (typeof isWallsMode === 'function' && isWallsMode()) return;
     const cell = cellFrom(e.target);
     if (!cell) return;
 
@@ -107,6 +109,7 @@ function initInteractions(chartEl) {
   // Desktop right-click => edit. Shift+right-click => the delete menu instead,
   // acting on the whole selection when there is one.
   chartEl.addEventListener('contextmenu', (e) => {
+    if (typeof isWallsMode === 'function' && isWallsMode()) return;
     const cell = cellFrom(e.target);
     if (!cell) return;
     e.preventDefault();

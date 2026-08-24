@@ -81,6 +81,7 @@ initSettings();
 initPaperControls();
 initOrientationControls();
 initTables();
+initWalls();
 initFilters();
 initRows();
 initInsertGuides(document.getElementById('stage'));

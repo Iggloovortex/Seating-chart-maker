@@ -68,12 +68,17 @@ and push it; don't stack new work directly on `main`.
   (SVG fill+outline, gaps bridged) and export `drawMerge` keep parity. Tap a
   merged cell to edit the anchor; the pane's Merged-square section switches
   kind / unmerges.
-- **Walls (planned):** edge objects drawn on the seams between squares. Kinds
-  from the reference: solid wall (filled black), hollow wall (double outline,
-  white interior), railing (line with a smaller inner line of another colour),
-  door (a wood/brown panel set in a wall gap with jamb lines), window (a gap
-  spanned by thin light-blue double lines). New edge-based model + both renderers
-  + editor + serialize.
+- **Walls — DONE** (branch `claude/walls-tmdavo`). Edge objects on the seams
+  between squares and the outer border. Types: `wall` (solid black), `hollow`
+  (double outline), `railing` (line + inner colour line), `door` (brown panel
+  with jamb ticks), `window` (blue double line with jambs). Model: `state.walls`
+  is a map, key `"h:r,c"` (top edge of cell r,c) / `"v:r,c"` (left edge), value =
+  type; remapped/pruned on insert/delete/setGrid, carried by serialize (Clear
+  Grid keeps walls; New clears them). Geometry `wallSegment` + paint spec
+  `wallPaint`/`paintWall` (js/layout.js) are shared by the grid overlay
+  `renderWalls` and export `drawWalls`. Walls mode (`js/walls.js`, the toolbar
+  `#btn-walls` + `#wall-bar`) shows an interactive edge layer (`renderWallEdges`);
+  pick a type, click a seam to place, click again / Erase to remove.
 - **2-column labels** for the KVM and Dual Monitor icons — a per-row optional 2nd
   column, activating when any row has 2nd-column content. Touches the label data
   model, editor, both renderers, and TSV. (Scoped, not started.)

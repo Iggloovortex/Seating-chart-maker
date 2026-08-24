@@ -177,7 +177,22 @@ async function renderToCanvas(dpi = 300) {
                 v.geo.clip, v.geo.tableRot);
   }
 
+  // 5) Walls, railings, doors and windows — drawn last, on the seams, on top.
+  drawWalls(ctx, rectOf);
+
   return canvas;
+}
+
+/** Draw every wall on its edge. Axis-aligned rectangles (see paintWall) — solid
+ *  wall, hollow wall, railing, door and window each build from a few bars. */
+function drawWalls(ctx, rectOf) {
+  const bg = state.exportBg || '#ffffff';
+  for (const [key, type] of Object.entries(state.walls)) {
+    const m = /^([hv]):(\d+),(\d+)$/.exec(key);
+    if (!m) continue;
+    const seg = wallSegment(m[1], Number(m[2]), Number(m[3]), rectOf);
+    paintWall(seg, type, bg, (x, y, w, h, color) => { ctx.fillStyle = color; ctx.fillRect(x, y, w, h); });
+  }
 }
 
 // ------------------------------------------------------- content sizing

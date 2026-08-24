@@ -220,6 +220,13 @@
               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
       </symbol>
 
+      <symbol id="ui-wall" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
+          <rect x="3" y="5" width="18" height="14" rx="1"/>
+          <path d="M3 9.7h18M3 14.3h18M9 5v4.7M15 9.7v4.6M9 14.3V19M15 5v0"/>
+        </g>
+      </symbol>
+
       <!-- ===== Grid-action row ===== -->
       <symbol id="ui-undo" viewBox="0 0 24 24">
         <path d="M4.2 9.4h9.4a5.8 5.8 0 0 1 0 11.6H7" fill="none" stroke="currentColor"
@@ -352,6 +359,9 @@
         <button id="btn-true-size" class="btn btn--toggle" type="button" aria-pressed="false" title="Show weighted row/column sizes in the grid">True size</button>
         <button id="btn-select" class="btn btn--icon btn--toggle" type="button" aria-pressed="false" title="Select mode" aria-label="Select mode">
           <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use id="select-icon" href="#ui-select-off"/></svg>
+        </button>
+        <button id="btn-walls" class="btn btn--icon btn--toggle" type="button" aria-pressed="false" title="Walls — draw walls, doors and windows on the seams" aria-label="Walls mode">
+          <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-wall"/></svg>
         </button>
       </div>
        </div>
@@ -491,6 +501,16 @@
           <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-trash"/></svg>
         </button>
         <button id="btn-select-clear" class="btn btn--ghost" type="button">Clear selection</button>
+      </div>
+    </div>
+
+    <!-- Walls bar: pick a wall type, then click the seams to place it. -->
+    <div id="wall-bar" class="selectbar" hidden>
+      <span class="selectbar__count">Click a seam to place:</span>
+      <div class="selectbar__actions">
+        <div id="wall-types" class="wall-types" role="group" aria-label="Wall type"></div>
+        <span class="toolbar__sep" aria-hidden="true"></span>
+        <button id="wall-clear" class="btn btn--empty" type="button" title="Remove every wall">Clear walls</button>
       </div>
     </div>
 
@@ -650,6 +670,7 @@
   <script src="js/editor.js"></script>
   <script src="js/colorpicker.js"></script>
   <script src="js/tables.js"></script>
+  <script src="js/walls.js"></script>
   <script src="js/export.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/rows.js"></script>

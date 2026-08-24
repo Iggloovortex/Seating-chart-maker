@@ -66,6 +66,64 @@ function mergePlan(merge) {
   return { set, has, bbox, cells, labelRun, iconCell, isRect };
 }
 
+/** Pixel geometry of a wall edge, given a `rectOf(r,c) -> {x,y,w,h}` lookup.
+ *  Returns `{ o, cross, a0, a1, u }`: for a horizontal edge `cross` is its y and
+ *  a0..a1 its x span; for a vertical edge `cross` is its x and a0..a1 its y span.
+ *  `u` is the neighbouring cell size, so wall thickness can scale with the grid. */
+function wallSegment(o, r, c, rectOf) {
+  const { rows, cols } = state.grid;
+  if (o === 'h') {
+    const cell = r < rows ? rectOf(r, c) : rectOf(rows - 1, c);
+    const y = r < rows ? cell.y : cell.y + cell.h;
+    return { o, cross: y, a0: cell.x, a1: cell.x + cell.w, u: Math.min(cell.w, cell.h) };
+  }
+  const cell = c < cols ? rectOf(r, c) : rectOf(r, cols - 1);
+  const x = c < cols ? cell.x : cell.x + cell.w;
+  return { o, cross: x, a0: cell.y, a1: cell.y + cell.h, u: Math.min(cell.w, cell.h) };
+}
+
+/** The bars (and end jambs) that make up each wall type, as fractions of the cell
+ *  size `u`. `off` is the cross-axis offset from the edge centre, `t` the
+ *  thickness, `shrink` trims each end (leaving a gap for a door/window). `bg` is
+ *  the colour behind the wall, used for a hollow wall's inner line. */
+function wallPaint(type, bg) {
+  switch (type) {
+    case 'wall':    return { bars: [{ off: 0, t: 0.16, color: '#1b1b1b' }] };
+    case 'hollow':  return { bars: [{ off: 0, t: 0.16, color: '#1b1b1b' },
+                                     { off: 0, t: 0.08, color: bg || '#ffffff' }] };
+    case 'railing': return { bars: [{ off: 0, t: 0.075, color: '#3a3a3a' },
+                                     { off: 0, t: 0.025, color: '#8fb3ff' }] };
+    case 'door':    return { jambs: true,
+                             bars: [{ off: 0, t: 0.13, color: '#a9744f', shrink: 0.14 }] };
+    case 'window':  return { jambs: true,
+                             bars: [{ off: -0.05, t: 0.03, color: '#5aa9d6', shrink: 0.12 },
+                                    { off: 0.05,  t: 0.03, color: '#5aa9d6', shrink: 0.12 }] };
+    default:        return { bars: [] };
+  }
+}
+
+/** Paint one wall by handing axis-aligned rectangles to `bar(x, y, w, h, color)`
+ *  — the one primitive both the SVG grid overlay and the canvas export provide. */
+function paintWall(seg, type, bg, bar) {
+  const { o, cross, a0, a1, u } = seg;
+  const len = a1 - a0;
+  const spec = wallPaint(type, bg);
+  for (const b of spec.bars) {
+    const shrink = (b.shrink || 0) * len;
+    const s0 = a0 + shrink, s1 = a1 - shrink;
+    const t = b.t * u, off = (b.off || 0) * u;
+    if (o === 'h') bar(s0, cross + off - t / 2, s1 - s0, t, b.color);
+    else           bar(cross + off - t / 2, s0, t, s1 - s0, b.color);
+  }
+  if (spec.jambs) {
+    const jt = 0.16 * u, jl = 0.2 * u;   // short perpendicular ticks at each end
+    for (const at of [a0, a1]) {
+      if (o === 'h') bar(at - jt / 2, cross - jl / 2, jt, jl, '#1b1b1b');
+      else           bar(cross - jl / 2, at - jt / 2, jl, jt, '#1b1b1b');
+    }
+  }
+}
+
 /** Per-square sizing rules for the current state. Computes table footprints
  *  once, then exposes the lookups both renderers need. */
 function layoutRules() {

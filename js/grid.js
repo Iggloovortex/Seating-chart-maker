@@ -72,6 +72,8 @@ function renderGrid() {
   fitCellLabels();
   renderTables();
   renderMerges();
+  renderWalls();
+  if (typeof isWallsMode === 'function' && isWallsMode()) renderWallEdges();
   renderMoveHandle();
   buildInsertGuides();
 }
@@ -1124,6 +1126,74 @@ function placeMergeContent(data, fill, box, which) {
   chart.appendChild(wrap);
 }
 
+// ---------------------------------------------------------------- walls
+//
+// Walls, railings, doors and windows live on the seams between squares. They are
+// drawn (renderWalls) as an SVG overlay of axis-aligned bars — the export twin is
+// drawWalls. In walls mode an interactive edge layer (renderWallEdges) sits on top
+// so every seam and border can be clicked to place the active wall type.
+
+/** A {x,y,w,h} for cell (r,c) in the chart's own layout px — the shape wallSegment
+ *  expects — or null if the cell isn't in the DOM. */
+function cellXYWH(r, c) {
+  const b = cellLocalRect(r, c);
+  return b ? { x: b.left, y: b.top, w: b.width, h: b.height } : null;
+}
+
+function makeWallsSvg(cls) {
+  const svg = document.createElementNS(MERGE_SVGNS, 'svg');
+  svg.setAttribute('class', cls);
+  svg.style.left = '0';
+  svg.style.top = '0';
+  svg.setAttribute('width', chart.clientWidth);
+  svg.setAttribute('height', chart.clientHeight);
+  return svg;
+}
+
+function renderWalls() {
+  if (!hasWalls()) return;
+  const svg = makeWallsSvg('walls-layer');
+  const bar = (x, y, w, h, color) => {
+    const rect = document.createElementNS(MERGE_SVGNS, 'rect');
+    rect.setAttribute('x', x); rect.setAttribute('y', y);
+    rect.setAttribute('width', Math.max(0, w)); rect.setAttribute('height', Math.max(0, h));
+    rect.setAttribute('fill', color);
+    svg.appendChild(rect);
+  };
+  const rectOf = (r, c) => cellXYWH(r, c);
+  for (const [key, type] of Object.entries(state.walls)) {
+    const m = /^([hv]):(\d+),(\d+)$/.exec(key);
+    if (!m) continue;
+    const seg = wallSegment(m[1], Number(m[2]), Number(m[3]), rectOf);
+    if (seg && Number.isFinite(seg.cross)) paintWall(seg, type, GRID_SURFACE, bar);
+  }
+  chart.appendChild(svg);
+}
+
+/** The interactive edge layer for walls mode: a clickable strip on every seam and
+ *  border. Clicking places the active wall type (see placeWall in walls.js). */
+function renderWallEdges() {
+  const { rows, cols } = state.grid;
+  const svg = makeWallsSvg('wall-edges');
+  const rectOf = (r, c) => cellXYWH(r, c);
+  const HIT = 14; // px hit thickness across the seam
+
+  const edge = (o, r, c) => {
+    const seg = wallSegment(o, r, c, rectOf);
+    if (!seg || !Number.isFinite(seg.cross)) return;
+    const rect = document.createElementNS(MERGE_SVGNS, 'rect');
+    if (o === 'h') { rect.setAttribute('x', seg.a0); rect.setAttribute('y', seg.cross - HIT / 2); rect.setAttribute('width', seg.a1 - seg.a0); rect.setAttribute('height', HIT); }
+    else { rect.setAttribute('x', seg.cross - HIT / 2); rect.setAttribute('y', seg.a0); rect.setAttribute('width', HIT); rect.setAttribute('height', seg.a1 - seg.a0); }
+    rect.setAttribute('class', wallAt(o, r, c) ? 'wall-edge wall-edge--set' : 'wall-edge');
+    rect.addEventListener('click', (e) => { e.stopPropagation(); if (typeof placeWall === 'function') placeWall(o, r, c); });
+    svg.appendChild(rect);
+  };
+
+  for (let r = 0; r <= rows; r++) for (let c = 0; c < cols; c++) edge('h', r, c);
+  for (let r = 0; r < rows; r++) for (let c = 0; c <= cols; c++) edge('v', r, c);
+  chart.appendChild(svg);
+}
+
 // ------------------------------------------------------------ table resizing
 //
 // Eight handles on a picked table's shape — four corners and four sides. Each
@@ -1238,10 +1308,12 @@ function showResizePreview({ preview, next }) {
 
 /** Re-measure table overlays after layout changes (zoom, resize). */
 function refreshTables() {
-  chart.querySelectorAll('.table-shape, .table-remove, .table-handle, .move-handle, .merge-shape, .merge-content, .merge-unit')
+  chart.querySelectorAll('.table-shape, .table-remove, .table-handle, .move-handle, .merge-shape, .merge-content, .merge-unit, .walls-layer, .wall-edges')
     .forEach((n) => n.remove());
   renderTables();
   renderMerges();
+  renderWalls();
+  if (typeof isWallsMode === 'function' && isWallsMode()) renderWallEdges();
   renderMoveHandle();
 }
 

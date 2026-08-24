@@ -695,6 +695,39 @@ body {
 .mergekind { display: flex; gap: 6px; }
 .mergekind .btn { flex: 1; }
 
+/* Walls, railings, doors and windows drawn on the seams (renderWalls). */
+.walls-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;   /* the walls themselves aren't interactive */
+  overflow: visible;
+  z-index: 3;
+}
+/* The interactive edge layer, only shown in walls mode (renderWallEdges). */
+.wall-edges {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  z-index: 6;
+}
+.wall-edge { fill: transparent; cursor: pointer; }
+.wall-edge:hover { fill: rgba(47, 111, 235, .35); }
+.wall-edge--set { fill: rgba(47, 111, 235, .14); }
+
+/* Wall-type picker in the walls bar. */
+.wall-types { display: flex; gap: 6px; flex-wrap: wrap; }
+.wall-type[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+.wall-type--erase[aria-pressed="true"] {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
 /* Split-shape option buttons (in the editor): each shows a tiny grid diagram. */
 .split-opt__svg { width: 24px; height: 24px; color: var(--ink); }
 
