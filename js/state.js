@@ -1094,12 +1094,26 @@ function wallEdgeInBounds(o, r, c) {
 
 function wallAt(o, r, c) { return state.walls[wallKey(o, r, c)] || null; }
 
-/** Place (or, with a null/unknown type, clear) the wall on one edge. */
-function setWall(o, r, c, type) {
+/** A wall's value can be a plain type string, or (for a door, which carries an
+ *  orientation) an object { t:'door', o:0..3 }. These read either shape. */
+function wallTypeOf(v) { return v && typeof v === 'object' ? v.t : v; }
+function wallOrient(v) { return v && typeof v === 'object' ? (((v.o | 0) % 4) + 4) % 4 : 0; }
+
+/** Coerce a wall value to a stored form, or null when it isn't a real wall. */
+function normalizeWallValue(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return WALL_TYPES.includes(value) ? value : null;
+  if (typeof value === 'object' && value.t === 'door') return { t: 'door', o: wallOrient(value) };
+  return null;
+}
+
+/** Place (or, with a null/unknown value, clear) the wall on one edge. `value` is
+ *  a type string, or a door object { t:'door', o } carrying its orientation. */
+function setWall(o, r, c, value) {
   if (!wallEdgeInBounds(o, r, c)) return;
   const key = wallKey(o, r, c);
-  if (type && WALL_TYPES.includes(type)) state.walls[key] = type;
-  else delete state.walls[key];
+  const norm = normalizeWallValue(value);
+  if (norm) state.walls[key] = norm; else delete state.walls[key];
   emit();
 }
 
@@ -1247,10 +1261,11 @@ function deserialize(data) {
       : [];
     state.walls = {};
     if (data.walls && typeof data.walls === 'object') {
-      for (const [key, type] of Object.entries(data.walls)) {
-        if (!WALL_TYPES.includes(type)) continue;
+      for (const [key, value] of Object.entries(data.walls)) {
+        const norm = normalizeWallValue(value);
+        if (!norm) continue;
         const m = /^([hv]):(\d+),(\d+)$/.exec(key);
-        if (m && wallEdgeInBounds(m[1], Number(m[2]), Number(m[3]))) state.walls[key] = type;
+        if (m && wallEdgeInBounds(m[1], Number(m[2]), Number(m[3]))) state.walls[key] = norm;
       }
     }
     state.paper = data.paper || 'letter';

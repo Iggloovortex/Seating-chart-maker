@@ -183,15 +183,41 @@ async function renderToCanvas(dpi = 300) {
   return canvas;
 }
 
-/** Draw every wall on its edge. Axis-aligned rectangles (see paintWall) — solid
- *  wall, hollow wall, railing, door and window each build from a few bars. */
+/** Canvas drawing primitives for walls — the twin of svgWallOps. */
+function canvasWallOps(ctx) {
+  return {
+    poly(points, fill, stroke, sw) {
+      ctx.beginPath();
+      points.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.closePath();
+      if (fill && fill !== 'none') { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke && stroke !== 'none') { ctx.lineJoin = 'round'; ctx.lineWidth = sw; ctx.strokeStyle = stroke; ctx.stroke(); }
+    },
+    circle(cx, cy, r, fill, stroke, sw) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      if (fill && fill !== 'none') { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke && stroke !== 'none') { ctx.lineWidth = sw; ctx.strokeStyle = stroke; ctx.stroke(); }
+    },
+    line(x1, y1, x2, y2, stroke, sw) {
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+      ctx.lineCap = 'round'; ctx.lineWidth = sw; ctx.strokeStyle = stroke; ctx.stroke();
+    },
+  };
+}
+
+/** Draw every wall on its edge: a beveled hexagon bar (wall / hollow / window) or
+ *  a door (brown frame + hinge + swing leaf). The export grid is gapless, so the
+ *  bevelled ends meet exactly at each junction. */
 function drawWalls(ctx, rectOf) {
-  const bg = state.exportBg || '#ffffff';
-  for (const [key, type] of Object.entries(state.walls)) {
+  const ops = canvasWallOps(ctx);
+  for (const [key, value] of Object.entries(state.walls)) {
     const m = /^([hv]):(\d+),(\d+)$/.exec(key);
     if (!m) continue;
     const seg = wallSegment(m[1], Number(m[2]), Number(m[3]), rectOf);
-    paintWall(seg, type, bg, (x, y, w, h, color) => { ctx.fillStyle = color; ctx.fillRect(x, y, w, h); });
+    const type = wallTypeOf(value);
+    if (type === 'door') paintDoor(seg, wallOrient(value), ops);
+    else paintWall(seg, type, ops);
   }
 }
 

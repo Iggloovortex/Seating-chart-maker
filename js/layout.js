@@ -69,59 +69,80 @@ function mergePlan(merge) {
 /** Pixel geometry of a wall edge, given a `rectOf(r,c) -> {x,y,w,h}` lookup.
  *  Returns `{ o, cross, a0, a1, u }`: for a horizontal edge `cross` is its y and
  *  a0..a1 its x span; for a vertical edge `cross` is its x and a0..a1 its y span.
- *  `u` is the neighbouring cell size, so wall thickness can scale with the grid. */
-function wallSegment(o, r, c, rectOf) {
+ *  `u` is the neighbouring cell size, so wall thickness scales with the grid.
+ *  `gap` (the grid's inter-cell gap; 0 in the gapless export) centres the segment
+ *  on the true seam and extends its ends to the corner points, so perpendicular
+ *  walls meet cleanly at junctions. */
+function wallSegment(o, r, c, rectOf, gap = 0) {
   const { rows, cols } = state.grid;
+  const g = gap / 2;
   if (o === 'h') {
     const cell = r < rows ? rectOf(r, c) : rectOf(rows - 1, c);
-    const y = r < rows ? cell.y : cell.y + cell.h;
-    return { o, cross: y, a0: cell.x, a1: cell.x + cell.w, u: Math.min(cell.w, cell.h) };
+    const y = (r < rows ? cell.y : cell.y + cell.h) + (r < rows ? -g : g);
+    return { o, cross: y, a0: cell.x - g, a1: cell.x + cell.w + g, u: Math.min(cell.w, cell.h) };
   }
   const cell = c < cols ? rectOf(r, c) : rectOf(r, cols - 1);
-  const x = c < cols ? cell.x : cell.x + cell.w;
-  return { o, cross: x, a0: cell.y, a1: cell.y + cell.h, u: Math.min(cell.w, cell.h) };
+  const x = (c < cols ? cell.x : cell.x + cell.w) + (c < cols ? -g : g);
+  return { o, cross: x, a0: cell.y - g, a1: cell.y + cell.h + g, u: Math.min(cell.w, cell.h) };
 }
 
-/** The bars (and end jambs) that make up each wall type, as fractions of the cell
- *  size `u`. `off` is the cross-axis offset from the edge centre, `t` the
- *  thickness, `shrink` trims each end (leaving a gap for a door/window). `bg` is
- *  the colour behind the wall, used for a hollow wall's inner line. */
-function wallPaint(type, bg) {
-  switch (type) {
-    case 'wall':    return { bars: [{ off: 0, t: 0.16, color: '#1b1b1b' }] };
-    case 'hollow':  return { bars: [{ off: 0, t: 0.16, color: '#1b1b1b' },
-                                     { off: 0, t: 0.08, color: bg || '#ffffff' }] };
-    case 'railing': return { bars: [{ off: 0, t: 0.075, color: '#3a3a3a' },
-                                     { off: 0, t: 0.025, color: '#8fb3ff' }] };
-    case 'door':    return { jambs: true,
-                             bars: [{ off: 0, t: 0.13, color: '#a9744f', shrink: 0.14 }] };
-    case 'window':  return { jambs: true,
-                             bars: [{ off: -0.05, t: 0.03, color: '#5aa9d6', shrink: 0.12 },
-                                    { off: 0.05,  t: 0.03, color: '#5aa9d6', shrink: 0.12 }] };
-    default:        return { bars: [] };
-  }
-}
+// Wall proportions, taken from the reference SVGs (a cell is 825 units there):
+// the beveled bar's fill is ~0.09 of a cell thick, its outline ~0.03. The 45°
+// bevels at each end let perpendicular walls miter together at a corner.
+const WALL_THICK = 0.091;
+const WALL_STROKE = 0.03;
 
-/** Paint one wall by handing axis-aligned rectangles to `bar(x, y, w, h, color)`
- *  — the one primitive both the SVG grid overlay and the canvas export provide. */
-function paintWall(seg, type, bg, bar) {
+/** The six points of a wall's beveled hexagon bar (a rectangle whose short ends
+ *  are cut to 45° points at the seam's endpoints), in draw order. */
+function wallHex(seg) {
   const { o, cross, a0, a1, u } = seg;
-  const len = a1 - a0;
-  const spec = wallPaint(type, bg);
-  for (const b of spec.bars) {
-    const shrink = (b.shrink || 0) * len;
-    const s0 = a0 + shrink, s1 = a1 - shrink;
-    const t = b.t * u, off = (b.off || 0) * u;
-    if (o === 'h') bar(s0, cross + off - t / 2, s1 - s0, t, b.color);
-    else           bar(cross + off - t / 2, s0, t, s1 - s0, b.color);
+  const h = (WALL_THICK * u) / 2;
+  const P = (p, q) => (o === 'h' ? { x: p, y: cross + q } : { x: cross + q, y: p });
+  return [P(a1, 0), P(a1 - h, -h), P(a0 + h, -h), P(a0, 0), P(a0 + h, h), P(a1 - h, h)];
+}
+
+/** Paint one non-door wall by handing shapes to `ops` — `poly(points, fill,
+ *  stroke, sw)` and `line(x1,y1,x2,y2, stroke, sw)`. Wall is a grey-filled bar,
+ *  hollow is its outline, window is the outline with a light-blue glass fill, and
+ *  railing is a line with a thinner coloured line inside it. */
+function paintWall(seg, type, ops) {
+  const sw = WALL_STROKE * seg.u;
+  if (type === 'railing') {
+    const { o, cross, a0, a1, u } = seg;
+    const P = (p) => (o === 'h' ? { x: p, y: cross } : { x: cross, y: p });
+    const A = P(a0), B = P(a1);
+    ops.line(A.x, A.y, B.x, B.y, '#3a3a3a', 0.05 * u);
+    ops.line(A.x, A.y, B.x, B.y, '#8fb3ff', 0.018 * u);
+    return;
   }
-  if (spec.jambs) {
-    const jt = 0.16 * u, jl = 0.2 * u;   // short perpendicular ticks at each end
-    for (const at of [a0, a1]) {
-      if (o === 'h') bar(at - jt / 2, cross - jl / 2, jt, jl, '#1b1b1b');
-      else           bar(cross - jl / 2, at - jt / 2, jl, jt, '#1b1b1b');
-    }
-  }
+  const fill = type === 'wall' ? '#909090' : type === 'window' ? '#d8feff' : 'none';
+  ops.poly(wallHex(seg), fill, '#000000', sw);
+}
+
+/** Paint a door: a brown hexagon frame in the opening, a hinge circle at one end,
+ *  and a 45° swing leaf into the adjacent cell. `orient` (0..3) picks the hinge
+ *  end (bit 1) and the swing side (bit 0) — its rotate and flip. */
+function paintDoor(seg, orient, ops) {
+  const { o, cross, a0, a1, u } = seg;
+  const sw = WALL_STROKE * u;
+  ops.poly(wallHex(seg), '#6c4c00', '#392b00', sw);
+
+  const P = (p, q) => (o === 'h' ? { x: p, y: cross + q } : { x: cross + q, y: p });
+  const hingeAtEnd = (orient & 2) !== 0;
+  const swing = (orient & 1) ? -1 : 1;
+  const hp = hingeAtEnd ? a1 : a0;         // which end the hinge sits on
+  const dir = hingeAtEnd ? -1 : 1;         // the leaf sweeps toward the other end
+  const hinge = P(hp, 0);
+  ops.circle(hinge.x, hinge.y, 0.03 * u, 'none', '#392b00', sw);
+
+  const comp = (a1 - a0) / Math.SQRT2;     // a 45° leaf of length = opening width
+  const tip = P(hp + dir * comp, swing * comp);
+  const dx = tip.x - hinge.x, dy = tip.y - hinge.y, len = Math.hypot(dx, dy) || 1;
+  const lw = 0.06 * u, nx = (-dy / len) * (lw / 2), ny = (dx / len) * (lw / 2);
+  ops.poly([
+    { x: hinge.x + nx, y: hinge.y + ny }, { x: tip.x + nx, y: tip.y + ny },
+    { x: tip.x - nx, y: tip.y - ny }, { x: hinge.x - nx, y: hinge.y - ny },
+  ], 'none', 'rgba(57,43,0,0.46)', sw);
 }
 
 /** Per-square sizing rules for the current state. Computes table footprints

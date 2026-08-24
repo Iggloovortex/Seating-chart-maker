@@ -1150,22 +1150,38 @@ function makeWallsSvg(cls) {
   return svg;
 }
 
+/** SVG drawing primitives for a walls overlay — the shapes paintWall / paintDoor
+ *  hand geometry to. */
+function svgWallOps(svg) {
+  const el = (name, attrs) => {
+    const e = document.createElementNS(MERGE_SVGNS, name);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    svg.appendChild(e);
+    return e;
+  };
+  return {
+    poly(points, fill, stroke, sw) {
+      el('polygon', { points: points.map((p) => `${p.x},${p.y}`).join(' '),
+                      fill, stroke, 'stroke-width': sw, 'stroke-linejoin': 'round' });
+    },
+    circle(cx, cy, r, fill, stroke, sw) { el('circle', { cx, cy, r, fill, stroke, 'stroke-width': sw }); },
+    line(x1, y1, x2, y2, stroke, sw) { el('line', { x1, y1, x2, y2, stroke, 'stroke-width': sw, 'stroke-linecap': 'round' }); },
+  };
+}
+
 function renderWalls() {
   if (!hasWalls()) return;
   const svg = makeWallsSvg('walls-layer');
-  const bar = (x, y, w, h, color) => {
-    const rect = document.createElementNS(MERGE_SVGNS, 'rect');
-    rect.setAttribute('x', x); rect.setAttribute('y', y);
-    rect.setAttribute('width', Math.max(0, w)); rect.setAttribute('height', Math.max(0, h));
-    rect.setAttribute('fill', color);
-    svg.appendChild(rect);
-  };
+  const ops = svgWallOps(svg);
   const rectOf = (r, c) => cellXYWH(r, c);
-  for (const [key, type] of Object.entries(state.walls)) {
+  for (const [key, value] of Object.entries(state.walls)) {
     const m = /^([hv]):(\d+),(\d+)$/.exec(key);
     if (!m) continue;
-    const seg = wallSegment(m[1], Number(m[2]), Number(m[3]), rectOf);
-    if (seg && Number.isFinite(seg.cross)) paintWall(seg, type, GRID_SURFACE, bar);
+    const seg = wallSegment(m[1], Number(m[2]), Number(m[3]), rectOf, CELL_GAP);
+    if (!seg || !Number.isFinite(seg.cross)) continue;
+    const type = wallTypeOf(value);
+    if (type === 'door') paintDoor(seg, wallOrient(value), ops);
+    else paintWall(seg, type, ops);
   }
   chart.appendChild(svg);
 }

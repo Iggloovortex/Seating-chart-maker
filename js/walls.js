@@ -16,12 +16,18 @@ const WALL_LABELS = {
 };
 
 /** Place, replace or clear the active wall type on an edge — called by the grid's
- *  edge layer. Clicking the same type again removes it; the Erase tool always
- *  removes. */
+ *  edge layer. Clicking the same type again removes it (the Erase tool always
+ *  removes); a door instead rotates/flips through its four orientations on repeat
+ *  clicks, and is removed with Erase. */
 function placeWall(o, r, c) {
   if (activeWallType === 'erase') { setWall(o, r, c, null); return; }
   const cur = wallAt(o, r, c);
-  setWall(o, r, c, cur === activeWallType ? null : activeWallType);
+  if (activeWallType === 'door') {
+    const next = (cur && wallTypeOf(cur) === 'door') ? (wallOrient(cur) + 1) % 4 : 0;
+    setWall(o, r, c, { t: 'door', o: next });
+    return;
+  }
+  setWall(o, r, c, (cur && wallTypeOf(cur) === activeWallType) ? null : activeWallType);
 }
 
 function initWalls() {

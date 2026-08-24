@@ -69,16 +69,23 @@ and push it; don't stack new work directly on `main`.
   merged cell to edit the anchor; the pane's Merged-square section switches
   kind / unmerges.
 - **Walls — DONE** (branch `claude/walls-tmdavo`). Edge objects on the seams
-  between squares and the outer border. Types: `wall` (solid black), `hollow`
-  (double outline), `railing` (line + inner colour line), `door` (brown panel
-  with jamb ticks), `window` (blue double line with jambs). Model: `state.walls`
-  is a map, key `"h:r,c"` (top edge of cell r,c) / `"v:r,c"` (left edge), value =
-  type; remapped/pruned on insert/delete/setGrid, carried by serialize (Clear
-  Grid keeps walls; New clears them). Geometry `wallSegment` + paint spec
-  `wallPaint`/`paintWall` (js/layout.js) are shared by the grid overlay
-  `renderWalls` and export `drawWalls`. Walls mode (`js/walls.js`, the toolbar
-  `#btn-walls` + `#wall-bar`) shows an interactive edge layer (`renderWallEdges`);
-  pick a type, click a seam to place, click again / Erase to remove.
+  between squares and the outer border, styled from user-supplied reference SVGs.
+  Every type is the same beveled-hexagon bar (length = 1 cell, thickness ~0.09u,
+  45° mitred ends so perpendicular runs join at corners): `wall` (grey `#909090`
+  fill + black outline), `hollow` (outline only), `window` (hollow + light-blue
+  `#d8feff` glass fill), `railing` (a line with a thinner colour line inside),
+  and `door` — a brown `#6c4c00` hexagon frame + hinge circle + a 45° swing leaf,
+  carrying an orientation (0..3 = hinge end × swing side; click a placed door to
+  rotate/flip). Model: `state.walls` is a map, key `"h:r,c"` (top edge of cell
+  r,c) / `"v:r,c"` (left edge); the value is a type string, or `{t:'door',o}` for
+  a door. Remapped/pruned on insert/delete/setGrid, carried by serialize (Clear
+  Grid keeps walls; New clears them). Geometry `wallSegment` (+ `gap` so grid and
+  gapless export both miter) and `wallHex`/`paintWall`/`paintDoor` (js/layout.js)
+  are shared by the grid overlay `renderWalls` (SVG polygons) and export
+  `drawWalls` (canvas), via matching poly/circle/line op sets. Walls mode
+  (`js/walls.js`, `#btn-walls` + `#wall-bar`) shows an interactive edge layer
+  (`renderWallEdges`); pick a type, click a seam to place, click again / Erase to
+  remove.
 - **2-column labels** for the KVM and Dual Monitor icons — a per-row optional 2nd
   column, activating when any row has 2nd-column content. Touches the label data
   model, editor, both renderers, and TSV. (Scoped, not started.)
