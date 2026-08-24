@@ -139,6 +139,14 @@ function fireTap(cell, mods = {}) {
     if (data && isSplit(data)) { toggleSubcell(r, c, sub); return; }
   }
 
+  // A merged desk is one object: a plain tap opens its editor (there is no single
+  // square to fill/empty). In select mode a tap still picks the cell, so a
+  // rectangle can gather the whole group to move or delete it.
+  if (!selectMode && !shift && !additive) {
+    const merge = mergeAt(r, c);
+    if (merge) { const [ar, ac] = parseKey(merge.keys[0]); openEditor(ar, ac); return; }
+  }
+
   const picking = selectMode;
 
   // A click that lands on a table picks the TABLE, not the square hiding under
@@ -250,6 +258,9 @@ function fireEdit(cell, sub = null) {
     const data = peekCell(r, c);
     if (data && isSplit(data)) { openEditor(r, c, sub); return; }
   }
+  // Editing any cell of a merged desk edits the merge's anchor (its content).
+  const merge = mergeAt(r, c);
+  if (merge) { const [ar, ac] = parseKey(merge.keys[0]); editHandler(ar, ac); return; }
   // In select mode, editing a square that's part of the selection edits the
   // whole selection; anything else falls through to the single-square pane.
   if (selectMode && state.selection.has(keyOf(r, c))) {

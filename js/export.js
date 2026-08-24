@@ -72,12 +72,18 @@ async function renderToCanvas(dpi = 300) {
   //    table. An empty (unlabelled, icon-less) seat renders as an empty chair.
   //  - Every other enabled square is an individual desk; adjacent desks render
   //    touching, as one connected block (outer borders only).
+  // Every cell fused into a merged desk — those cells draw as part of the merge,
+  // not on their own.
+  const mergeMembers = new Set();
+  for (const m of state.merges) for (const k of m.keys) mergeMembers.add(k);
+
   const desks = [];
   const seats = [];
   const covered = []; // seated squares under a table: only their content draws
   const splits = []; // split squares: a block of sub-cells drawn in their place
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
+      if (mergeMembers.has(keyOf(r, c))) continue; // drawn by its merge
       const data = peekCell(r, c);
       if (!data) continue;
       // A split square owns its whole cell and draws its own pieces, so it never
@@ -89,6 +95,22 @@ async function renderToCanvas(dpi = 300) {
       if (st) seats.push({ r, c, data, fp: st.fp });
       else desks.push({ r, c, data });
     }
+  }
+
+  // Merged desks: the anchor cell's content, sized against its label run so the
+  // chart-wide text plan accounts for it.
+  const mergeDraws = [];
+  const mergeItems = [];
+  for (const merge of state.merges) {
+    const [ar, ac] = parseKey(merge.keys[0]);
+    const data = peekCell(ar, ac);
+    if (!data) continue;
+    const plan = mergePlan(merge);
+    mergeDraws.push({ merge, data, plan });
+    let w = 0, h = 0;
+    if (plan.isRect) { const a = rectOf(plan.bbox.minR, plan.bbox.minC); const z = rectOf(plan.bbox.maxR, plan.bbox.maxC); w = z.x + z.w - a.x; h = z.y + z.h - a.y; }
+    else if (plan.labelRun) { const a = rectOf(plan.labelRun.r, plan.labelRun.cStart); const z = rectOf(plan.labelRun.r, plan.labelRun.cEnd); w = z.x + z.w - a.x; h = a.h; }
+    if (w && h) mergeItems.push({ data, geo: { w, h } });
   }
 
   // Each split's enabled sub-cells, sized against their own piece rectangle, so
@@ -122,12 +144,12 @@ async function renderToCanvas(dpi = 300) {
   // labelBox; a multi-server rack uses one slab (full width, 1/N of the height).
   const planItems = [
     ...desks.map((d) => furnitureLabelGeo(d) || d),
-    ...seats, ...covered, ...splitItems,
+    ...seats, ...covered, ...splitItems, ...mergeItems,
   ];
   const plan = planContent(ctx, planItems);
 
   // Preload icon images (async), keyed by "id|color" — including a chair for empty seats.
-  const imgCache = await preloadIcons(desks, seats, covered, splitItems);
+  const imgCache = await preloadIcons(desks, seats, covered, splitItems, mergeItems);
 
   // 1) Table shapes (drawn solid; the editing grid shows them semi-transparent).
   for (const table of state.tables) drawTable(ctx, table, rectOf);
@@ -141,6 +163,9 @@ async function renderToCanvas(dpi = 300) {
 
   // 2.5) Split squares — a block of independent sub-cells filling the cell.
   for (const sp of splits) drawSplit(ctx, rectOf, sp, imgCache, plan);
+
+  // 2.6) Merged desks — one desk over a whole group of squares.
+  for (const md of mergeDraws) drawMerge(ctx, rectOf, md, imgCache, plan);
 
   // 3) Seats gathered around their table.
   for (const s of seats) drawTableSeat(ctx, s, imgCache, plan);
@@ -215,6 +240,67 @@ function drawDesk(ctx, rectOf, { r, c, data }, deskSet, imgCache, plan) {
   ctx.stroke();
 
   drawContent(ctx, x + w / 2, y + h / 2, w, h, data, imgCache, false, plan, undefined, 0, data.fill || '#dbe7ff');
+}
+
+/** A merged desk: one desk over a whole group of squares. A 'unit' merge is a
+ *  single square centred in the block; a 'poly' merge fills the exact shape of
+ *  the group (an L, T or +) with a single outline, its labels across the widest
+ *  run and its icon in the slimmest cell. Content contrasts against the fill. */
+function drawMerge(ctx, rectOf, { merge, data, plan }, imgCache, out) {
+  const fill = data.fill || '#dbe7ff';
+  const border = data.border || '#2f6feb';
+  const rectFor = (k) => { const [r, c] = parseKey(k); return rectOf(r, c); };
+  const rects = merge.keys.map(rectFor);
+  const left = Math.min(...rects.map((b) => b.x));
+  const top = Math.min(...rects.map((b) => b.y));
+  const right = Math.max(...rects.map((b) => b.x + b.w));
+  const bottom = Math.max(...rects.map((b) => b.y + b.h));
+
+  if (merge.kind === 'unit') {
+    const sample = rects[0];
+    const size = Math.min(sample.w, sample.h);
+    const cx = (left + right) / 2, cy = (top + bottom) / 2;
+    roundRect(ctx, cx - size / 2, cy - size / 2, size, size, size * 0.06);
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.lineWidth = Math.max(1, size * 0.03); ctx.strokeStyle = border; ctx.stroke();
+    drawContent(ctx, cx, cy, size, size, data, imgCache, false, out, undefined, 0, fill);
+    return;
+  }
+
+  // Fill every member cell, then outline only the edges bordering a non-member.
+  // A half-pixel overlap closes the sub-pixel seams between adjacent fill rects.
+  ctx.fillStyle = fill;
+  for (const b of rects) ctx.fillRect(b.x - 0.5, b.y - 0.5, b.w + 1, b.h + 1);
+  ctx.strokeStyle = border;
+  ctx.lineWidth = Math.max(1, Math.min(rects[0].w, rects[0].h) * 0.03);
+  ctx.beginPath();
+  for (const k of merge.keys) {
+    const [r, c] = parseKey(k);
+    const b = rectOf(r, c);
+    if (!plan.has(r - 1, c)) { ctx.moveTo(b.x, b.y); ctx.lineTo(b.x + b.w, b.y); }
+    if (!plan.has(r, c + 1)) { ctx.moveTo(b.x + b.w, b.y); ctx.lineTo(b.x + b.w, b.y + b.h); }
+    if (!plan.has(r + 1, c)) { ctx.moveTo(b.x, b.y + b.h); ctx.lineTo(b.x + b.w, b.y + b.h); }
+    if (!plan.has(r, c - 1)) { ctx.moveTo(b.x, b.y); ctx.lineTo(b.x, b.y + b.h); }
+  }
+  ctx.stroke();
+
+  if (plan.isRect) {
+    drawContent(ctx, (left + right) / 2, (top + bottom) / 2, right - left, bottom - top,
+                data, imgCache, false, out, undefined, 0, fill);
+    return;
+  }
+  // L/T/+: labels across the widest run, icon in the slimmest cell.
+  if (plan.labelRun) {
+    const a = rectOf(plan.labelRun.r, plan.labelRun.cStart);
+    const z = rectOf(plan.labelRun.r, plan.labelRun.cEnd);
+    const bw = z.x + z.w - a.x;
+    drawContent(ctx, a.x + bw / 2, a.y + a.h / 2, bw, a.h, { ...data, icon: null },
+                imgCache, false, out, undefined, 0, fill);
+  }
+  if (plan.iconCell && data.icon) {
+    const ic = rectOf(plan.iconCell.r, plan.iconCell.c);
+    drawIconOnly(ctx, ic.x + ic.w / 2, ic.y + ic.h / 2, Math.min(ic.w, ic.h), data, imgCache);
+  }
 }
 
 /** A split square: its cell divided into a rows×cols block of sub-cells, each an
@@ -669,12 +755,12 @@ function iconKey(id, data) {
   return `${id}|${iconColorOf(data)}|${data.iconFill || ''}`;
 }
 
-async function preloadIcons(desks, seats, covered = [], splitItems = []) {
+async function preloadIcons(desks, seats, covered = [], splitItems = [], mergeItems = []) {
   const needed = new Map(); // key -> dataUrl
   const want = (id, data) =>
     needed.set(iconKey(id, data), iconDataUrl(id, iconColorOf(data), data.iconFill));
 
-  for (const { data } of [...desks, ...covered, ...splitItems]) {
+  for (const { data } of [...desks, ...covered, ...splitItems, ...mergeItems]) {
     if (data.icon) want(data.icon, data);
     // A server rack also needs its corner icon, contrasted against the page.
     if (isServerCell(data)) needed.set(cornerIconKey(data), iconDataUrl('server', cornerIconColor(data), data.iconFill));

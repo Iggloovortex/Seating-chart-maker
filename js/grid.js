@@ -71,6 +71,7 @@ function renderGrid() {
   chart.style.setProperty('--line-out', `${LINE_BTN_OUT}px`);
   fitCellLabels();
   renderTables();
+  renderMerges();
   renderMoveHandle();
   buildInsertGuides();
 }
@@ -766,6 +767,15 @@ function buildCell(r, c, rects) {
   // A split square renders as a small block of independent sub-cells instead of a
   // single desk. Tapping a piece fills it; long-press / right-click edits it
   // (see interactions.js). Everything below (furniture, ghost, desk) is skipped.
+  // A merged square draws as one desk over the whole group (renderMerges), so its
+  // member cells render blank here and let that overlay show through. Merge wins
+  // over a split — a split cell can be pulled into a merge.
+  if (mergeAt(r, c)) {
+    el.classList.add('cell--merged');
+    el.setAttribute('aria-label', `Merged square, row ${r + 1}, column ${c + 1}`);
+    return el;
+  }
+
   if (data && isSplit(data)) {
     el.classList.add('cell--split');
     el.appendChild(buildSplitGrid(r, c, data));
@@ -956,6 +966,164 @@ function renderTables() {
   }
 }
 
+// ---------------------------------------------------------------- merged squares
+//
+// A merged square draws as ONE desk over its whole group. The member cells render
+// blank (see buildCell) and these overlays — pointer-events:none, so clicks still
+// reach the cells and edit the anchor — draw the fused desk on top.
+
+const MERGE_SVGNS = 'http://www.w3.org/2000/svg';
+
+function renderMerges() {
+  if (!state.merges.length) return;
+  for (const merge of state.merges) {
+    const [ar, ac] = parseKey(merge.keys[0]);
+    const data = peekCell(ar, ac) || {};
+    const fill = data.fill || '#dbe7ff';
+    const border = data.border || '#2f6feb';
+
+    // Each member cell's box in the chart's own layout px.
+    const rects = new Map();
+    for (const k of merge.keys) {
+      const [r, c] = parseKey(k);
+      const rc = cellLocalRect(r, c);
+      if (rc) rects.set(k, { ...rc, r, c });
+    }
+    if (!rects.size) continue;
+    const vals = [...rects.values()];
+    const left = Math.min(...vals.map((b) => b.left));
+    const top = Math.min(...vals.map((b) => b.top));
+    const right = Math.max(...vals.map((b) => b.left + b.width));
+    const bottom = Math.max(...vals.map((b) => b.top + b.height));
+
+    const plan = mergePlan(merge);
+    if (merge.kind === 'unit') {
+      renderMergeUnit(data, fill, border, { left, top, right, bottom }, vals[0]);
+      continue;
+    }
+
+    // Extend each cell's fill across the grid's gap toward member neighbours, so
+    // the block reads as one continuous desk (the export layout has no gaps).
+    const g = CELL_GAP / 2;
+    const exp = vals.map((b) => ({
+      r: b.r, c: b.c,
+      x0: b.left - (plan.has(b.r, b.c - 1) ? g : 0),
+      y0: b.top - (plan.has(b.r - 1, b.c) ? g : 0),
+      x1: b.left + b.width + (plan.has(b.r, b.c + 1) ? g : 0),
+      y1: b.top + b.height + (plan.has(b.r + 1, b.c) ? g : 0),
+    }));
+    const oLeft = Math.min(...exp.map((e) => e.x0));
+    const oTop = Math.min(...exp.map((e) => e.y0));
+    const oRight = Math.max(...exp.map((e) => e.x1));
+    const oBottom = Math.max(...exp.map((e) => e.y1));
+
+    // Filled member rects + an outline of only the edges that border a non-member
+    // — the block's outer shape (the rule drawDesk and the export share, so an
+    // L/T/+ reads as one connected desk).
+    const svg = document.createElementNS(MERGE_SVGNS, 'svg');
+    svg.setAttribute('class', 'merge-shape');
+    svg.style.left = `${oLeft}px`;
+    svg.style.top = `${oTop}px`;
+    svg.setAttribute('width', oRight - oLeft);
+    svg.setAttribute('height', oBottom - oTop);
+    for (const e of exp) {
+      const rect = document.createElementNS(MERGE_SVGNS, 'rect');
+      rect.setAttribute('x', e.x0 - oLeft);
+      rect.setAttribute('y', e.y0 - oTop);
+      rect.setAttribute('width', e.x1 - e.x0);
+      rect.setAttribute('height', e.y1 - e.y0);
+      rect.setAttribute('fill', fill);
+      svg.appendChild(rect);
+    }
+    const lw = Math.max(1.5, Math.min(vals[0].width, vals[0].height) * 0.03);
+    for (const e of exp) {
+      const x0 = e.x0 - oLeft, y0 = e.y0 - oTop, x1 = e.x1 - oLeft, y1 = e.y1 - oTop;
+      const seg = (a1, b1, a2, b2) => {
+        const l = document.createElementNS(MERGE_SVGNS, 'line');
+        l.setAttribute('x1', a1); l.setAttribute('y1', b1); l.setAttribute('x2', a2); l.setAttribute('y2', b2);
+        l.setAttribute('stroke', border); l.setAttribute('stroke-width', lw); l.setAttribute('stroke-linecap', 'square');
+        svg.appendChild(l);
+      };
+      if (!plan.has(e.r - 1, e.c)) seg(x0, y0, x1, y0);
+      if (!plan.has(e.r, e.c + 1)) seg(x1, y0, x1, y1);
+      if (!plan.has(e.r + 1, e.c)) seg(x0, y1, x1, y1);
+      if (!plan.has(e.r, e.c - 1)) seg(x0, y0, x0, y1);
+    }
+    chart.appendChild(svg);
+
+    // Content. A full rectangle lays out centred like a desk; an L/T/+ puts its
+    // labels across the widest run and its icon in the slimmest cell.
+    if (plan.isRect) {
+      placeMergeContent(data, fill, { left, top, w: right - left, h: bottom - top }, 'both');
+    } else {
+      if (plan.labelRun) {
+        const a = rects.get(keyOf(plan.labelRun.r, plan.labelRun.cStart));
+        const z = rects.get(keyOf(plan.labelRun.r, plan.labelRun.cEnd));
+        if (a && z) placeMergeContent(data, fill,
+          { left: a.left, top: a.top, w: (z.left + z.width) - a.left, h: a.height }, 'labels');
+      }
+      if (plan.iconCell && data.icon) {
+        const ic = rects.get(keyOf(plan.iconCell.r, plan.iconCell.c));
+        if (ic) placeMergeContent(data, fill, { left: ic.left, top: ic.top, w: ic.width, h: ic.height }, 'icon');
+      }
+    }
+  }
+}
+
+/** One 'unit' merge: a single square (one cell in size) centred in the block, so
+ *  a desk can straddle the seam between cells while staying square. */
+function renderMergeUnit(data, fill, border, box, sample) {
+  const size = Math.min(sample.width, sample.height);
+  const cx = (box.left + box.right) / 2, cy = (box.top + box.bottom) / 2;
+  const div = document.createElement('div');
+  div.className = 'merge-unit';
+  div.style.left = `${cx - size / 2}px`;
+  div.style.top = `${cy - size / 2}px`;
+  div.style.width = `${size}px`;
+  div.style.height = `${size}px`;
+  div.style.background = fill;
+  div.style.borderColor = border;
+  div.appendChild(mergeContentInner(data, fill, 'both'));
+  chart.appendChild(div);
+}
+
+/** The icon/label stack for a merged desk, contrast-corrected against its fill. */
+function mergeContentInner(data, fill, which) {
+  const inner = document.createElement('div');
+  inner.className = 'cell__content';
+  inner.style.setProperty('--rot', `${data.rotation || 0}deg`);
+  if (data.icon && (which === 'both' || which === 'icon')) {
+    const svg = iconUse(data.icon, 'cell__icon', data.iconFill);
+    if (svg) { svg.style.color = contrastLabelColor(data.iconColor || '#1f2933', fill); inner.appendChild(svg); }
+  }
+  if ((which === 'both' || which === 'labels') && (data.labels || []).some((l) => l.text)) {
+    const labels = document.createElement('div');
+    labels.className = 'cell__labels';
+    for (const line of data.labels) {
+      if (!line.text) continue;
+      const span = document.createElement('span');
+      span.className = 'cell__label';
+      span.textContent = line.text;
+      span.style.color = contrastLabelColor(line.color, fill);
+      labels.appendChild(span);
+    }
+    inner.appendChild(labels);
+  }
+  return inner;
+}
+
+/** An absolutely-positioned content stack over one region of a merged desk. */
+function placeMergeContent(data, fill, box, which) {
+  const wrap = document.createElement('div');
+  wrap.className = 'merge-content';
+  wrap.style.left = `${box.left}px`;
+  wrap.style.top = `${box.top}px`;
+  wrap.style.width = `${box.w}px`;
+  wrap.style.height = `${box.h}px`;
+  wrap.appendChild(mergeContentInner(data, fill, which));
+  chart.appendChild(wrap);
+}
+
 // ------------------------------------------------------------ table resizing
 //
 // Eight handles on a picked table's shape — four corners and four sides. Each
@@ -1070,9 +1238,10 @@ function showResizePreview({ preview, next }) {
 
 /** Re-measure table overlays after layout changes (zoom, resize). */
 function refreshTables() {
-  chart.querySelectorAll('.table-shape, .table-remove, .table-handle, .move-handle')
+  chart.querySelectorAll('.table-shape, .table-remove, .table-handle, .move-handle, .merge-shape, .merge-content, .merge-unit')
     .forEach((n) => n.remove());
   renderTables();
+  renderMerges();
   renderMoveHandle();
 }
 

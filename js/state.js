@@ -134,6 +134,8 @@ const state = {
   rowWeights: [],               // per-row size weight (empty => DEFAULTS.rowWeight)
   colWeights: [],               // per-col size weight
   tables: [],                   // [{ id, cellKeys:[], shape:'round'|'square', color }]
+  merges: [],                   // [{ id, keys:[], kind:'poly'|'unit' }] — see merge ops
+                                //   content lives on the anchor cell (sorted keys[0])
   paper: 'letter',              // preset id or { w, h, unit }
   landscape: true,              // paper orientation; false swaps width/height
   exportBg: '#ffffff',          // page background of the exported / printed output
@@ -185,6 +187,7 @@ function setGrid(cols, rows) {
     if (r >= rows || c >= cols) state.cells.delete(k);
   }
   pruneTables();
+  pruneMerges();
   pruneSelection();
   state.rowWeights.length = rows;
   state.colWeights.length = cols;
@@ -550,6 +553,15 @@ function moveSelection(dr, dc) {
         });
       }
     }
+    // A merge travels only when its whole self is in the moved selection.
+    for (const m of state.merges) {
+      if (m.keys.every((k) => selected.has(k))) {
+        m.keys = sortCellKeys(m.keys.map((k) => {
+          const [r, c] = parseKey(k);
+          return keyOf(r + dr, c + dc);
+        }));
+      }
+    }
     // The moved squares travel with the drag; filters stay out of it, since a
     // move is as explicit a pick as a rectangle.
     selectionReplace(keys.map((k) => {
@@ -595,6 +607,7 @@ function insertLine(axis, index) {
     state.cells = moved;
     remapSelection(shift);
     for (const t of state.tables) t.cellKeys = t.cellKeys.map(shift);
+    for (const m of state.merges) m.keys = sortCellKeys(m.keys.map(shift));
     const weights = isRow ? state.rowWeights : state.colWeights;
     weights.splice(index, 0, undefined);          // the new line takes the default
     if (isRow) state.grid = { ...state.grid, rows: state.grid.rows + 1 };
@@ -639,6 +652,9 @@ function deleteLine(axis, index) {
     for (const t of state.tables) {
       t.cellKeys = t.cellKeys.map(shift).filter((k) => k !== undefined);
     }
+    for (const m of state.merges) {
+      m.keys = sortCellKeys(m.keys.map(shift).filter((k) => k !== undefined));
+    }
     const weights = isRow ? state.rowWeights : state.colWeights;
     weights.splice(index, 1);
     if (isRow) state.grid = { ...state.grid, rows: state.grid.rows - 1 };
@@ -646,6 +662,7 @@ function deleteLine(axis, index) {
     state.rowWeights.length = state.grid.rows;
     state.colWeights.length = state.grid.cols;
     pruneTables();      // a table that lived entirely on that line is gone now
+    pruneMerges();      // and a merge left with fewer than two cells
     pruneSelection();
   });
   return true;
@@ -675,6 +692,9 @@ function resetSquares(keys) {
       state.cells.set(k, makeCell());
       if (!inBounds(r, c)) state.cells.delete(k);
     }
+    // A reset square can no longer belong to a merge — drop any merge it was in.
+    const gone = new Set(keys);
+    state.merges = state.merges.filter((m) => !m.keys.some((k) => gone.has(k)));
   });
 }
 
@@ -963,6 +983,75 @@ function pruneTables() {
   state.tables = state.tables.filter((t) => t.cellKeys.length > 0);
 }
 
+// ---------------------------------------------------------------- merged squares
+//
+// A merge fuses a block of selected squares into ONE desk. Two kinds:
+//   'poly' — the desk takes the exact SHAPE of the selection (an L, a T, a +),
+//            filling every member cell; its labels sit across the widest run and
+//            its icon in the slimmest arm (see mergePlan in js/layout.js).
+//   'unit' — a single 1×1 square, centred in the block, so a square can straddle
+//            the seam between cells while staying square.
+// The merged content is just the ANCHOR cell (sorted keys[0]); member cells keep
+// their own data for when the merge is undone, but it is not drawn while merged.
+
+/** Keys sorted top-to-bottom, left-to-right — so keys[0] is the anchor. */
+function sortCellKeys(keys) {
+  return [...keys].sort((a, b) => {
+    const [ra, ca] = parseKey(a), [rb, cb] = parseKey(b);
+    return ra - rb || ca - cb;
+  });
+}
+
+/** Fuse the current selection into one merged desk of `kind`. Seats every member
+ *  cell (the desk fills its whole footprint) and clears the selection, like a
+ *  table. Needs at least two squares. */
+function addMerge(kind = 'poly') {
+  const keys = sortCellKeys(state.selection);
+  if (keys.length < 2) return null;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  const merge = { id: `m${Date.now().toString(36)}`, keys, kind };
+  state.merges.push(merge);
+  for (const k of keys) { const [r, c] = parseKey(k); getCell(r, c).enabled = true; }
+  clearManualSelection();
+  emit();
+  return merge;
+}
+
+/** The merge covering a square, or null. Later merges win, matching paint order. */
+function mergeAt(r, c) {
+  const k = keyOf(r, c);
+  let found = null;
+  for (const m of state.merges) if (m.keys.includes(k)) found = m;
+  return found;
+}
+
+/** The anchor "r,c" of a merge — where its drawn content lives. */
+function mergeAnchorKey(merge) { return merge.keys[0]; }
+
+function updateMerge(id, patch) {
+  const m = state.merges.find((x) => x.id === id);
+  if (!m) return;
+  Object.assign(m, patch);
+  emit();
+}
+
+/** Undo a merge: the squares stand alone again with their own content. */
+function removeMerge(id) {
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  state.merges = state.merges.filter((m) => m.id !== id);
+  emit();
+}
+
+function pruneMerges() {
+  for (const m of state.merges) {
+    m.keys = m.keys.filter((k) => { const [r, c] = parseKey(k); return inBounds(r, c); });
+  }
+  // A merge needs at least two cells to mean anything.
+  state.merges = state.merges.filter((m) => m.keys.length >= 2);
+  // keys[0] must stay the anchor after any pruning.
+  for (const m of state.merges) m.keys = sortCellKeys(m.keys);
+}
+
 // ---------------------------------------------------------------- reset
 
 /** Empty every square on the grid. Non-destructive, like any unseating: labels,
@@ -975,6 +1064,7 @@ function clearGrid() {
   batch(() => {
     for (const cell of state.cells.values()) cell.enabled = false;
     state.tables = [];
+    state.merges = [];
     state.tableSelection.clear();
   });
 }
@@ -987,6 +1077,7 @@ function clearAll() {
     state.title = '';
     state.cells.clear();
     state.tables = [];
+    state.merges = [];
     clearManualSelection();
     state.tableSelection.clear();
     state.rowWeights = [];
@@ -1008,6 +1099,7 @@ function serialize() {
     rowWeights: [...state.rowWeights],
     colWeights: [...state.colWeights],
     tables: state.tables.map((t) => ({ ...t, cellKeys: [...t.cellKeys] })),
+    merges: state.merges.map((m) => ({ id: m.id, kind: m.kind, keys: [...m.keys] })),
     paper: state.paper,
     landscape: state.landscape,
     exportBg: state.exportBg,
@@ -1063,12 +1155,20 @@ function deserialize(data) {
                                   rotation: t.rotation || 0,
                                   cellKeys: [...(t.cellKeys || [])] }))
       : [];
+    state.merges = Array.isArray(data.merges)
+      ? data.merges
+          .filter((m) => m && Array.isArray(m.keys) && m.keys.length >= 2)
+          .map((m) => ({ id: String(m.id || `m${Math.random().toString(36).slice(2)}`),
+                         kind: m.kind === 'unit' ? 'unit' : 'poly',
+                         keys: sortCellKeys(m.keys.map(String)) }))
+      : [];
     state.paper = data.paper || 'letter';
     state.landscape = data.landscape !== false;
     state.exportBg = data.exportBg || '#ffffff';
     clearManualSelection();
     state.tableSelection = new Set();
     pruneTables();
+    pruneMerges();
   });
   return true;
 }

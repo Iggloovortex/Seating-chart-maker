@@ -52,6 +52,9 @@ function initTables() {
     document.getElementById('btn-table-round').disabled = !canShape;
     document.getElementById('btn-table-square').disabled = !canShape;
     document.getElementById('btn-table-rotate').disabled = tables === 0;
+    // Merge fuses two or more selected squares into one desk.
+    const mergeBtn = document.getElementById('btn-table-merge');
+    if (mergeBtn) mergeBtn.disabled = squares < 2;
     document.getElementById('btn-table-remove').disabled = squares === 0 && tables === 0;
     colorInput.disabled = tables === 0;
     borderInput.disabled = tables === 0;
@@ -125,6 +128,13 @@ function initTables() {
   document.getElementById('btn-table-square').addEventListener('click', shapeAction('square'));
   document.getElementById('btn-table-rotate')
     .addEventListener('click', () => { if (tableIds().length) rotateTables(tableIds(), 45); });
+
+  // Merge — the two options (exact shape, or one centred square) via a small menu.
+  document.getElementById('btn-table-merge').addEventListener('click', (e) => {
+    if (state.selection.size < 2) return;
+    const box = e.currentTarget.getBoundingClientRect();
+    openMergeMenu(box.left, box.bottom + 4);
+  });
   bindColorInput(colorInput, () => updateTables(tableIds(), { color: colorInput.value }));
   bindColorInput(borderInput, () => updateTables(tableIds(), { border: borderInput.value }));
 
@@ -199,3 +209,44 @@ function firstTableKey() {
   const t = state.tables.find((x) => state.tableSelection.has(x.id));
   return t ? t.cellKeys[0] : null;
 }
+
+// ---------------------------------------------------------------- merge menu
+//
+// The Merge button offers the two kinds of merge (see js/state.js addMerge): the
+// exact shape of the selection, or one square centred in it.
+
+let mergeMenu = null;
+
+function openMergeMenu(x, y) {
+  closeMergeMenu();
+  mergeMenu = document.createElement('div');
+  mergeMenu.className = 'popmenu merge-menu';
+  mergeMenu.setAttribute('role', 'menu');
+
+  const item = (label, run) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'popmenu__item';
+    b.setAttribute('role', 'menuitem');
+    b.textContent = label;
+    b.addEventListener('click', (ev) => { ev.stopPropagation(); closeMergeMenu(); run(); });
+    mergeMenu.appendChild(b);
+  };
+  item('Merge into one shape', () => addMerge('poly'));
+  item('Merge into a centered square', () => addMerge('unit'));
+
+  document.body.appendChild(mergeMenu);
+  const box = mergeMenu.getBoundingClientRect();
+  mergeMenu.style.left = `${Math.min(x, window.innerWidth - box.width - 8)}px`;
+  mergeMenu.style.top = `${Math.min(y, window.innerHeight - box.height - 8)}px`;
+}
+
+function closeMergeMenu() {
+  mergeMenu?.remove();
+  mergeMenu = null;
+}
+
+document.addEventListener('pointerdown', (e) => {
+  if (mergeMenu && !e.target.closest?.('.merge-menu, #btn-table-merge')) closeMergeMenu();
+}, true);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMergeMenu(); });

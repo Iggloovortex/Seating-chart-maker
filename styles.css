@@ -666,6 +666,35 @@ body {
 .subcell .cell__icon { width: 42%; max-width: 22px; }
 .subcell .cell__label { font-size: 9px; line-height: 1.1; }
 
+/* A merged desk spans several cells; each member cell renders blank (transparent)
+   and the merge overlays (drawn by renderMerges) show the fused desk on top. */
+.cell--merged { background: transparent; border-color: transparent; }
+/* Keep a selected member's outline visible above the merge overlay. */
+.cell--merged.cell--selected { z-index: 5; }
+.merge-shape,
+.merge-content,
+.merge-unit {
+  position: absolute;
+  pointer-events: none;   /* clicks pass to the cells below, which edit the anchor */
+  z-index: 1;
+}
+.merge-content,
+.merge-unit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.merge-unit {
+  box-sizing: border-box;
+  border: 1px solid var(--seat-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* Merge-kind toggle in the editor (Shape vs Centered). */
+.mergekind { display: flex; gap: 6px; }
+.mergekind .btn { flex: 1; }
+
 /* Split-shape option buttons (in the editor): each shows a tiny grid diagram. */
 .split-opt__svg { width: 24px; height: 24px; color: var(--ink); }
 

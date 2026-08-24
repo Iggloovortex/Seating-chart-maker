@@ -58,9 +58,16 @@ and push it; don't stack new work directly on `main`.
   serialize/copy-paste). Rendered by `buildSplitGrid`/`buildSubcell` (grid) and
   `drawSplit` (export); a piece is tapped to fill and long-press/right-click (or
   the Pieces list) to edit via `openSubcellEditor`. TSV is lossy for splits.
-- **Merge (planned, next):** two options — (1) polygon table from the *shape* of
-  the selection (L/T/+: labels across the widest run, icons in the slimmest); (2)
-  a single square centred across N cells, kept 1:1. Wire `#btn-table-merge`.
+- **Merge — DONE.** Two kinds, from the `#btn-table-merge` menu on a ≥2-square
+  selection: `'poly'` fuses the selection into one desk of its exact shape (L/T/+,
+  a single outline, labels across the widest run, icon in the slimmest cell) and
+  `'unit'` is one 1:1 square centred in the block (straddles seams). Model:
+  `state.merges = [{id, keys, kind}]` (content on the anchor = sorted keys[0]),
+  remapped/pruned alongside tables in insert/delete/move/setGrid and carried by
+  serialize. Geometry `mergePlan` (js/layout.js); grid overlay `renderMerges`
+  (SVG fill+outline, gaps bridged) and export `drawMerge` keep parity. Tap a
+  merged cell to edit the anchor; the pane's Merged-square section switches
+  kind / unmerges.
 - **Walls (planned):** edge objects drawn on the seams between squares. Kinds
   from the reference: solid wall (filled black), hollow wall (double outline,
   white interior), railing (line with a smaller inner line of another colour),

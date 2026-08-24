@@ -321,8 +321,11 @@ function render(cell) {
     g.appendChild(add);
   }));
 
-  // --- Split into smaller squares -----------------------------------------
-  bodyEl.appendChild(splitSection(cell));
+  // --- Merge / Split -------------------------------------------------------
+  // A merged desk's anchor gets merge controls (shape vs centred, unmerge); an
+  // ordinary square gets the split options. A square can't be both.
+  const merge = mergeAt(current.r, current.c);
+  bodyEl.appendChild(merge ? mergeSection(merge) : splitSection(cell));
 
   // --- Row / column size (empty row & column height) ----------------------
   bodyEl.appendChild(group('Size (this row & column)', (g) => {
@@ -399,6 +402,51 @@ function specialSection(cell) {
       note.textContent = text + ' Use Facing above to aim it.';
       g.appendChild(note);
     }
+  });
+}
+
+// ---------------------------------------------------------------- merged square
+//
+// The anchor cell of a merge carries the merged desk's content, so its normal
+// pane doubles as the merge editor: this section switches the merge between its
+// polygon ('poly') and centred-single-square ('unit') kinds, or unmerges it.
+
+function mergeSection(merge) {
+  return group('Merged square', (g) => {
+    const seg = document.createElement('div');
+    seg.className = 'mergekind';
+    const kindBtn = (kind, label, desc) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `btn ${merge.kind === kind ? 'btn--primary' : ''}`;
+      b.textContent = label;
+      b.title = desc;
+      b.setAttribute('aria-pressed', String(merge.kind === kind));
+      b.addEventListener('click', () => { updateMerge(merge.id, { kind }); render(peekCell(current.r, current.c)); });
+      return b;
+    };
+    seg.append(
+      kindBtn('poly', 'Shape', 'Fill the exact shape of the group (L, T, +): labels across the widest part, icon in the slimmest.'),
+      kindBtn('unit', 'Centered', 'One square, centred in the group and kept 1:1 — so it can straddle the seam between cells.'),
+    );
+    g.appendChild(seg);
+
+    const unmerge = document.createElement('button');
+    unmerge.type = 'button';
+    unmerge.className = 'btn btn--empty';
+    unmerge.style.marginTop = '8px';
+    unmerge.textContent = 'Unmerge';
+    unmerge.title = 'Split the merged desk back into its separate squares';
+    unmerge.addEventListener('click', () => {
+      removeMerge(merge.id);
+      render(peekCell(current.r, current.c));
+    });
+    g.appendChild(unmerge);
+
+    const note = document.createElement('p');
+    note.className = 'egroup__note';
+    note.textContent = `This desk spans ${merge.keys.length} squares. Its fill, border, icon, labels and facing above apply to the whole merged desk.`;
+    g.appendChild(note);
   });
 }
 
