@@ -252,6 +252,14 @@
         <circle cx="10.6" cy="10.6" r="6.6" fill="none" stroke="currentColor" stroke-width="1.8"/>
         <path d="M15.4 15.4 20.6 20.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
       </symbol>
+      <symbol id="ui-sun" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="4.4" fill="currentColor"/>
+        <path d="M12 1.8v3M12 19.2v3M1.8 12h3M19.2 12h3M4.9 4.9l2.1 2.1M16.97 16.97l2.12 2.12M19.1 4.9l-2.13 2.13M7.03 16.97l-2.12 2.12"
+              fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="ui-moon" viewBox="0 0 24 24">
+        <path d="M20.5 14.6A8.2 8.2 0 1 1 9.4 3.5a6.5 6.5 0 0 0 11.1 11.1z" fill="currentColor"/>
+      </symbol>
     </defs>
   </svg>
 
@@ -280,7 +288,12 @@
           <button id="btn-print" class="iconbtn iconbtn--print" type="button" title="Print / PDF" aria-label="Print or save as PDF">
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-print"/></svg>
           </button>
-          <input id="file-input" type="file" accept=".seatchart,application/json" hidden />
+          <span class="iconbar__sep" aria-hidden="true"></span>
+          <!-- Dark / light toggle: a bright sun (click to go light) or a purple moon (click to go dark). -->
+          <button id="btn-theme" class="iconbtn iconbtn--theme" type="button" title="Toggle dark / light" aria-label="Toggle dark or light theme">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-moon"/></svg>
+          </button>
+          <input id="file-input" type="file" accept=".seatchart,application/json,.tsv,text/tab-separated-values" hidden />
         </div>
         <!-- Second row: actions that change the grid rather than the file.
              Undo/redo will join this row. -->
@@ -300,7 +313,7 @@
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-redo"/></svg>
           </button>
           <span class="iconbar__sep" aria-hidden="true"></span>
-          <button id="btn-settings" class="iconbtn" type="button" disabled title="Settings — not built yet" aria-label="Settings">
+          <button id="btn-settings" class="iconbtn" type="button" title="Settings" aria-label="Settings">
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-settings"/></svg>
           </button>
         </div>
@@ -452,6 +465,8 @@
                 title="Edit the selected squares" aria-label="Edit selected">
           <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-pencil"/></svg>
         </button>
+        <button id="btn-save-preset" class="btn" type="button"
+                title="Save the selected square as a preset">Save preset</button>
         <span class="toolbar__sep" aria-hidden="true"></span>
         <button id="btn-table-round" class="btn" type="button"
                 title="Squares selected: build a round table from them. Tables picked: make them round.">Round table</button>
@@ -542,11 +557,11 @@
           </button>
           <label class="field field--custom-paper" hidden>
             <span class="field__label">W</span>
-            <input id="paper-w" class="field__input field__input--num" type="number" min="1" step="0.1" value="11" inputmode="decimal" />
+            <input id="paper-w" class="field__input field__input--num" type="number" min="1" step="0.1" value="8.5" inputmode="decimal" />
           </label>
           <label class="field field--custom-paper" hidden>
-            <span class="field__label">H</span>
-            <input id="paper-h" class="field__input field__input--num" type="number" min="1" step="0.1" value="8.5" inputmode="decimal" />
+            <span class="field__label" title="Length — the longer side">L</span>
+            <input id="paper-h" class="field__input field__input--num" type="number" min="1" step="0.1" value="11" inputmode="decimal" />
           </label>
           <label class="field field--custom-paper" hidden>
             <span class="field__label">Unit</span>
@@ -556,6 +571,11 @@
             </select>
           </label>
         </div>
+        <label class="field field--export-bg">
+          <span class="field__label">Background</span>
+          <input id="export-bg" class="field__input field__input--color" type="color" value="#ffffff"
+                 aria-label="Exported page background colour" />
+        </label>
         <button class="btn btn--icon" type="button" data-close-preview aria-label="Close">✕</button>
       </header>
       <div class="modal__body">
@@ -584,21 +604,56 @@
     </section>
   </div>
 
+  <!-- ===================== Settings modal ===================== -->
+  <!-- Edits app configuration, which is kept apart from chart data: it lives in
+       state.config and is persisted under its own localStorage key, never in a
+       .seatchart file or share link. Body is built by js/settings.js. -->
+  <div class="modal" id="settings" hidden aria-hidden="true">
+    <div class="modal__backdrop" data-close-settings></div>
+    <section class="modal__panel modal__panel--settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <header class="modal__head modal__head--settings">
+        <div class="modal__headrow">
+          <h2 class="modal__title" id="settings-title">Settings</h2>
+          <button class="btn btn--icon" type="button" data-close-settings aria-label="Close">✕</button>
+        </div>
+        <div class="settings-tabs" id="settings-tabs" role="tablist"></div>
+      </header>
+      <div class="modal__body modal__body--settings" id="settings-body">
+        <!-- populated by js/settings.js -->
+      </div>
+      <footer class="modal__foot">
+        <button class="btn" type="button" data-close-settings>Close</button>
+      </footer>
+    </section>
+  </div>
+
   <!-- Classic scripts (not ES modules) so the app also runs when index.html is
        opened directly via file:// — module scripts are blocked over file://.
        Load order matters: each file defines globals used by later ones. -->
+  <!-- Source map for "Export site". Holds each source file's text so the app can
+       inline itself into a single file even over file://, where a fetch of a
+       sibling file is blocked. REGENERATE with tools/gen-sources.py whenever any
+       source changes, or Export site ships stale code. -->
+  <script src="js/sources.js"></script>
   <script src="js/state.js"></script>
+  <script src="js/history.js"></script>
   <script src="js/icons.js"></script>
+  <!-- Icon-library browse catalog (Bootstrap Icons, MIT). Big and design-time
+       only: gen-sources.py leaves it out of the export bundle. -->
+  <script src="js/iconlib.js"></script>
+  <script src="js/iconbrowser.js"></script>
   <script src="js/paper.js"></script>
   <script src="js/layout.js"></script>
   <script src="js/grid.js"></script>
   <script src="js/interactions.js"></script>
   <script src="js/filters.js"></script>
   <script src="js/editor.js"></script>
+  <script src="js/colorpicker.js"></script>
   <script src="js/tables.js"></script>
   <script src="js/export.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/rows.js"></script>
+  <script src="js/settings.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

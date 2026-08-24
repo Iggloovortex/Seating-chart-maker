@@ -83,7 +83,36 @@ const FILTERS = {
   tables:    { label: 'All tables',    icon: 'ui-f-tables' },
   // Widens what the other filters look at rather than matching anything itself.
   withghost: { label: 'Include ghost', icon: 'ui-f-ghost' },
+  // Not a button: driven by the search box (see setFilterQuery). Active exactly
+  // when filterQuery is non-empty, and claims every square the query matches.
+  search:    { label: 'Search',        icon: 'ui-search',
+               keys: () => {
+                 const q = (state.filterQuery || '').trim();
+                 if (!q) return [];
+                 const words = q.toLowerCase().split(/\s+/);
+                 return cellKeysWhere((cell) => {
+                   // Search obeys the same in-play rule as the other content
+                   // filters: filled squares only, unless Include ghost is lit.
+                   if (!inPlay(cell)) return false;
+                   const hay = cellSearchText(cell);
+                   return words.every((w) => hay.includes(w));
+                 });
+               } },
 };
+
+/** The lowercased text a search matches against: every label line, plus the
+ *  icon's id and its human label. Read live, so relabelling moves a square in
+ *  or out of the search selection on the same emit. */
+function cellSearchText(cell) {
+  const parts = [];
+  for (const l of cell.labels || []) if (l.text) parts.push(l.text);
+  if (cell.icon) {
+    parts.push(cell.icon);
+    if (typeof iconLabel === 'function') parts.push(iconLabel(cell.icon));
+    else if (ICONS[cell.icon]) parts.push(ICONS[cell.icon].label);
+  }
+  return parts.join(' ').toLowerCase();
+}
 
 const FILTER_ORDER = ['all', 'filled', 'blank', 'labeled', 'unlabeled',
                       'icons', 'noicons', 'ghost', 'tables', 'withghost'];
@@ -121,6 +150,38 @@ function toggleFilter(id) {
   return on;
 }
 
+/** Drive the search filter from the box. `search` is active exactly when the
+ *  query is non-empty; an empty box drops it. Mirrors toggleFilter's handling of
+ *  a filter-set change by clearing hand-drops. */
+function setFilterQuery(q) {
+  batch(() => {
+    state.filterQuery = q || '';
+    if (state.filterQuery.trim()) state.filters.add('search');
+    else state.filters.delete('search');
+    state.manualDrop.clear();
+  });
+}
+
+/** Enable the search box and run it on submit only (Enter or the button) — never
+ *  on keystroke, so typing can't select half the chart mid-word. */
+function initSearch() {
+  const form = document.getElementById('filter-search');
+  const input = document.getElementById('filter-query');
+  const btn = document.getElementById('btn-filter-search');
+  if (!form || !input) return;
+  input.removeAttribute('disabled');
+  if (btn) {
+    btn.removeAttribute('disabled');
+    btn.setAttribute('title', 'Search labels & icons');
+  }
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    // A search is as good a reason to open the bar as a toggle click.
+    if (!isSelectMode()) enterSelectFromFilter();
+    setFilterQuery(input.value.trim());
+  });
+}
+
 function initFilters() {
   const buttons = new Map();
   for (const id of FILTER_ORDER) {
@@ -133,6 +194,8 @@ function initFilters() {
       toggleFilter(id);
     });
   }
+
+  initSearch();
 
   subscribe(() => {
     for (const [id, btn] of buttons) {

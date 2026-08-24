@@ -25,6 +25,26 @@ function batch(fn) {
   emit();
 }
 
+// ---------------------------------------------------------------- app config
+//
+// Configuration is the app's own settings — theme, custom paper sizes, site
+// icon/title, square presets. It is DISTINCT from chart data: it has its own
+// tiny pub/sub, its own serialize, and (in storage.js) its own localStorage key.
+// It must NEVER travel in serialize() — the .seatchart / share-link payload.
+
+const configListeners = new Set();
+function subscribeConfig(fn) { configListeners.add(fn); return () => configListeners.delete(fn); }
+function emitConfig() { for (const fn of configListeners) fn(state.config); }
+
+const DEFAULT_CONFIG = {
+  theme: 'system',                    // 'system' | 'light' | 'dark'
+  customPapers: [],                   // [{ id, name, w, h, unit }]
+  siteTitle: 'Seating Chart Maker',
+  favicon: null,                      // data: URI, or null to keep the built-in icon
+  presets: { '1': null, '2': null },  // saved square configs, applied from the edit pane
+  customIcons: [],                    // imported SVG icons: [{ id, label, viewBox, inner }]
+};
+
 const DEFAULTS = {
   fill: '#dbe7ff',
   border: '#2f6feb',
@@ -38,10 +58,22 @@ const DEFAULTS = {
   colWeight: 1,
 };
 
-/** A square acts as a "chair" when its icon is the chair: it is furniture
- *  rather than a desk, so it can shrink to fit a walkway. */
+/** "Furniture" squares carry a special icon that renders as a piece tucked to
+ *  the edge the square faces, with labels in the empty space, rather than a
+ *  full desk. A chair is a small square; a server is a half-square slab. */
+const FURNITURE_ICONS = { chair: 'chair', server: 'server' };
+function furnitureKind(cell) {
+  return cell && cell.enabled && FURNITURE_ICONS[cell.icon] ? cell.icon : null;
+}
+function isFurnitureCell(cell) { return !!furnitureKind(cell); }
+
+/** A square acts as a "chair" when its icon is the chair: furniture rather than
+ *  a desk. */
 function isChairCell(cell) {
   return !!(cell && cell.enabled && cell.icon === 'chair');
+}
+function isServerCell(cell) {
+  return !!(cell && cell.enabled && cell.icon === 'server');
 }
 function isChairAt(r, c) { return isChairCell(peekCell(r, c)); }
 
@@ -87,14 +119,17 @@ const state = {
   tables: [],                   // [{ id, cellKeys:[], shape:'round'|'square', color }]
   paper: 'letter',              // preset id or { w, h, unit }
   landscape: true,              // paper orientation; false swaps width/height
+  exportBg: '#ffffff',          // page background of the exported / printed output
   // The selection is derived and must never be assigned to directly: it is
   // rebuilt from the three fields below on every emit.
   selection: new Set(),         // keys highlighted in select mode (DERIVED)
   filters: new Set(),           // active filter toggle ids (see js/filters.js)
+  filterQuery: '',              // live search text (view state, never serialized)
   manualAdd: new Set(),         // squares picked by hand
   manualDrop: new Set(),        // squares un-picked by hand, overriding filters
   tableSelection: new Set(),    // table ids highlighted in select mode
   showTrueSizes: false,         // preview weighted row/col sizes in the grid
+  config: JSON.parse(JSON.stringify(DEFAULT_CONFIG)),   // app settings (see above)
 };
 
 const keyOf = (r, c) => `${r},${c}`;
@@ -236,6 +271,9 @@ function resetLineSizes() {
 /** Flip the page between landscape and portrait. */
 function toggleOrientation() { state.landscape = !state.landscape; emit(); }
 
+/** The exported page's background colour (Preview re-renders live on emit). */
+function setExportBg(color) { state.exportBg = color || '#ffffff'; emit(); }
+
 function setTitle(title) { state.title = title || ''; emit(); }
 
 /** Set a default color (fill | border | iconColor | labelColor) for future cells. */
@@ -358,6 +396,7 @@ function copySquareFrom(r, c) {
  *  target's own labels are replaced, so it ends up matching the source. */
 function pasteSquareTo(keys) {
   if (!squareClipboard || !keys.length) return false;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint(); // undo: record before paste
   const f = squareClipboard;
   batch(() => {
     for (const k of keys) {
@@ -442,6 +481,7 @@ function insertLine(axis, index) {
   const isRow = axis === 'row';
   const limit = isRow ? state.grid.rows : state.grid.cols;
   if (index < 0 || index > limit || limit >= 40) return false;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint(); // undo: record before insert
 
   const shift = (k) => {
     const [r, c] = parseKey(k);
@@ -478,6 +518,7 @@ function deleteLine(axis, index) {
   const isRow = axis === 'row';
   const limit = isRow ? state.grid.rows : state.grid.cols;
   if (index < 0 || index >= limit || limit <= 1) return false;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint(); // undo: record before delete
 
   // undefined => the square went with the deleted line
   const shift = (k) => {
@@ -686,6 +727,7 @@ function pruneSelection() {
 function addTable(shape, color) {
   const cellKeys = [...state.selection];
   if (cellKeys.length === 0) return null;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint(); // undo: record before add table
   const table = { id: `t${Date.now().toString(36)}`, cellKeys, shape,
                   color: color || state.defaults.tableColor,
                   border: state.defaults.tableBorder,
@@ -703,6 +745,7 @@ function addTable(shape, color) {
   return table;
 }
 function removeTable(id) {
+  if (typeof historyCheckpoint === 'function') historyCheckpoint(); // undo: record before remove table
   state.tables = state.tables.filter((t) => t.id !== id);
   state.tableSelection.delete(id);
   emit();
@@ -808,6 +851,7 @@ function rotateTables(ids, step = 45) {
 }
 
 function removeTables(ids) {
+  if (typeof historyCheckpoint === 'function') historyCheckpoint(); // undo: record before remove tables
   batch(() => {
     state.tables = state.tables.filter((t) => !ids.includes(t.id));
     for (const id of ids) state.tableSelection.delete(id);
@@ -828,6 +872,7 @@ function pruneTables() {
 /** Empty every square and take the tables with them. Labels, icons and colours
  *  survive — this clears the layout, not the content. */
 function clearGrid() {
+  if (typeof historyCheckpoint === 'function') historyCheckpoint(); // undo: record before Clear Grid
   batch(() => {
     for (const cell of state.cells.values()) cell.enabled = false;
     state.tables = [];
@@ -866,11 +911,15 @@ function serialize() {
     tables: state.tables.map((t) => ({ ...t, cellKeys: [...t.cellKeys] })),
     paper: state.paper,
     landscape: state.landscape,
+    exportBg: state.exportBg,
   };
 }
 
 function deserialize(data) {
   if (!data || typeof data !== 'object') return false;
+  // undo: record before a file open / import replaces the chart. No-op during an
+  // undo/redo restore or before history init, so it never fights the restore.
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
   batch(() => {
     state.title = typeof data.title === 'string' ? data.title : '';
     state.defaults = {
@@ -903,10 +952,93 @@ function deserialize(data) {
       : [];
     state.paper = data.paper || 'letter';
     state.landscape = data.landscape !== false;
+    state.exportBg = data.exportBg || '#ffffff';
     clearManualSelection();
     state.tableSelection = new Set();
     pruneTables();
   });
+  return true;
+}
+
+// ---------------------------------------------------------------- config ops
+//
+// These mutate state.config and emit on the CONFIG channel only, so config
+// changes persist to the config key without being confused with chart edits.
+
+function setConfig(patch) { Object.assign(state.config, patch); emitConfig(); }
+
+function updateConfigPreset(n, preset) { state.config.presets[String(n)] = preset; emitConfig(); }
+
+function addCustomPaper(paper) { state.config.customPapers.push(paper); emitConfig(); }
+
+function removeCustomPaper(id) {
+  state.config.customPapers = state.config.customPapers.filter((p) => p.id !== id);
+  emitConfig();
+}
+
+function addCustomIcon(icon) { state.config.customIcons.push(icon); emitConfig(); }
+function removeCustomIcon(id) {
+  state.config.customIcons = state.config.customIcons.filter((c) => c.id !== id);
+  emitConfig();
+}
+
+/** A plain snapshot of config, safe to JSON.stringify for its own localStorage
+ *  key or to bake into an exported site. Never merged into serialize(). */
+function serializeConfig() {
+  const copyPreset = (p) => (p ? { ...p, labels: (p.labels || []).map((l) => ({ ...l })) } : null);
+  return {
+    theme: state.config.theme,
+    customPapers: state.config.customPapers.map((p) => ({ ...p })),
+    siteTitle: state.config.siteTitle,
+    favicon: state.config.favicon,
+    presets: { '1': copyPreset(state.config.presets['1']), '2': copyPreset(state.config.presets['2']) },
+    customIcons: state.config.customIcons.map((c) => ({ ...c })),
+  };
+}
+
+/** Load a config snapshot back into state.config, coercing every field so a
+ *  stale or hand-edited store can never break the app. */
+function applyConfig(data) {
+  if (!data || typeof data !== 'object') return false;
+  const cfg = state.config;
+  cfg.theme = ['system', 'light', 'dark'].includes(data.theme) ? data.theme : 'system';
+  cfg.customPapers = Array.isArray(data.customPapers)
+    ? data.customPapers
+        .filter((p) => p && p.id)
+        .map((p) => ({
+          id: String(p.id),
+          name: String(p.name || 'Custom'),
+          w: Number(p.w) || 11,
+          h: Number(p.h) || 8.5,
+          unit: p.unit === 'mm' ? 'mm' : 'in',
+        }))
+    : [];
+  cfg.siteTitle = typeof data.siteTitle === 'string' && data.siteTitle.trim()
+    ? data.siteTitle : DEFAULT_CONFIG.siteTitle;
+  cfg.favicon = typeof data.favicon === 'string' ? data.favicon : null;
+  const okPreset = (p) => (p && typeof p === 'object') ? {
+    icon: p.icon || null,
+    iconColor: p.iconColor || DEFAULTS.iconColor,
+    iconFill: p.iconFill || null,
+    rotation: p.rotation || 0,
+    fill: p.fill || DEFAULTS.fill,
+    border: p.border || DEFAULTS.border,
+    labels: Array.isArray(p.labels)
+      ? p.labels.map((l) => ({ text: String(l.text || ''), color: l.color || DEFAULTS.labelColor }))
+      : [],
+  } : null;
+  cfg.presets = { '1': okPreset(data.presets?.['1']), '2': okPreset(data.presets?.['2']) };
+  cfg.customIcons = Array.isArray(data.customIcons)
+    ? data.customIcons
+        .filter((c) => c && c.id && typeof c.inner === 'string')
+        .map((c) => ({
+          id: String(c.id),
+          label: String(c.label || 'Icon'),
+          viewBox: /^[-\d.\s]+$/.test(String(c.viewBox || '')) ? String(c.viewBox) : '0 0 16 16',
+          inner: String(c.inner),
+        }))
+    : [];
+  emitConfig();
   return true;
 }
 

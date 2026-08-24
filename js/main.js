@@ -71,6 +71,12 @@ bindColorInput(iconFillSwatchEl, () => {
 });
 reflectIconFillDefault();
 
+// ---- App config & settings pane -------------------------------------------
+// Restore config first, so custom paper sizes exist before the paper dropdown
+// is built and the theme/title/favicon are applied before the first paint.
+restoreConfig();
+initSettings();
+
 // ---- Paper, tables ---------------------------------------------------------
 initPaperControls();
 initOrientationControls();
@@ -206,7 +212,11 @@ document.getElementById('btn-preview-share')
   .addEventListener('click', (e) => copyShareLink(e.currentTarget, 'btn--ok'));
 
 document.getElementById('btn-clear').addEventListener('click', () => {
-  if (confirm('Clear the whole chart? This cannot be undone.')) clearAll();
+  if (confirm('Clear the whole chart? This wipes the undo history too, so it '
+    + "can't be undone unless you've saved or exported the chart.")) {
+    clearAll();
+    clearHistory();   // New starts fresh: drop the undo/redo stacks
+  }
 });
 
 // ---- Zoom ------------------------------------------------------------------
@@ -238,5 +248,7 @@ function reflectControls() {
   reflectControls();
   renderGrid();
   scheduleTableRefresh();
-  initAutoSave();        // start persisting after the initial restore
+  initHistory();         // snapshot the restored state as the undo baseline
+  initAutoSave();        // start persisting the chart after the initial restore
+  initConfigAutoSave();  // and the app config, on its own channel + key
 })();

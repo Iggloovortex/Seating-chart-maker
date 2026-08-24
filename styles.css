@@ -24,8 +24,14 @@
   --font: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
+/* Dark palette. The light palette above lives on bare :root; the dark palette
+   applies when the OS prefers dark AND the user has NOT forced light
+   (:root:not([data-theme="light"])), OR when the user explicitly chose dark
+   (:root[data-theme="dark"]). So an explicit choice from Settings wins in both
+   directions. The two rules carry the same tokens — one cannot be nested in the
+   other because one is media-gated and the other is not. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #1a1f26;
     --surface: #232a33;
     --surface-2: #2b333d;
@@ -36,6 +42,17 @@
     --seat: #23405f;
     --shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
   }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1f26;
+  --surface: #232a33;
+  --surface-2: #2b333d;
+  --ink: #e4e7eb;
+  --ink-soft: #9aa5b1;
+  --line: #3e4c59;
+  --line-strong: #616e7c;
+  --seat: #23405f;
+  --shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
 }
 
 * { box-sizing: border-box; }
@@ -86,6 +103,7 @@ body {
   margin-right: auto;
 }
 .toolbar__logo { font-size: 20px; line-height: 1; }
+.toolbar__logo img { width: 22px; height: 22px; display: block; object-fit: contain; border-radius: 4px; }
 .toolbar__title { white-space: nowrap; }
 
 .toolbar__group {
@@ -181,8 +199,8 @@ body {
 }
 .defaults__label--sub { font-size: 11px; font-style: italic; }
 .defaults__swatch {
-  /* button-sized, per the mockup */
-  width: 52px;
+  /* Square color well — same on every swatch across the site. */
+  width: var(--tap);
   height: var(--tap);
   padding: 3px;
   background: var(--surface);
@@ -207,11 +225,13 @@ body {
     flex-wrap: wrap;
   }
   .defaults__set { flex: 1; }
-  .defaults__swatch { width: 100%; min-width: 44px; }
+  /* Stay square when stacked, rather than stretching to the column width. */
+  .defaults__swatch { width: var(--tap); }
   .defaults__rule { display: none; }
 }
 .field__input--color {
-  width: 48px;
+  width: var(--tap);
+  height: var(--tap);
   padding: 4px;
   cursor: pointer;
 }
@@ -520,6 +540,85 @@ body {
   aspect-ratio: 1;
   flex: 0 0 auto;
 }
+
+/* A furniture piece (chair, server) tucked to the faced edge; its size and
+   position are set inline (placeChairTile / placeServerTile). The square around
+   it stays plain, so it reads as furniture rather than a filled desk. */
+.cell__furniture {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid var(--seat-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  z-index: 2;
+}
+.cell__chair { width: 50%; height: 50%; border-radius: 18%; }
+.cell__server { border-radius: 10%; }
+.cell__furniture .cell__content { padding: 1px; }
+.cell__furniture .cell__icon { width: 62%; }
+.cell__server .cell__icon { width: 74%; }
+
+/* A rack of servers: the square split into one slab per label, stacked and
+   turned to the facing (transform set inline). The column is only as wide as its
+   longest label (fit-content, every slab stretched to match) and the cell centres
+   it. An upright server icon sits in the top-left corner, over the slab fills but
+   under the labels (label z-index 2 > icon z-index 1), so a long name covers it. */
+.cell__rack {
+  align-self: stretch;      /* full cell height */
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 1px;
+}
+.cell__rackunit {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 0 6px;           /* room around the label sets the column width */
+  border: 1px solid var(--seat-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.cell__rackunit .cell__label { position: relative; z-index: 2; }
+/* Upright server icon in the square's empty top-left corner (the rack is centred
+   and only as wide as its labels, so the corner is free). */
+.cell__rackicon {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 22%;
+  height: 22%;
+  color: var(--ink);
+  z-index: 4;
+  pointer-events: none;
+}
+
+/* A furniture piece's labels sit in the empty part of the square (left/top/size
+   set inline) and turn with the piece, so a name reads beside its furniture. */
+.cell__furniturelabels {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 1px;
+  z-index: 2;
+  pointer-events: none;
+}
+/* A side-facing label is turned 90°, so it lays out in a narrow box but reads
+   down the square's full height — let the text overflow that box (the cell still
+   clips it) instead of ellipsizing on the pre-rotation width. */
+.cell__furniturelabels--vert { overflow: visible; }
+.cell__furniturelabels--vert .cell__label { max-width: none; overflow: visible; text-overflow: clip; }
 .cell__labels {
   display: flex;
   flex-direction: column;
@@ -703,6 +802,8 @@ body {
 .modal__head .field__input { min-height: 38px; min-width: 0; }
 .modal__head .btn-rotate { min-height: 38px; flex: 0 0 auto; }
 .modal__head [data-close-preview] { flex: 0 0 auto; }
+/* Settings has no page-settings group to push the ✕ over, so right-align it. */
+.modal__head [data-close-settings] { margin-left: auto; flex: 0 0 auto; }
 @media (max-width: 640px) {
   /* Too narrow for one line: keep Close beside the title and drop the page
      settings onto their own row, rather than stranding Close below them. */
@@ -760,6 +861,26 @@ body {
   letter-spacing: .04em;
   color: var(--ink-soft);
 }
+.egroup__note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+
+/* Size section: both entries on one line. */
+.erow--size { gap: 16px; }
+.sizeentry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.sizeentry__label { white-space: nowrap; }
+.sizeentry .field__input--num { width: 100%; min-width: 0; flex: 1; }
 .erow {
   display: flex;
   align-items: center;
@@ -767,7 +888,8 @@ body {
   margin-bottom: 8px;
 }
 .erow .field__input { flex: 1; min-width: 0; }
-.erow__color { flex: 0 0 auto; width: 44px; }
+/* Color wells stay square; beats the flex:1 above (same specificity, later). */
+.erow .field__input--color { flex: 0 0 auto; width: var(--tap); }
 
 .seg {
   display: inline-flex;
@@ -866,6 +988,80 @@ body {
   border-top: 1px solid var(--line);
 }
 
+/* ===================== Icon library browser ===================== */
+.modal__panel--iconlib { width: min(760px, 96vw); height: min(80vh, 720px); }
+/* The shared modal body centres its child (for the preview); the icon grid wants
+   the full width instead. */
+.modal__panel--iconlib .modal__body { display: block; align-self: stretch; width: 100%; }
+.iconlib__search { flex: 1 1 240px; min-width: 0; }
+.iconlib__grid {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+}
+.iconlib__tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  cursor: pointer;
+  overflow: hidden;
+}
+.iconlib__tile:hover { background: var(--surface-2); border-color: var(--line-strong); }
+.iconlib__tile.is-added { border-color: var(--line-strong); }
+.iconlib__tile.is-selected { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); box-shadow: inset 0 0 0 1px var(--accent); }
+.iconlib__tile.is-selected .iconlib__name { color: var(--accent-ink); }
+.iconlib__svg { width: 26px; height: 26px; }
+.iconlib__name {
+  max-width: 100%;
+  font-size: 10px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.iconlib__note { margin: 10px 2px 0; font-size: 12px; color: var(--ink-soft); }
+/* Footer stacks: the MIT credit on top, then the selected-icons strip beside Done. */
+.iconlib__foot { flex-direction: column; align-items: stretch; gap: 8px; }
+.iconlib__credit { font-size: 12px; color: var(--ink-soft); }
+.iconlib__selectedbar { display: flex; align-items: center; gap: 10px; }
+.iconlib__selected {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px;
+  min-height: 40px;
+  align-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.iconlib__selected:empty::before { content: 'No icons selected yet'; font-size: 12px; color: var(--ink-soft); padding: 0 6px; }
+.iconlib__chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.iconlib__chip:hover { border-color: var(--danger); color: var(--danger); }
+.iconlib__chipsvg { width: 18px; height: 18px; }
+.iconlib__selectedbar .btn { flex: 0 0 auto; }
+
 .preview__paper {
   background: #fff;
   box-shadow: 0 2px 12px rgba(0,0,0,.25);
@@ -958,14 +1154,22 @@ body {
    action colour — plain black on light, plain white on dark. */
 .iconbar--grid .iconbtn { color: #000; }
 
+/* Toolbar icon tints for dark — gated the same way as the palette so an explicit
+   Light/Dark choice from Settings overrides the media query in both directions. */
 @media (prefers-color-scheme: dark) {
-  .iconbtn--new   { color: #b0bec5; }
-  .iconbtn--save  { color: #81c784; }
-  .iconbtn--open  { color: #ffb74d; }
-  .iconbtn--share { color: #ce93d8; }
-  .iconbtn--print { color: #90caf9; }
-  .iconbar--grid .iconbtn { color: #fff; }
+  :root:not([data-theme="light"]) .iconbtn--new   { color: #b0bec5; }
+  :root:not([data-theme="light"]) .iconbtn--save  { color: #81c784; }
+  :root:not([data-theme="light"]) .iconbtn--open  { color: #ffb74d; }
+  :root:not([data-theme="light"]) .iconbtn--share { color: #ce93d8; }
+  :root:not([data-theme="light"]) .iconbtn--print { color: #90caf9; }
+  :root:not([data-theme="light"]) .iconbar--grid .iconbtn { color: #fff; }
 }
+:root[data-theme="dark"] .iconbtn--new   { color: #b0bec5; }
+:root[data-theme="dark"] .iconbtn--save  { color: #81c784; }
+:root[data-theme="dark"] .iconbtn--open  { color: #ffb74d; }
+:root[data-theme="dark"] .iconbtn--share { color: #ce93d8; }
+:root[data-theme="dark"] .iconbtn--print { color: #90caf9; }
+:root[data-theme="dark"] .iconbar--grid .iconbtn { color: #fff; }
 
 /* Rotate-orientation button: a broken ring with the orientation's initial in
    the middle, and the word beside it. Drawn in the text colour so it stays
@@ -1142,12 +1346,325 @@ body {
    boxes read taller than the solid button above them. Keep the edge crisp so
    all three are seen at the size they actually are. */
 .btn--preset { font-size: 12px; }
+/* A live preset button carries a saved square, so it reads as an action: the
+   accent blue, matching .btn--primary. */
+.btn--preset:not(:disabled) {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.btn--preset:not(:disabled):hover { filter: brightness(1.06); }
 .btn--preset:disabled {
   opacity: 1;
   color: var(--ink-soft);
   background: var(--surface-2);
   border-color: var(--line-strong);
 }
+
+/* ============================== Settings modal ============================== */
+/* Settings is a stacked form, not a document to preview, so it opens as a
+   left-side pane rather than a wide centred modal. */
+.modal__panel--settings {
+  margin: 0;                       /* hug the left edge (overrides the centring margin:auto) */
+  width: min(400px, 92vw);
+  height: 100%;
+  max-height: 100%;
+  border-radius: 0;
+  animation: slideInLeft .18s ease;
+}
+@keyframes slideInLeft { from { transform: translateX(-24px); opacity: .6; } }
+@media (max-width: 719px) {
+  /* On a phone the pane takes the whole width. */
+  .modal__panel--settings { width: 100%; }
+}
+
+/* The shared modal body centres a single object (the preview paper); Settings is
+   a stacked form instead, so it reverts to a left-aligned column. */
+.modal__body--settings {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  place-items: stretch;
+  background: var(--bg);
+  padding: 18px 20px;
+}
+.settings-section {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+.settings-section:first-child { padding-top: 0; border-top: 0; }
+.settings-section__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.settings-note { margin: 0; font-size: 13px; line-height: 1.4; color: var(--ink-soft); }
+/* A tight subtitle right under a section heading (e.g. the current page size). */
+.settings-subtext { margin: -6px 0 2px; font-size: 12px; color: var(--ink-soft); }
+
+/* Segmented tab switcher at the top of the Settings pane. */
+/* Settings header: the title row, then the tab switcher beneath it. */
+.modal__head--settings { flex-direction: column; align-items: stretch; gap: 12px; }
+.modal__headrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+.settings-tab {
+  flex: 1;
+  appearance: none;
+  padding: 8px 10px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.settings-tab:hover { color: var(--ink); }
+.settings-tab[aria-selected="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .1);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.settings-row__name { flex: 1 1 auto; min-width: 0; color: var(--ink); }
+
+/* Saved entries (custom papers, custom icons) sit on their own inset panel, so
+   they read as a distinct list from the controls that add and describe them. */
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+}
+.settings-list .settings-row { padding: 6px 0; border-top: 1px solid var(--line); }
+.settings-list .settings-row:first-child { border-top: 0; }
+
+/* Label-over-control field, matching the toolbar's stacked fields. */
+.settings-field { display: flex; flex-direction: column; gap: 4px; }
+.settings-field__label { font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+.settings-field .field__input { width: 100%; }
+
+.settings-seg { align-self: flex-start; }
+
+/* Add-paper form: name / W / H / unit / button, wrapping on narrow panels. */
+.settings-addpaper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+.settings-addpaper .settings-field { flex: 0 0 auto; }
+.settings-addpaper .settings-field .field__input { width: 88px; min-height: 38px; }
+.settings-addpaper .settings-field:first-child { flex: 1 1 160px; }
+.settings-addpaper .settings-field:first-child .field__input { width: 100%; }
+
+.settings-row--favicon { flex-wrap: wrap; }
+.settings-favicon {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 3px;
+}
+.settings-file { flex: 1 1 auto; min-width: 0; }
+
+/* Custom-icon import: a name box, a paste-SVG box, an Add button, and a list of
+   imported icons each with a small live preview. */
+.settings-addicon {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+.settings-addicon .settings-field:first-child { flex: 1 1 160px; }
+.settings-addicon .settings-field:nth-child(2) { flex: 1 1 100%; }
+.settings-svg {
+  width: 100%;
+  min-height: 60px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  resize: vertical;
+}
+.settings-icon-preview {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.settings-icon-preview__svg { width: 20px; height: 20px; }
+
+/* Settings preset row: a drawn miniature, then a two-line description, then the
+   Make/Edit and Clear buttons. */
+.settings-row--preset { align-items: center; gap: 10px; }
+.preset-preview {
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.preset-preview--empty {
+  border-style: dashed;
+  background: repeating-linear-gradient(
+    45deg, transparent, transparent 5px,
+    var(--line) 5px, var(--line) 6px);
+}
+.preset-preview__icon { width: 22px; height: 22px; }
+.preset-preview__text {
+  max-width: 100%;
+  padding: 0 2px;
+  font-size: 9px;
+  line-height: 1.1;
+  font-weight: 600;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preset-desc { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.preset-desc__meta { font-size: 12px; color: var(--ink-soft); }
+
+/* ============================== Color picker ============================== */
+/* The themed popover that stands in for the browser's color dialog. Fixed and
+   above every pane (the edit drawer sits at z-index 50, menus at 70). */
+.cpick {
+  position: fixed;
+  z-index: 80;
+  width: 236px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  color: var(--ink);
+}
+.cpick__sv {
+  position: relative;
+  width: 100%;
+  height: 140px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  cursor: crosshair;
+  touch-action: none;
+}
+.cpick__dot {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .5);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.cpick__hue {
+  position: relative;
+  height: 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  cursor: pointer;
+  touch-action: none;
+  background: linear-gradient(to right,
+    #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%);
+}
+.cpick__huethumb {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--line-strong);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.cpick__fields { display: flex; flex-direction: column; gap: 6px; }
+.cpick__row { display: flex; align-items: center; gap: 8px; }
+.cpick__label {
+  flex: 0 0 30px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--ink-soft);
+}
+.cpick__inputs { flex: 1 1 auto; display: flex; gap: 6px; }
+.cpick__field {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 0 6px;
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.cpick__field:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.cpick__hex { text-align: left; letter-spacing: .04em; }
+/* Trim the number spinners so three fit a row cleanly. */
+.cpick__num { -moz-appearance: textfield; padding: 0 2px; }
+.cpick__num::-webkit-outer-spin-button,
+.cpick__num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.cpick__eye {
+  appearance: none;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.cpick__eye:hover { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.cpick__eyeicon { width: 15px; height: 15px; flex: 0 0 auto; }
 
 /* Eight facing directions as a compass; the middle cell stays empty. */
 .compass {
@@ -1187,7 +1704,7 @@ body {
   grid-template-columns: repeat(2, auto);
   gap: 4px 8px;
 }
-.swatches .defaults__swatch { width: 46px; height: 34px; }
+.swatches .defaults__swatch { width: 34px; height: 34px; }
 .swatches .defaults__swatch:disabled { opacity: .4; cursor: not-allowed; }
 .swatches .defaults__label { display: flex; align-items: center; gap: 4px; }
 /* The tick that turns icon fill on; off leaves the icon an outline. */
@@ -1256,7 +1773,7 @@ body {
 /* A menu raised at the pointer rather than anchored to a button. Declared AFTER
    .popmenu so its position and stacking win — at .popmenu's z-index it opened
    behind the edit pane, which reads as the Delete button doing nothing. */
-.delete-menu { position: fixed; z-index: 70; }
+.delete-menu, .preset-menu { position: fixed; z-index: 70; }
 .popmenu__item--danger { color: var(--danger); }
 .popmenu__item--danger:hover,
 .popmenu__item--danger:focus-visible { background: var(--danger); color: #fff; }

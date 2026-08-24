@@ -3,6 +3,7 @@
 
 
 const LS_KEY = 'seatchart:last-session';
+const CONFIG_KEY = 'seatchart:config';   // app settings, kept apart from chart data
 const FILE_TYPE = 'seatchart';
 
 // ------------------------------------------------------------ localStorage
@@ -37,6 +38,42 @@ function restoreFromCache() {
   }
 }
 
+// ------------------------------------------------- config persistence
+//
+// The same autosave shape as the chart, but on the config channel and under the
+// config key — so app settings survive reloads without ever entering a
+// .seatchart file or share link.
+
+let configSaveTimer = 0;
+
+function initConfigAutoSave() {
+  subscribeConfig(() => {
+    clearTimeout(configSaveTimer);
+    configSaveTimer = window.setTimeout(saveConfigToCache, 200);
+  });
+}
+
+function saveConfigToCache() {
+  try {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(serializeConfig()));
+  } catch {
+    /* storage full or blocked — non-fatal */
+  }
+}
+
+/** Restore app config. A baked-in seed (an exported site) wins over the store,
+ *  so an exported app opens with the settings it shipped with. */
+function restoreConfig() {
+  if (window.__CONFIG_SEED) return applyConfig(window.__CONFIG_SEED);
+  try {
+    const raw = localStorage.getItem(CONFIG_KEY);
+    if (!raw) return false;
+    return applyConfig(JSON.parse(raw));
+  } catch {
+    return false;
+  }
+}
+
 // ------------------------------------------------------------ file I/O
 
 /** Download the current chart as a .seatchart file. */
@@ -55,6 +92,8 @@ function exportFile(name = 'seating-chart') {
 /** Read a File object and load it into state. Returns a Promise<boolean>. */
 function importFile(file) {
   return file.text().then((text) => {
+    // A .tsv (or any non-JSON sheet) replaces the chart just like a .seatchart.
+    if (looksLikeTsv(file.name, text)) return importTsv(text);
     const data = unwrap(JSON.parse(text));
     if (!data) throw new Error('Not a valid .seatchart file');
     return deserialize(data);

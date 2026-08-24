@@ -43,6 +43,9 @@ function initTables() {
     const pasteBtn = document.getElementById('btn-paste-format');
     if (copyBtn) copyBtn.disabled = squares !== 1;
     if (pasteBtn) pasteBtn.disabled = squares === 0 || !hasSquareClipboard();
+    // Save preset captures ONE square, like copy.
+    const savePresetBtn = document.getElementById('btn-save-preset');
+    if (savePresetBtn) savePresetBtn.disabled = squares !== 1;
 
     // Shape buttons build from selected squares, or convert picked tables.
     const canShape = squares > 0 || tables > 0;
@@ -83,6 +86,16 @@ function initTables() {
   fillBtn.addEventListener('click', () => {
     if (!state.selection.size) return;
     updateCells([...state.selection], { enabled: !allSelectedFilled() });
+  });
+
+  // Save the single selected square as a preset, choosing which slot from a
+  // popup (the same popmenu style as the delete menu).
+  document.getElementById('btn-save-preset').addEventListener('click', (e) => {
+    if (state.selection.size !== 1) return;
+    const [r, c] = parseKey([...state.selection][0]);
+    const cell = getCell(r, c);
+    const box = e.currentTarget.getBoundingClientRect();
+    if (typeof openPresetSaveMenu === 'function') openPresetSaveMenu(box.left, box.bottom + 4, cell);
   });
 
   // Copy formatting from a single selected square, paste onto the selection.

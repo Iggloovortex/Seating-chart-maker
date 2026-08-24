@@ -5,30 +5,26 @@
 const chart = document.getElementById('chart');
 
 // Live editing grid uses ONE uniform square size for every cell (row/column
-// weights are output-only). The base fits ~2 label lines of 10 characters, so
-// basic use never resizes; when any cell needs more, they all grow together.
+// weights are output-only). The size follows a comfortable base plus the tallest
+// label stack / icon — NOT the longest label, so a single long name shrinks only
+// its own cell's text (fitCellLabels) instead of enlarging every square.
 const CELL_BASE = 88;      // px — fits 2 lines × 10 chars (+icon)
 const CHAR_W = 7.2;        // approx px per label character at the grid font
 const PAD = 16;            // inner padding allowance
 const LINE_H = 16;         // px per label line
 const ICON_RESERVE = 40;   // px reserved for an icon above labels
 
-/** Uniform square cell size (px) needed to hold the largest cell's content. */
+/** Uniform square cell size (px). A comfortable fixed base (room for a ~10-char,
+ *  2-line label plus an icon) — deliberately NOT driven by the longest label or
+ *  the most label lines, so no single square enlarges every other one. A square
+ *  with more/longer text shrinks its own text to fit instead (see fitCellLabels). */
 function uniformCellSize() {
-  const { cols, rows } = state.grid;
-  let maxChars = 10, maxLines = 2, anyIcon = false;
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const d = peekCell(r, c);
-      if (!d || !d.enabled) continue;
-      if (d.icon) anyIcon = true;
-      const lines = (d.labels || []).filter((l) => l.text);
-      maxLines = Math.max(maxLines, lines.length);
-      for (const l of lines) maxChars = Math.max(maxChars, l.text.length);
-    }
-  }
-  const neededW = maxChars * CHAR_W + PAD;
-  const neededH = PAD + (anyIcon ? ICON_RESERVE : 0) + maxLines * LINE_H;
+  let anyIcon = false;
+  for (let r = 0; r < state.grid.rows; r++)
+    for (let c = 0; c < state.grid.cols; c++)
+      if (peekCell(r, c)?.icon && isEnabled(r, c)) anyIcon = true;
+  const neededW = 10 * CHAR_W + PAD;                       // ~10-char label
+  const neededH = PAD + (anyIcon ? ICON_RESERVE : 0) + 2 * LINE_H; // ~2 lines + icon
   return Math.round(Math.max(CELL_BASE, neededW, neededH));
 }
 
@@ -40,6 +36,7 @@ const TABLE_BADGE = 24; // .table-remove size, in px
 /** Full re-render of the grid. Called on any state change. */
 function renderGrid() {
   const { cols, rows } = state.grid;
+  refreshGridSurface();
 
   // All cells share one square size, so the grid stays uniform as content grows.
   const size = uniformCellSize();
@@ -72,9 +69,47 @@ function renderGrid() {
   }
 
   chart.style.setProperty('--line-out', `${LINE_BTN_OUT}px`);
+  fitCellLabels();
   renderTables();
   renderMoveHandle();
   buildInsertGuides();
+}
+
+/** Natural width of label text at the base font — measured on a canvas, so a
+ *  span's max-width/ellipsis can't mask the true length. */
+let _labelMeasureCtx = null;
+function measureLabelWidth(text) {
+  if (!_labelMeasureCtx) _labelMeasureCtx = document.createElement('canvas').getContext('2d');
+  _labelMeasureCtx.font = '600 12px system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+  return _labelMeasureCtx.measureText(text).width;
+}
+
+/** Shrink each square's label text to fit that square — per square, so one long
+ *  name or a tall stack of lines shrinks only its own cell rather than every
+ *  square resizing together (as the output's single global size does). Fits both
+ *  the widest line to the cell width AND the whole stack to the height under any
+ *  icon. A no-op for labels that already fit. */
+function fitCellLabels() {
+  const BASE = 12;        // .cell__label font-size, px
+  const LINE = BASE * 1.25; // line box at the base font (line-height 1.15 + gap)
+  for (const cell of chart.querySelectorAll('.cell')) {
+    const spans = cell.querySelectorAll('.cell__label');
+    if (!spans.length) continue;
+    const availW = cell.clientWidth - 10;
+    if (availW <= 0) continue;
+    let widest = 0;
+    for (const s of spans) widest = Math.max(widest, measureLabelWidth(s.textContent));
+    const wScale = widest > availW ? availW / widest : 1;
+    // Height budget: the cell minus any icon above the labels and a little padding.
+    const iconEl = cell.querySelector('.cell__icon');
+    const iconH = iconEl ? iconEl.getBoundingClientRect().height : 0;
+    const availH = cell.clientHeight - iconH - 10;
+    const stackH = spans.length * LINE;
+    const hScale = stackH > availH && availH > 0 ? availH / stackH : 1;
+    const scale = Math.min(wScale, hScale);
+    const px = scale < 1 ? Math.max(6, Math.round(BASE * scale)) : null; // floor so it stays legible
+    for (const s of spans) s.style.fontSize = px ? `${px}px` : '';
+  }
 }
 
 /** Output-accurate rectangles for the true-size preview, at the grid's own unit
@@ -546,6 +581,104 @@ function attachMoveDrag(handle, geo) {
   handle.addEventListener('pointercancel', finish);
 }
 
+/** Position a chair's furniture tile (50% of the square) against the edge it
+ *  faces, centred on the other axis — the DOM twin of chairGeometry in the
+ *  output. Diagonal facings tuck into the matching corner. */
+function placeChairTile(tile, rot) {
+  const n = ((Math.round(rot / 45) * 45) % 360 + 360) % 360;
+  const [dr, dc] = FACING_STEP[n] || FACING_STEP[0];
+  tile.style.left = dc < 0 ? '0' : dc > 0 ? '50%' : '25%';
+  tile.style.top = dr < 0 ? '0' : dr > 0 ? '50%' : '25%';
+}
+
+/** Position a chair's labels in the region opposite the tile — a full-width
+ *  top/bottom band for a vertical facing (hugging the tile), or the far half
+ *  (full height) beside a side-facing chair, whose label reads vertically once
+ *  the element is turned by the facing. The DOM twin of the output's chairLabelBox. */
+function placeChairLabels(el, rot) {
+  const [dr, dc] = serverHalf(rot);
+  if (dr < 0) { el.style.left = '0'; el.style.width = '100%'; el.style.top = '50%'; el.style.height = '50%'; el.style.justifyContent = 'flex-start'; }
+  else if (dr > 0) { el.style.left = '0'; el.style.width = '100%'; el.style.top = '0'; el.style.height = '50%'; el.style.justifyContent = 'flex-end'; }
+  else { placeVertFurnitureLabels(el, dc); }
+}
+
+/** A turned (side-facing) furniture label: a full-height strip whose centre — the
+ *  rotation pivot — sits just outside the tile, so the vertical name hugs the
+ *  piece rather than floating in the far half. dc<0 faces left (tile left), dc>0
+ *  faces right (tile right). */
+function placeVertFurnitureLabels(el, dc) {
+  el.style.top = '0';
+  el.style.height = '100%';
+  el.style.width = '40%';
+  el.style.left = dc < 0 ? '38%' : '22%'; // centre ~58% (hug left tile) or ~42% (hug right tile)
+  el.style.justifyContent = 'center';
+  el.classList.add('cell__furniturelabels--vert');
+}
+
+/** Which orthogonal half a server slab fills, given its facing — a diagonal
+ *  collapses to its vertical side, mirroring serverGeometry in the output. */
+function serverHalf(rot) {
+  const n = ((Math.round(rot / 45) * 45) % 360 + 360) % 360;
+  let [dr, dc] = FACING_STEP[n] || FACING_STEP[0];
+  if (dr && dc) dc = 0;
+  return [dr, dc];
+}
+
+/** Position a server's half-square slab against the edge it faces. */
+function placeServerTile(tile, rot) {
+  const [dr, dc] = serverHalf(rot);
+  if (dr || !dc) { tile.style.width = '100%'; tile.style.left = '0'; }
+  if (dc) { tile.style.width = '50%'; tile.style.left = dc < 0 ? '0' : '50%'; tile.style.height = '100%'; tile.style.top = '0'; }
+  if (dr) { tile.style.height = '50%'; tile.style.top = dr < 0 ? '0' : '50%'; }
+}
+
+/** Position a server's labels in the other half of the square. */
+function placeServerLabels(el, rot) {
+  const [dr, dc] = serverHalf(rot);
+  if (dc) { placeVertFurnitureLabels(el, dc); }
+  else { el.style.width = '100%'; el.style.left = '0'; el.style.height = '50%'; el.style.top = dr < 0 ? '50%' : '0'; }
+}
+
+/** A rack of servers: the square split into one slab per non-empty label,
+ *  stacked and turned to the facing. Fit-content wide — every slab stretches to
+ *  the widest label — so the column is only as wide as its longest name and the
+ *  cell centres it. The DOM twin of drawServerRack. */
+function buildServerRack(data, rot) {
+  const rack = document.createElement('div');
+  rack.className = 'cell__rack';
+  rack.style.transform = `rotate(${rot}deg)`;
+  for (const line of data.labels) {
+    if (!line.text) continue;
+    const unit = document.createElement('div');
+    unit.className = 'cell__rackunit';
+    unit.style.background = data.fill;
+    unit.style.borderColor = data.border;
+    const span = document.createElement('span');
+    span.className = 'cell__label';
+    span.textContent = line.text;
+    // The label sits on its slab fill; keep it legible against that colour.
+    span.style.color = typeof contrastLabelColor === 'function'
+      ? contrastLabelColor(line.color, data.fill || '#dbe7ff') : line.color;
+    unit.appendChild(span);
+    rack.appendChild(unit);
+  }
+  return rack;
+}
+
+// The theme surface a bare (furniture/ghost) label sits on, refreshed each full
+// render so a label that would vanish on it (white on white in light mode) can be
+// flipped to a readable colour — the grid twin of the export's page-background flip.
+let GRID_SURFACE = '#ffffff';
+function refreshGridSurface() {
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--surface').trim();
+  if (v) GRID_SURFACE = v;
+}
+/** Recolor a label placed directly on the grid surface so it stays legible in
+ *  both light and dark themes. */
+function surfaceLabelColor(color) {
+  return typeof contrastLabelColor === 'function' ? contrastLabelColor(color, GRID_SURFACE) : color;
+}
+
 function buildCell(r, c, rects) {
   const key = keyOf(r, c);
   const data = peekCell(r, c);
@@ -578,7 +711,12 @@ function buildCell(r, c, rects) {
   const ghost = !!(data && !data.enabled && hasContent(data));
 
   if (data && (data.enabled || ghost)) {
-    if (data.enabled) {
+    // Furniture (chair, server) keeps its full-size square but draws a piece of
+    // furniture inside it, tucked against the edge it faces — matching the
+    // output. So the square itself is NOT filled desk-style; the furniture is.
+    const furniture = data.enabled ? furnitureKind(data) : null;
+
+    if (data.enabled && !furniture) {
       el.classList.add('cell--on');
       el.style.background = data.fill;
       el.style.borderColor = data.border;
@@ -593,27 +731,66 @@ function buildCell(r, c, rects) {
     if (data.icon) {
       const svg = iconUse(data.icon, 'cell__icon', data.iconFill);
       if (svg) {
-        svg.style.color = data.iconColor || '#1f2933'; // drives currentColor in the icon
-        // Chairs preview at their chair size, matching the scaled-down output.
-        if (data.icon === 'chair') svg.style.width = `${Math.round(60 * CHAIR_SCALE)}%`;
+        // Keep the icon legible: a ghost's icon flips against the surface (like
+        // its labels); a live icon sits on its square/tile fill, so it flips
+        // against that fill when it would otherwise vanish (white on a light fill).
+        const ic = data.iconColor || '#1f2933';
+        svg.style.color = ghost ? surfaceLabelColor(ic) : contrastLabelColor(ic, data.fill || '#dbe7ff');
         content.appendChild(svg);
       }
     }
 
-    if (data.labels && data.labels.length) {
-      const labels = document.createElement('div');
-      labels.className = 'cell__labels';
+    let labelsEl = null;
+    if (data.labels && data.labels.length && data.labels.some((l) => l.text)) {
+      labelsEl = document.createElement('div');
+      labelsEl.className = 'cell__labels';
       for (const line of data.labels) {
         if (!line.text) continue;
         const span = document.createElement('span');
         span.className = 'cell__label';
         span.textContent = line.text;
-        span.style.color = line.color;
-        labels.appendChild(span);
+        // Furniture and ghost labels sit on the bare grid surface, so keep them
+        // legible in both themes; a desk label sits on its own fill and is left be.
+        span.style.color = (furniture || ghost) ? surfaceLabelColor(line.color) : line.color;
+        labelsEl.appendChild(span);
       }
-      content.appendChild(labels);
     }
-    el.appendChild(content);
+
+    const labelCount = data.labels ? data.labels.filter((l) => l.text).length : 0;
+
+    if (furniture === 'server' && labelCount >= 2) {
+      // A rack of several servers: one slab per label, stacked and turned to the
+      // facing — the DOM twin of drawServerRack. The server icon sits upright in
+      // the square's empty corner (the rack is only as wide as its labels).
+      const rot = (data.rotation || 0) + tableRot;
+      el.classList.add('cell--furniturehost');
+      el.appendChild(buildServerRack(data, rot));
+      const svg = iconUse('server', 'cell__rackicon');
+      if (svg) { svg.style.color = surfaceLabelColor(data.iconColor || '#1f2933'); el.appendChild(svg); }
+    } else if (furniture) {
+      // Furniture piece carries only the icon (turned to face); labels sit in the
+      // square's empty space (a single server's label turns with the facing).
+      const rot = (data.rotation || 0) + tableRot;
+      const tile = document.createElement('div');
+      tile.className = `cell__furniture cell__${furniture}`;
+      tile.style.background = data.fill;
+      tile.style.borderColor = data.border;
+      if (furniture === 'server') placeServerTile(tile, rot);
+      else placeChairTile(tile, rot);
+      tile.appendChild(content);
+      el.classList.add('cell--furniturehost');
+      el.appendChild(tile);
+      if (labelsEl) {
+        labelsEl.classList.add('cell__furniturelabels');
+        if (furniture === 'server') placeServerLabels(labelsEl, rot);
+        else placeChairLabels(labelsEl, rot);
+        labelsEl.style.transform = `rotate(${rot}deg)`; // labels turn with the piece
+        el.appendChild(labelsEl);
+      }
+    } else {
+      if (labelsEl) content.appendChild(labelsEl);
+      el.appendChild(content);
+    }
     el.setAttribute('aria-label', ghost
       ? `Empty seat row ${r + 1}, column ${c + 1}, previously ${ariaLabel(r, c, data)}`
       : ariaLabel(r, c, data));

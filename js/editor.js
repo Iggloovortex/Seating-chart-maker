@@ -8,6 +8,7 @@ const bodyEl = document.getElementById('editor-body');
 const titleEl = document.getElementById('editor-title');
 
 let current = null; // { r, c }
+let presetMode = null; // 1 | 2 while the pane is editing a preset instead of a cell
 
 function initEditor() {
   editorEl.querySelectorAll('[data-close-editor]').forEach((el) =>
@@ -48,6 +49,182 @@ function closeEditor() {
   editorEl.hidden = true;
   editorEl.setAttribute('aria-hidden', 'true');
   current = null;
+  presetMode = null;
+}
+
+// -------------------------------------------------- preset maker
+//
+// The same edit drawer, but bound to a preset in state.config rather than a grid
+// cell. Reuses the decoupled primitives (buildCompass, swatch) — the cell-bound
+// builders can't be, since they write through current.r/current.c.
+
+/** Open the drawer to build/edit preset `n`. Opened from Settings, which closes
+ *  behind it so the drawer isn't fighting the modal for the screen. */
+function openPresetEditor(n) {
+  if (typeof closeSettings === 'function') closeSettings();
+  current = null;
+  presetMode = n;
+  titleEl.textContent = `Preset ${n}`;
+  renderPresetEditor(n);
+  showPane();
+}
+
+/** The preset being edited, always a full object (a never-saved preset reads as
+ *  blank). Writes go straight through updateConfigPreset, so edits persist live. */
+function renderPresetEditor(n) {
+  const key = String(n);
+  const cur = () => state.config.presets[key] || emptyPreset();
+  const setP = (patch) => { updateConfigPreset(n, { ...cur(), ...patch }); renderPresetEditor(n); };
+  const p = cur();
+
+  bodyEl.replaceChildren();
+  document.getElementById('editor-actions').replaceChildren();
+
+  // Facing + colours on one row, matching the square pane (no fill toggle — a
+  // preset is always applied as a filled square).
+  bodyEl.appendChild(group(null, (g) => {
+    const row = document.createElement('div');
+    row.className = 'erow erow--controls';
+
+    const facing = controlGroup('Facing');
+    facing.appendChild(buildCompass(p.rotation || 0, (deg) => setP({ rotation: deg })));
+
+    const colors = controlGroup('Colors');
+    const sw = document.createElement('div');
+    sw.className = 'swatches';
+    sw.append(
+      swatch('Fill', p.fill, (v) => updateConfigPreset(n, { ...cur(), fill: v })),
+      swatch('Border', p.border, (v) => updateConfigPreset(n, { ...cur(), border: v })),
+      swatch('Icon', p.iconColor, (v) => updateConfigPreset(n, { ...cur(), iconColor: v })),
+      presetIconFillSwatch(n, cur),
+    );
+    colors.appendChild(sw);
+
+    row.append(facing, colors);
+    g.appendChild(row);
+  }));
+
+  // Icon.
+  bodyEl.appendChild(group('Icon', (g) => {
+    const picker = document.createElement('div');
+    picker.className = 'icon-picker';
+    const none = document.createElement('button');
+    none.type = 'button';
+    none.className = 'icon-picker__btn icon-picker__btn--none';
+    none.textContent = 'None';
+    none.setAttribute('aria-pressed', String(!p.icon));
+    none.addEventListener('click', () => setP({ icon: null }));
+    picker.appendChild(none);
+    for (const id of ICON_IDS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'icon-picker__btn';
+      btn.title = ICONS[id].label;
+      btn.setAttribute('aria-label', ICONS[id].label);
+      btn.setAttribute('aria-pressed', String(p.icon === id));
+      const svg = iconUse(id, '');
+      if (svg) btn.appendChild(svg);
+      btn.addEventListener('click', () => setP({ icon: id }));
+      picker.appendChild(btn);
+    }
+    g.appendChild(picker);
+  }));
+
+  // Labels — text + colour per line, add/remove.
+  bodyEl.appendChild(group('Labels', (g) => {
+    p.labels.forEach((line, i) => g.appendChild(presetLabelRow(n, cur, line, i)));
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'link-btn';
+    add.textContent = '+ Add label line';
+    add.addEventListener('click', () => {
+      const labels = cur().labels.concat({ text: '', color: defaultLabelColor(cur().labels.length) });
+      setP({ labels });
+    });
+    g.appendChild(add);
+  }));
+
+  // Footer: clear the preset, or done.
+  const foot = document.createElement('div');
+  foot.className = 'editor__foot';
+  const clr = document.createElement('button');
+  clr.type = 'button';
+  clr.className = 'btn btn--ghost';
+  clr.textContent = 'Clear preset';
+  clr.addEventListener('click', () => { updateConfigPreset(n, null); closeEditor(); });
+  const done = document.createElement('button');
+  done.type = 'button';
+  done.className = 'btn btn--primary';
+  done.textContent = 'Done';
+  done.addEventListener('click', closeEditor);
+  foot.append(clr, done);
+  bodyEl.appendChild(foot);
+}
+
+function presetIconFillSwatch(n, cur) {
+  const on = !!cur().iconFill;
+  const item = swatch('Icon fill', cur().iconFill || cur().fill,
+                      (v) => updateConfigPreset(n, { ...cur(), iconFill: v }));
+  const input = item.querySelector('input');
+  input.disabled = !on;
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.className = 'swatch__toggle';
+  box.checked = on;
+  box.setAttribute('aria-label', 'Fill the space inside the icon');
+  box.addEventListener('change', () => {
+    updateConfigPreset(n, { ...cur(), iconFill: box.checked ? input.value : null });
+    renderPresetEditor(n);
+  });
+  item.querySelector('.defaults__label').prepend(box);
+  return item;
+}
+
+function presetLabelRow(n, cur, line, index) {
+  const row = document.createElement('div');
+  row.className = 'erow';
+  const text = document.createElement('input');
+  text.type = 'text';
+  text.className = 'field__input';
+  text.value = line.text;
+  text.placeholder = `Line ${index + 1}`;
+  text.addEventListener('input', () => {
+    const labels = cur().labels.map((l, i) => i === index ? { ...l, text: text.value } : l);
+    updateConfigPreset(n, { ...cur(), labels }); // live, no re-render (keeps focus/caret)
+  });
+  const color = document.createElement('input');
+  color.type = 'color';
+  color.className = 'field__input field__input--color erow__color';
+  color.value = line.color;
+  bindColorInput(color, () => {
+    const labels = cur().labels.map((l, i) => i === index ? { ...l, color: color.value } : l);
+    updateConfigPreset(n, { ...cur(), labels });
+  });
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'btn btn--icon btn--ghost';
+  del.textContent = '✕';
+  del.setAttribute('aria-label', `Remove label line ${index + 1}`);
+  del.addEventListener('click', () => {
+    const labels = cur().labels.filter((_, i) => i !== index);
+    updateConfigPreset(n, { ...cur(), labels });
+    renderPresetEditor(n);
+  });
+  row.append(text, color, del);
+  return row;
+}
+
+/** The single square the pane is open on, or null (bulk pane / pane closed).
+ *  Lets Settings capture the open square as a preset. */
+function editorSquare() {
+  return current ? { r: current.r, c: current.c, cell: peekCell(current.r, current.c) } : null;
+}
+
+/** Re-render the single-square pane in place — used after Settings saves a
+ *  preset, so the pane's Preset buttons switch from disabled to live. */
+function refreshEditor() {
+  if (editorEl.hidden || !current) return;
+  render(peekCell(current.r, current.c));
 }
 
 function render(cell) {
@@ -77,12 +254,12 @@ function render(cell) {
     none.addEventListener('click', () => { updateCell(current.r, current.c, { icon: null }); render(peekCell(current.r, current.c)); });
     picker.appendChild(none);
 
-    for (const id of ICON_IDS) {
+    for (const id of pickableIconIds()) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'icon-picker__btn';
-      btn.title = ICONS[id].label;
-      btn.setAttribute('aria-label', ICONS[id].label);
+      btn.title = iconLabel(id);
+      btn.setAttribute('aria-label', iconLabel(id));
       btn.setAttribute('aria-pressed', String(cell.icon === id));
       const svg = iconUse(id, '');
       if (svg) btn.appendChild(svg);
@@ -91,27 +268,34 @@ function render(cell) {
     }
     g.appendChild(picker);
 
-    // The chair icon makes the square a chair: furniture that draws smaller than
-    // a desk, so it fits inside a thinned walkway. There is no size to set — the
-    // walkway's own width is what a chair has to fit, and it already follows it.
-    if (cell.icon === 'chair') {
-      const note = document.createElement('p');
-      note.className = 'egroup__title';
-      note.style.textTransform = 'none';
-      note.style.fontWeight = '400';
-      note.style.marginTop = '6px';
-      note.textContent = 'Chairs take their row/column size in the output, so they fit walkway paths, ' +
-        'and line up with the square they face.';
-      g.appendChild(note);
+    // Browse the bundled icon library and apply the pick straight to this square.
+    if (typeof iconLibraryAvailable === 'function' && iconLibraryAvailable()) {
+      const browse = document.createElement('button');
+      browse.type = 'button';
+      browse.className = 'link-btn';
+      browse.textContent = '+ Browse icon library';
+      browse.addEventListener('click', () => openIconLibrary((id) => {
+        updateCell(current.r, current.c, { icon: id });
+        render(peekCell(current.r, current.c));
+      }));
+      g.appendChild(browse);
     }
   }));
 
+  // --- Special --------------------------------------------------------------
+  // A permanent home for the special icons — the ones that turn the square into
+  // furniture (a piece tucked to the faced edge, labels in the empty space).
+  bodyEl.appendChild(specialSection(cell));
+
   // --- Labels (each line has its own color) --------------------------------
   bodyEl.appendChild(group('Labels', (g) => {
+    // There is always one label line to type into — blank by default. An empty
+    // line is excluded from the grid, the output and content checks, so a
+    // never-filled default line costs nothing.
+    if (cell.labels.length === 0) cell.labels.push({ text: '', color: defaultLabelColor(0) });
     const list = document.createElement('div');
     list.id = 'label-list';
-    const labels = cell.labels.length ? cell.labels : [];
-    labels.forEach((line, i) => list.appendChild(labelRow(line, i)));
+    cell.labels.forEach((line, i) => list.appendChild(labelRow(line, i)));
     g.appendChild(list);
 
     const add = document.createElement('button');
@@ -132,12 +316,15 @@ function render(cell) {
 
   // --- Row / column size (empty row & column height) ----------------------
   bodyEl.appendChild(group('Size (this row & column)', (g) => {
-    g.appendChild(weightRow('Row height ×', rowWeight(current.r), (v) => setRowWeight(current.r, v)));
-    g.appendChild(weightRow('Col width ×', colWeight(current.c), (v) => setColWeight(current.c, v)));
+    const row = document.createElement('div');
+    row.className = 'erow erow--size';
+    row.append(
+      sizeEntry('Row ×', rowWeight(current.r), (v) => setRowWeight(current.r, v)),
+      sizeEntry('Col ×', colWeight(current.c), (v) => setColWeight(current.c, v)),
+    );
+    g.appendChild(row);
     const note = document.createElement('p');
-    note.className = 'egroup__title';
-    note.style.textTransform = 'none';
-    note.style.fontWeight = '400';
+    note.className = 'egroup__note';
     note.style.marginTop = '6px';
     note.textContent = 'In the output, this resizes only the empty spaces in this row/column — filled squares stay full size, which offsets them. The editing grid stays uniform.';
     g.appendChild(note);
@@ -153,6 +340,75 @@ function render(cell) {
   done.addEventListener('click', closeEditor);
   foot.appendChild(done);
   bodyEl.appendChild(foot);
+}
+
+/** The special icons — the ones that turn a square into furniture and so live in
+ *  the Special section rather than the Icon picker. */
+const SPECIAL_ICON_IDS = Object.keys(FURNITURE_ICONS);
+function isSpecialIcon(id) { return !!FURNITURE_ICONS[id]; }
+
+/** How each special icon behaves, shown in the Special section so the reader
+ *  knows why the icon renders tucked rather than as a desk. */
+const SPECIAL_SQUARE_NOTES = {
+  chair: 'This square is a chair: a small piece of furniture tucked against and lined up ' +
+    'with the square it faces. Its label sits in the empty space. The square stays full size.',
+  server: 'This square is a server rack. One label shows the server icon and a slab tucked ' +
+    'to the side it faces. Add more labels and each becomes its own server slab, filling the ' +
+    'square. Labels turn with the facing, like a normal square.',
+};
+
+/** The Special section — a permanent home for the special icons. Picking one
+ *  turns the square into that furniture; picking it again clears it. When one is
+ *  active, its behaviour note appears and points at Facing, which aims it. */
+function specialSection(cell) {
+  return group('Special', (g) => {
+    const picker = document.createElement('div');
+    picker.className = 'icon-picker';
+    for (const id of SPECIAL_ICON_IDS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'icon-picker__btn';
+      btn.title = ICONS[id].label;
+      btn.setAttribute('aria-label', ICONS[id].label);
+      btn.setAttribute('aria-pressed', String(cell.icon === id));
+      const svg = iconUse(id, '');
+      if (svg) btn.appendChild(svg);
+      btn.addEventListener('click', () => {
+        const next = cell.icon === id ? null : id; // clicking the active one clears it
+        updateCell(current.r, current.c, { icon: next });
+        render(peekCell(current.r, current.c));
+      });
+      picker.appendChild(btn);
+    }
+    g.appendChild(picker);
+
+    const text = cell && cell.icon && SPECIAL_SQUARE_NOTES[cell.icon];
+    if (text) {
+      const note = document.createElement('p');
+      note.className = 'egroup__note';
+      note.textContent = text + ' Use Facing above to aim it.';
+      g.appendChild(note);
+    }
+  });
+}
+
+/** One compact label + number entry for the Size row, so both sit on one line. */
+function sizeEntry(label, value, onChange) {
+  const wrap = document.createElement('label');
+  wrap.className = 'sizeentry';
+  const span = document.createElement('span');
+  span.className = 'sizeentry__label';
+  span.textContent = label;
+  const num = document.createElement('input');
+  num.type = 'number';
+  num.className = 'field__input field__input--num';
+  num.min = '0.2';
+  num.step = '0.1';
+  num.value = value;
+  num.inputMode = 'decimal';
+  num.addEventListener('change', () => onChange(parseFloat(num.value) || 1));
+  wrap.append(span, num);
+  return wrap;
 }
 
 // ---------------------------------------------------------------- bulk render
@@ -218,12 +474,13 @@ function renderBulk(keys) {
     none.addEventListener('click', () => updateCells(keys, { icon: null }));
     picker.appendChild(none);
 
-    for (const id of ICON_IDS) {
+    const bulkIds = ICON_IDS.concat(((state.config && state.config.customIcons) || []).map((c) => c.id));
+    for (const id of bulkIds) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'icon-picker__btn';
-      btn.title = ICONS[id].label;
-      btn.setAttribute('aria-label', ICONS[id].label);
+      btn.title = iconLabel(id);
+      btn.setAttribute('aria-label', iconLabel(id));
       const svg = iconUse(id, '');
       if (svg) btn.appendChild(svg);
       btn.addEventListener('click', () => updateCells(keys, { icon: id }));
@@ -290,7 +547,8 @@ function bulkFillControls(keys) {
     updateCells(keys, { enabled: !allFilled });
     renderBulk(keys);
   });
-  wrap.appendChild(fillStack(btn, presetButton(1), presetButton(2)));
+  const apply = (n) => { applyPreset(n, keys); renderBulk(keys); };
+  wrap.appendChild(fillStack(btn, presetButton(1, apply), presetButton(2, apply)));
   return wrap;
 }
 
@@ -540,6 +798,9 @@ function bindColorInput(input, apply) {
   input.addEventListener('input', apply);
   input.addEventListener('change', apply);
   input.addEventListener('blur', apply);
+  // Swap the browser's un-themed color dialog for the app's own popover. The
+  // native input stays the value holder, so these listeners keep firing.
+  if (typeof enhanceColorInput === 'function') enhanceColorInput(input);
 }
 
 function weightRow(label, value, onChange) {
@@ -586,7 +847,11 @@ function deleteButton(getKeys, getAt) {
  *  swatches beside it. */
 function fillControls(cell) {
   const wrap = controlGroup('Fill');
-  wrap.appendChild(fillStack(seatToggle(cell), presetButton(1), presetButton(2)));
+  const apply = (n) => {
+    applyPreset(n, [keyOf(current.r, current.c)]);
+    render(peekCell(current.r, current.c));
+  };
+  wrap.appendChild(fillStack(seatToggle(cell), presetButton(1, apply), presetButton(2, apply)));
   return wrap;
 }
 
@@ -614,17 +879,20 @@ function seatToggle(cell) {
   return btn;
 }
 
-/** A saved square configuration, applied in one press. The presets themselves
- *  are defined in the settings pane, which does not exist yet — until then the
- *  buttons are placeholders so the row's shape is settled. */
-function presetButton(n) {
+/** A saved square configuration, applied in one press. Presets are captured and
+ *  stored in Settings (state.config.presets). A button is live only when its
+ *  preset is set AND a target is given; `onApply(n)` receives the click. */
+function presetButton(n, onApply) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'btn btn--preset';
   btn.dataset.preset = String(n);
   btn.textContent = `Preset ${n}`;
-  btn.title = `Preset ${n} — configured in Settings`;
-  btn.disabled = true;
+  const preset = state.config && state.config.presets ? state.config.presets[String(n)] : null;
+  const has = !!preset;
+  btn.disabled = !has || !onApply;
+  btn.title = has ? `Apply Preset ${n} (set in Settings)` : `Preset ${n} — set it in Settings`;
+  if (has && onApply) btn.addEventListener('click', () => onApply(n));
   return btn;
 }
 

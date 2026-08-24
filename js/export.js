@@ -3,7 +3,7 @@
 
 
 const MAX_DIM = 4000;      // cap canvas pixels for memory safety
-const CHAIR_SCALE = 0.7;   // a chair's share of its square — furniture, not a desk
+const CHAIR_SCALE = 0.5;   // a chair's share of its (full-size) square — furniture, not a desk
 
 /** Which neighbouring square each rotation faces, as [rowStep, colStep]. */
 const FACING_STEP = {
@@ -25,8 +25,9 @@ async function renderToCanvas(dpi = 300) {
   canvas.height = pxH;
   const ctx = canvas.getContext('2d');
 
-  // White page background (grid lines intentionally omitted).
-  ctx.fillStyle = '#ffffff';
+  // Page background (grid lines intentionally omitted); white unless the user
+  // set an export background colour.
+  ctx.fillStyle = state.exportBg || '#ffffff';
   ctx.fillRect(0, 0, pxW, pxH);
 
   const { cols, rows } = state.grid;
@@ -40,10 +41,10 @@ async function renderToCanvas(dpi = 300) {
   const areaW = pxW - margin * 2;
   const areaH = pxH - margin * 2 - titleBand;
 
-  // Empty-space sizing: every SEATED square renders at one uniform size, while
-  // each EMPTY square (and each chair) shrinks/grows to its column-width ×
-  // row-height weights. See js/layout.js — the grid's "true sizes" preview uses
-  // the very same rules, so what is shown there is what prints here.
+  // Empty-space sizing: every FILLED square renders at one uniform size, while
+  // each EMPTY square shrinks/grows to its column-width × row-height weights.
+  // See js/layout.js — the grid's "true sizes" preview uses the very same rules,
+  // so what is shown there is what prints here.
   const rules = layoutRules();
   const { insideAnyFootprint, seatTableOf, footprints } = rules;
 
@@ -54,9 +55,9 @@ async function renderToCanvas(dpi = 300) {
   const originY = margin + titleBand;                     // top-anchored, beneath the title
   const rects = layoutRects(rules, unit, originX, originY);
 
-  // Title at the top, centered.
+  // Title at the top, centered — inked to read on the page background.
   if (title) {
-    ctx.fillStyle = '#1f2933';
+    ctx.fillStyle = readableInk(state.exportBg);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = `700 ${Math.round(titleBand * 0.5)}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
@@ -84,13 +85,14 @@ async function renderToCanvas(dpi = 300) {
       else desks.push({ r, c, data });
     }
   }
-  // Chairs are standalone furniture, so they never merge into a desk block.
-  const deskSet = new Set(desks.filter((d) => !isChairCell(d.data)).map((d) => keyOf(d.r, d.c)));
+  // Furniture (chairs, servers) is standalone, so it never merges into a desk block.
+  const deskSet = new Set(desks.filter((d) => !isFurnitureCell(d.data)).map((d) => keyOf(d.r, d.c)));
 
   // Work out where every piece of content will sit BEFORE painting any of it,
   // so one text size and one icon size can be chosen for the whole chart.
   for (const d of desks) {
     if (isChairCell(d.data)) d.geo = chairGeometry(rectOf, d);
+    else if (isServerCell(d.data)) d.geo = serverGeometry(rectOf, d);
     else {
       const { x, y, w, h } = rectOf(d.r, d.c);
       d.geo = { cx: x + w / 2, cy: y + h / 2, w, h };
@@ -98,7 +100,14 @@ async function renderToCanvas(dpi = 300) {
   }
   for (const s of seats) s.geo = seatGeometry(rectOf, s);
   for (const v of covered) v.geo = coveredGeometry(rectOf, v, footprints);
-  const plan = planContent(ctx, [...desks, ...seats, ...covered]);
+  // Furniture labels fill the square's empty space, so plan their size against
+  // that space, not the small furniture piece: a chair/single-server uses its
+  // labelBox; a multi-server rack uses one slab (full width, 1/N of the height).
+  const planItems = [
+    ...desks.map((d) => furnitureLabelGeo(d) || d),
+    ...seats, ...covered,
+  ];
+  const plan = planContent(ctx, planItems);
 
   // Preload icon images (async), keyed by "id|color" — including a chair for empty seats.
   const imgCache = await preloadIcons(desks, seats, covered);
@@ -106,9 +115,10 @@ async function renderToCanvas(dpi = 300) {
   // 1) Table shapes (drawn solid; the editing grid shows them semi-transparent).
   for (const table of state.tables) drawTable(ctx, table, rectOf);
 
-  // 2) Connected desks — chairs draw as small furniture instead.
+  // 2) Connected desks — furniture (chairs, servers) draws as a tucked piece instead.
   for (const d of desks) {
     if (isChairCell(d.data)) drawChair(ctx, d, imgCache, plan);
+    else if (isServerCell(d.data)) (d.geo.units >= 2 ? drawServerRack : drawServer)(ctx, d, imgCache, plan);
     else drawDesk(ctx, rectOf, d, deskSet, imgCache, plan);
   }
 
@@ -219,21 +229,214 @@ function chairGeometry(rectOf, { r, c, data }) {
     if (dr && !dc) cx = faced.x + faced.w / 2;
     if (dc && !dr) cy = faced.y + faced.h / 2;
   }
-  return { cx, cy, w: size, h: size };
+  // Labels turn with the chair (like its icon), sitting in the region opposite
+  // the tile — a top/bottom band for a vertical facing, the far half for a side
+  // facing so the now-vertical name has full height and never truncates.
+  return { cx, cy, w: size, h: size, labelBox: chairLabelBox(rect, dr, dc), full: Math.min(rect.w, rect.h) };
 }
 
-/** A chair: standalone furniture drawn at a fixed fraction of its square, so a
- *  chair standing in a thinned row/column shrinks with it and stays inside the
- *  walkway. */
+/** Where a chair's labels are drawn, opposite the tile: a full-width top/bottom
+ *  half hugging a vertical-facing chair, or the far half (full height) beside a
+ *  side-facing chair, whose label reads vertically once turned. */
+function chairLabelBox(rect, dr, dc) {
+  if (dr < 0) return { x: rect.x, y: rect.y + rect.h / 2, w: rect.w, h: rect.h / 2, anchor: 'top' };    // tile top → hug just below
+  if (dr > 0) return { x: rect.x, y: rect.y, w: rect.w, h: rect.h / 2, anchor: 'bottom' };              // tile bottom → hug just above
+  if (dc < 0) return { x: rect.x + rect.w / 2, y: rect.y, w: rect.w / 2, h: rect.h, anchor: 'left' };   // faces left → right half, hug left
+  return { x: rect.x, y: rect.y, w: rect.w / 2, h: rect.h, anchor: 'right' };                            // faces right → left half, hug right
+}
+
+/** A chair: standalone furniture drawn at a fixed fraction of its full-size
+ *  square, attached to the edge it faces and centred on the other axis, so it
+ *  tucks up to the desk or table it belongs to. */
 function drawChair(ctx, item, imgCache, plan) {
-  const { cx, cy, w: size } = item.geo;
+  const { cx, cy, w: size, labelBox, full } = item.geo;
   roundRect(ctx, cx - size / 2, cy - size / 2, size, size, size * 0.18);
   ctx.fillStyle = item.data.fill || '#dbe7ff';
   ctx.fill();
   ctx.lineWidth = Math.max(1, size * 0.05);
   ctx.strokeStyle = item.data.border || '#2f6feb';
   ctx.stroke();
-  drawContent(ctx, cx, cy, size, size, item.data, imgCache, false, plan);
+  // The furniture carries its icon and its labels, both turned to the facing.
+  drawIconOnly(ctx, cx, cy, size, item.data, imgCache);
+  if (labelBox) drawLabelBox(ctx, labelBox, item.data, plan, full || Math.min(labelBox.w, labelBox.h), item.data.rotation || 0);
+}
+
+/** Where a server sits: a half-square slab hugging the edge it faces, filling
+ *  the full width (or height) of that half, with its labels in the other half.
+ *  A diagonal facing collapses to its vertical side so the slab stays a clean
+ *  half rather than a quarter. */
+function serverGeometry(rectOf, { r, c, data }) {
+  const rect = rectOf(r, c);
+  let [dr, dc] = FACING_STEP[data.rotation || 0] || FACING_STEP[0];
+  if (dr && dc) dc = 0;
+  const half = (v) => v / 2;
+  let box, labelBox;
+  if (dr < 0) {        // faces up → slab on top, label hugs just below it
+    box =      { x: rect.x, y: rect.y,               w: rect.w, h: half(rect.h) };
+    labelBox = { x: rect.x, y: rect.y + half(rect.h), w: rect.w, h: half(rect.h), anchor: 'top' };
+  } else if (dr > 0) { // faces down → slab on bottom
+    box =      { x: rect.x, y: rect.y + half(rect.h), w: rect.w, h: half(rect.h) };
+    labelBox = { x: rect.x, y: rect.y,               w: rect.w, h: half(rect.h), anchor: 'bottom' };
+  } else if (dc < 0) { // faces left → slab on the left
+    box =      { x: rect.x,               y: rect.y, w: half(rect.w), h: rect.h };
+    labelBox = { x: rect.x + half(rect.w), y: rect.y, w: half(rect.w), h: rect.h, anchor: 'left' };
+  } else {             // faces right → slab on the right
+    box =      { x: rect.x + half(rect.w), y: rect.y, w: half(rect.w), h: rect.h };
+    labelBox = { x: rect.x,               y: rect.y, w: half(rect.w), h: rect.h, anchor: 'right' };
+  }
+  return { rect, box, labelBox, full: Math.min(rect.w, rect.h), units: labelsOf(data).length };
+}
+
+/** A single server: a half-square slab tucked to the faced edge, its icon
+ *  centred and turned to face, its one label rotated to the facing in the other
+ *  half — just as a normal square's label turns. */
+function drawServer(ctx, item, imgCache, plan) {
+  const { box, labelBox, full } = item.geo;
+  const inset = Math.min(box.w, box.h) * 0.05;
+  const x = box.x + inset, y = box.y + inset, w = box.w - inset * 2, h = box.h - inset * 2;
+  roundRect(ctx, x, y, w, h, Math.min(w, h) * 0.16);
+  ctx.fillStyle = item.data.fill || '#dbe7ff';
+  ctx.fill();
+  ctx.lineWidth = Math.max(1, Math.min(w, h) * 0.05);
+  ctx.strokeStyle = item.data.border || '#2f6feb';
+  ctx.stroke();
+  drawIconOnly(ctx, x + w / 2, y + h / 2, Math.min(w, h), item.data, imgCache);
+  if (labelBox) drawLabelBox(ctx, labelBox, item.data, plan, full, item.data.rotation || 0);
+}
+
+/** A server rack holding several servers: split into one slab per label, stacked
+ *  and turned to the facing. Every slab is the SAME width — that of the longest
+ *  label — so the rack is only as wide as its names need, centred in the square.
+ *  A small server icon sits upright in the rack's top-left corner: it never turns
+ *  and is painted over the slabs but under the labels, so a long name covers it. */
+function drawServerRack(ctx, item, imgCache, plan) {
+  const { rect, full } = item.geo;
+  const data = item.data;
+  const labels = labelsOf(data);
+  const n = labels.length;
+  const bandH = rect.h / n;
+  const inset = Math.min(rect.w, bandH) * 0.06;
+  const lineH = Math.min(full * plan.lineFrac, bandH * 0.72);
+  const cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;
+  const rad = ((data.rotation || 0) * Math.PI) / 180;
+
+  // The column is as wide as the longest label needs, capped to the square.
+  ctx.font = contentFont(lineH * FONT_OF_LINE);
+  let widest = 0;
+  for (const l of labels) widest = Math.max(widest, ctx.measureText(l.text).width);
+  const pad = lineH * 0.7;
+  const slabW = Math.min(rect.w - inset * 2, widest + pad * 2);
+  const left = -slabW / 2; // centred
+
+  // 1) The slabs, turned to the facing.
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rad);
+  for (let i = 0; i < n; i++) {
+    const top = -rect.h / 2 + i * bandH;
+    const y = top + inset, h = bandH - inset * 2;
+    roundRect(ctx, left, y, slabW, h, Math.min(slabW, h) * 0.22);
+    ctx.fillStyle = data.fill || '#dbe7ff';
+    ctx.fill();
+    ctx.lineWidth = Math.max(1, Math.min(slabW, h) * 0.06);
+    ctx.strokeStyle = data.border || '#2f6feb';
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // 2) The upright server icon in the square's top-left corner (never turns). The
+  //    rack is only as wide as its labels, so the corner is empty space; on a
+  //    full-width rack the label painted next covers it instead.
+  const img = imgCache.get(cornerIconKey(data));
+  if (img) {
+    const isz = Math.min(rect.w, rect.h) * 0.22;
+    ctx.drawImage(img, rect.x + inset, rect.y + inset, isz, isz);
+  }
+
+  // 3) The labels, centred in each slab and turned, painted last so a long one
+  //    covers the icon.
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rad);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = contentFont(lineH * FONT_OF_LINE);
+  for (let i = 0; i < n; i++) {
+    const top = -rect.h / 2 + i * bandH;
+    // A rack label sits on its slab, so keep it legible against the slab fill.
+    ctx.fillStyle = contrastLabelColor(labels[i].color, data.fill || '#dbe7ff');
+    ctx.fillText(fitText(ctx, labels[i].text, slabW - pad), 0, top + bandH / 2);
+  }
+  ctx.restore();
+}
+
+/** The rectangle a furniture square's labels are sized against, for planContent:
+ *  a chair/single-server uses its labelBox; a multi-server rack uses one slab
+ *  (full width, 1/N of the height). Null for a non-furniture square. */
+function furnitureLabelGeo(d) {
+  if (!isFurnitureCell(d.data)) return null;
+  if (isServerCell(d.data) && d.geo.units >= 2) {
+    return { data: d.data, geo: { w: d.geo.rect.w, h: d.geo.rect.h / d.geo.units } };
+  }
+  return d.geo.labelBox ? { data: d.data, geo: d.geo.labelBox } : null;
+}
+
+/** Just a cell's icon, centred and turned to its facing — no labels. */
+function drawIconOnly(ctx, cx, cy, size, data, imgCache) {
+  if (!data.icon) return;
+  const img = imgCache.get(iconKey(data.icon, data));
+  if (!img) return;
+  const iconSize = size * 0.64;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(((data.rotation || 0) * Math.PI) / 180);
+  ctx.drawImage(img, -iconSize / 2, -iconSize / 2, iconSize, iconSize);
+  ctx.restore();
+}
+
+/** A label drawn straight onto the page background — a chair's or a single
+ *  server's, sitting in the square's empty space rather than on a filled shape —
+ *  vanishes when its colour matches the page (white text on a white export).
+ *  When it all but matches, swap it for a readable colour: black on a light
+ *  page, white on a dark one. Labels on a filled desk or slab are untouched. */
+function labelColorOnBg(color) {
+  return contrastLabelColor(color, state.exportBg || '#ffffff');
+}
+
+/** A label stack centred inside `box`, sized to the whole square (`fullMin`) so
+ *  furniture labels match the chart's other text. Turned by `rot` (the facing),
+ *  so a side-facing piece reads down its tall column instead of truncating. */
+function drawLabelBox(ctx, box, data, plan, fullMin, rot = 0) {
+  const labels = labelsOf(data);
+  if (!labels.length) return;
+  const lineH = fullMin * plan.lineFrac;
+  const totalH = labels.length * lineH;
+  const norm = ((Math.round(rot / 45) * 45) % 360 + 360) % 360;
+  const vertical = norm === 90 || norm === 270;
+  const maxW = (vertical ? box.h : box.w) * LABEL_WIDTH;
+  // Anchor the stack to a tile-side edge of the box when asked, so it hugs the
+  // furniture instead of centring in the free space. Vertical facings hug the
+  // top/bottom edge; a turned (side) label hugs the left/right edge — the stack
+  // runs along the rotated axis, so its half-depth is totalH/2 either way.
+  const pad = lineH * 0.35;
+  let stackX = box.x + box.w / 2, stackY = box.y + box.h / 2;
+  if (box.anchor === 'top') stackY = box.y + totalH / 2 + pad;
+  else if (box.anchor === 'bottom') stackY = box.y + box.h - totalH / 2 - pad;
+  else if (box.anchor === 'left') stackX = box.x + totalH / 2 + pad;
+  else if (box.anchor === 'right') stackX = box.x + box.w - totalH / 2 - pad;
+  ctx.save();
+  ctx.translate(stackX, stackY);
+  ctx.rotate((rot * Math.PI) / 180);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = contentFont(lineH * FONT_OF_LINE);
+  let y = -totalH / 2 + lineH / 2;
+  for (const line of labels) {
+    ctx.fillStyle = labelColorOnBg(line.color);
+    ctx.fillText(fitText(ctx, line.text, maxW), 0, y);
+    y += lineH;
+  }
+  ctx.restore();
 }
 
 /** Where a seat around a table sits: smaller than a desk and shifted toward the
@@ -396,9 +599,24 @@ function drawTable(ctx, table, rectOf) {
   ctx.restore();
 }
 
-/** Icon color for a cell: its dedicated iconColor, falling back to border. */
-function iconColorOf(data) {
+/** A cell's chosen icon colour, before any contrast adjustment. */
+function rawIconColor(data) {
   return data.iconColor || data.border || '#2f6feb';
+}
+
+/** Icon colour as drawn: the chosen colour, flipped when it would vanish on the
+ *  square's fill (a light icon on a light fill), the same way labels are. */
+function iconColorOf(data) {
+  return contrastLabelColor(rawIconColor(data), data.fill || '#dbe7ff');
+}
+
+/** A server rack's corner icon sits on the page, not the fill, so it flips
+ *  against the export background instead. */
+function cornerIconColor(data) {
+  return contrastLabelColor(rawIconColor(data), state.exportBg || '#ffffff');
+}
+function cornerIconKey(data) {
+  return `server-corner|${cornerIconColor(data)}|${data.iconFill || ''}`;
 }
 
 /** Cache key for a drawn icon: the same glyph in a different colour or fill is
@@ -414,6 +632,8 @@ async function preloadIcons(desks, seats, covered = []) {
 
   for (const { data } of [...desks, ...covered]) {
     if (data.icon) want(data.icon, data);
+    // A server rack also needs its corner icon, contrasted against the page.
+    if (isServerCell(data)) needed.set(cornerIconKey(data), iconDataUrl('server', cornerIconColor(data), data.iconFill));
   }
   for (const { data } of seats) {
     if (data.icon) want(data.icon, data);
@@ -501,6 +721,8 @@ async function copyPngLink() {
 async function showPreview() {
   const modal = document.getElementById('preview');
   const paper = document.getElementById('preview-paper');
+  const bg = document.getElementById('export-bg');
+  if (bg) bg.value = state.exportBg || '#ffffff'; // reflect current value each open
   paper.replaceChildren();
   const canvas = await renderToCanvas(150); // lighter dpi for on-screen preview
   paper.appendChild(canvas);
