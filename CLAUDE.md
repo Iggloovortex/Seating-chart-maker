@@ -4,6 +4,9 @@ A web-based seating/desk-chart maker. **Vanilla HTML/CSS/JS, no build step.** It
 runs from `file://` with classic `<script>` tags (never ES modules), and can
 export itself as a single self-contained `.html`.
 
+**Before building or restyling any UI, read [`STYLING.md`](STYLING.md)** — the
+design-token/theme/component baseline so new work matches the rest of the app.
+
 ## Working rules
 
 - **Regenerate `js/sources.js` after editing any source file:**
