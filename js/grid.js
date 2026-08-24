@@ -14,23 +14,17 @@ const PAD = 16;            // inner padding allowance
 const LINE_H = 16;         // px per label line
 const ICON_RESERVE = 40;   // px reserved for an icon above labels
 
-/** Uniform square cell size (px). Sized by a comfortable base plus the tallest
- *  label stack / icon — deliberately NOT by the longest label, so one long name
- *  no longer enlarges every square; instead that square's text shrinks to fit it
- *  (see fitCellLabels). */
+/** Uniform square cell size (px). A comfortable fixed base (room for a ~10-char,
+ *  2-line label plus an icon) — deliberately NOT driven by the longest label or
+ *  the most label lines, so no single square enlarges every other one. A square
+ *  with more/longer text shrinks its own text to fit instead (see fitCellLabels). */
 function uniformCellSize() {
-  const { cols, rows } = state.grid;
-  let maxLines = 2, anyIcon = false;
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const d = peekCell(r, c);
-      if (!d || !d.enabled) continue;
-      if (d.icon) anyIcon = true;
-      maxLines = Math.max(maxLines, (d.labels || []).filter((l) => l.text).length);
-    }
-  }
-  const neededW = 10 * CHAR_W + PAD; // room for a comfortable ~10-char label
-  const neededH = PAD + (anyIcon ? ICON_RESERVE : 0) + maxLines * LINE_H;
+  let anyIcon = false;
+  for (let r = 0; r < state.grid.rows; r++)
+    for (let c = 0; c < state.grid.cols; c++)
+      if (peekCell(r, c)?.icon && isEnabled(r, c)) anyIcon = true;
+  const neededW = 10 * CHAR_W + PAD;                       // ~10-char label
+  const neededH = PAD + (anyIcon ? ICON_RESERVE : 0) + 2 * LINE_H; // ~2 lines + icon
   return Math.round(Math.max(CELL_BASE, neededW, neededH));
 }
 
@@ -91,18 +85,29 @@ function measureLabelWidth(text) {
 }
 
 /** Shrink each square's label text to fit that square — per square, so one long
- *  name shrinks only its own cell rather than every square resizing together (as
- *  the output's single global size does). A no-op for labels that already fit. */
+ *  name or a tall stack of lines shrinks only its own cell rather than every
+ *  square resizing together (as the output's single global size does). Fits both
+ *  the widest line to the cell width AND the whole stack to the height under any
+ *  icon. A no-op for labels that already fit. */
 function fitCellLabels() {
-  const BASE = 12; // .cell__label font-size, px
+  const BASE = 12;        // .cell__label font-size, px
+  const LINE = BASE * 1.25; // line box at the base font (line-height 1.15 + gap)
   for (const cell of chart.querySelectorAll('.cell')) {
     const spans = cell.querySelectorAll('.cell__label');
     if (!spans.length) continue;
-    const avail = cell.clientWidth - 10; // leave a little breathing room
-    if (avail <= 0) continue;
+    const availW = cell.clientWidth - 10;
+    if (availW <= 0) continue;
     let widest = 0;
     for (const s of spans) widest = Math.max(widest, measureLabelWidth(s.textContent));
-    const px = widest > avail ? Math.max(6, Math.round(BASE * (avail / widest))) : null; // floor so it stays legible
+    const wScale = widest > availW ? availW / widest : 1;
+    // Height budget: the cell minus any icon above the labels and a little padding.
+    const iconEl = cell.querySelector('.cell__icon');
+    const iconH = iconEl ? iconEl.getBoundingClientRect().height : 0;
+    const availH = cell.clientHeight - iconH - 10;
+    const stackH = spans.length * LINE;
+    const hScale = stackH > availH && availH > 0 ? availH / stackH : 1;
+    const scale = Math.min(wScale, hScale);
+    const px = scale < 1 ? Math.max(6, Math.round(BASE * scale)) : null; // floor so it stays legible
     for (const s of spans) s.style.fontSize = px ? `${px}px` : '';
   }
 }
