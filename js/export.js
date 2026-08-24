@@ -75,14 +75,31 @@ async function renderToCanvas(dpi = 300) {
   const desks = [];
   const seats = [];
   const covered = []; // seated squares under a table: only their content draws
+  const splits = []; // split squares: a block of sub-cells drawn in their place
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const data = peekCell(r, c);
-      if (!data || !data.enabled) continue;
+      if (!data) continue;
+      // A split square owns its whole cell and draws its own pieces, so it never
+      // joins a desk block, becomes a seat, or is treated as table-covered.
+      if (data.split && data.subcells) { splits.push({ r, c, data }); continue; }
+      if (!data.enabled) continue;
       if (insideAnyFootprint(r, c)) { covered.push({ r, c, data }); continue; }
       const st = seatTableOf(r, c);
       if (st) seats.push({ r, c, data, fp: st.fp });
       else desks.push({ r, c, data });
+    }
+  }
+
+  // Each split's enabled sub-cells, sized against their own piece rectangle, so
+  // the chart-wide text/icon plan accounts for them too.
+  const splitItems = [];
+  for (const sp of splits) {
+    const rect = rectOf(sp.r, sp.c);
+    sp.cw = rect.w / sp.data.split.cols;
+    sp.ch = rect.h / sp.data.split.rows;
+    for (const sub of sp.data.subcells) {
+      if (sub.enabled) splitItems.push({ data: sub, geo: { w: sp.cw, h: sp.ch } });
     }
   }
   // Furniture (chairs, servers) is standalone, so it never merges into a desk block.
@@ -105,12 +122,12 @@ async function renderToCanvas(dpi = 300) {
   // labelBox; a multi-server rack uses one slab (full width, 1/N of the height).
   const planItems = [
     ...desks.map((d) => furnitureLabelGeo(d) || d),
-    ...seats, ...covered,
+    ...seats, ...covered, ...splitItems,
   ];
   const plan = planContent(ctx, planItems);
 
   // Preload icon images (async), keyed by "id|color" — including a chair for empty seats.
-  const imgCache = await preloadIcons(desks, seats, covered);
+  const imgCache = await preloadIcons(desks, seats, covered, splitItems);
 
   // 1) Table shapes (drawn solid; the editing grid shows them semi-transparent).
   for (const table of state.tables) drawTable(ctx, table, rectOf);
@@ -121,6 +138,9 @@ async function renderToCanvas(dpi = 300) {
     else if (isServerCell(d.data)) (d.geo.units >= 2 ? drawServerRack : drawServer)(ctx, d, imgCache, plan);
     else drawDesk(ctx, rectOf, d, deskSet, imgCache, plan);
   }
+
+  // 2.5) Split squares — a block of independent sub-cells filling the cell.
+  for (const sp of splits) drawSplit(ctx, rectOf, sp, imgCache, plan);
 
   // 3) Seats gathered around their table.
   for (const s of seats) drawTableSeat(ctx, s, imgCache, plan);
@@ -195,6 +215,28 @@ function drawDesk(ctx, rectOf, { r, c, data }, deskSet, imgCache, plan) {
   ctx.stroke();
 
   drawContent(ctx, x + w / 2, y + h / 2, w, h, data, imgCache, false, plan, undefined, 0, data.fill || '#dbe7ff');
+}
+
+/** A split square: its cell divided into a rows×cols block of sub-cells, each an
+ *  independent mini desk. Enabled pieces draw filled with their own colours and
+ *  content; empty pieces leave the page showing through. Internal seams are the
+ *  sub-cell borders, so the division reads clearly. */
+function drawSplit(ctx, rectOf, sp, imgCache, plan) {
+  const rect = rectOf(sp.r, sp.c);
+  const { rows, cols } = sp.data.split;
+  const cw = rect.w / cols, ch = rect.h / rows;
+  sp.data.subcells.forEach((sub, i) => {
+    if (!sub.enabled) return;
+    const rr = Math.floor(i / cols), cc = i % cols;
+    const x = rect.x + cc * cw, y = rect.y + rr * ch;
+    ctx.fillStyle = sub.fill || '#dbe7ff';
+    ctx.fillRect(x, y, cw, ch);
+    ctx.strokeStyle = sub.border || '#2f6feb';
+    ctx.lineWidth = Math.max(1, Math.min(cw, ch) * 0.04);
+    ctx.strokeRect(x, y, cw, ch);
+    drawContent(ctx, x + cw / 2, y + ch / 2, cw, ch, sub, imgCache, false, plan,
+                undefined, 0, sub.fill || '#dbe7ff');
+  });
 }
 
 /** Where a chair sits and how big it is. Split out from drawChair so the layout
@@ -627,12 +669,12 @@ function iconKey(id, data) {
   return `${id}|${iconColorOf(data)}|${data.iconFill || ''}`;
 }
 
-async function preloadIcons(desks, seats, covered = []) {
+async function preloadIcons(desks, seats, covered = [], splitItems = []) {
   const needed = new Map(); // key -> dataUrl
   const want = (id, data) =>
     needed.set(iconKey(id, data), iconDataUrl(id, iconColorOf(data), data.iconFill));
 
-  for (const { data } of [...desks, ...covered]) {
+  for (const { data } of [...desks, ...covered, ...splitItems]) {
     if (data.icon) want(data.icon, data);
     // A server rack also needs its corner icon, contrasted against the page.
     if (isServerCell(data)) needed.set(cornerIconKey(data), iconDataUrl('server', cornerIconColor(data), data.iconFill));

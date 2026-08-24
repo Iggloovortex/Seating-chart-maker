@@ -95,6 +95,23 @@ function makeCell() {
     rotation: 0,                // 0 | 90 | 180 | 270
     fill: state.defaults.fill,
     border: state.defaults.border,
+    split: null,                // null, or { rows, cols } — see subcells below
+  };
+}
+
+/** A sub-cell of a split square: a mini square with its own content, but never
+ *  itself split. A split square divides its cell into rows×cols of these, each
+ *  filled, coloured, iconed and labelled on its own. */
+function makeSubcell() {
+  return {
+    enabled: false,
+    labels: [],
+    icon: null,
+    iconColor: state.defaults.iconColor,
+    iconFill: state.defaults.iconFill,
+    rotation: 0,
+    fill: state.defaults.fill,
+    border: state.defaults.border,
   };
 }
 
@@ -199,6 +216,66 @@ function updateCell(r, c, patch) {
   const had = hasContent(cell);
   Object.assign(cell, patch);
   if (!('enabled' in patch)) seatOnNewContent(cell, had);
+  emit();
+}
+
+// ---------------------------------------------------------------- split square
+//
+// A split square divides its one grid cell into a rows×cols block of sub-cells,
+// each an independent mini square (own fill, icon, labels, facing). The parent
+// stays one cell to the layout — it always occupies its full unit — so splitting
+// never disturbs the grid, tables, moves or row/column sizing around it.
+
+/** True when a cell is currently split into sub-cells. */
+function isSplit(cell) {
+  return !!(cell && cell.split && Array.isArray(cell.subcells) && cell.subcells.length);
+}
+
+/** Divide a square into rows×cols sub-cells, keeping any sub-cell content that
+ *  still fits when re-splitting to a different shape. A split square is always
+ *  "filled" so it claims a full unit in the output layout. */
+function splitCell(r, c, rows, cols) {
+  const cell = getCell(r, c);
+  const n = Math.max(1, rows) * Math.max(1, cols);
+  const prev = cell.subcells || [];
+  const subs = [];
+  for (let i = 0; i < n; i++) subs.push(prev[i] || makeSubcell());
+  cell.split = { rows, cols };
+  cell.subcells = subs;
+  cell.enabled = true;
+  emit();
+}
+
+/** Turn a split square back into a single square, dropping its sub-cells. */
+function unsplitCell(r, c) {
+  const cell = getCell(r, c);
+  cell.split = null;
+  delete cell.subcells;
+  emit();
+}
+
+/** The sub-cell at index `i` of a split square, or null. */
+function subcellAt(r, c, i) {
+  const cell = peekCell(r, c);
+  return cell && cell.subcells ? cell.subcells[i] || null : null;
+}
+
+/** Patch one sub-cell, seating it when this is its first content (mirrors
+ *  updateCell for a whole square). */
+function updateSubcell(r, c, i, patch) {
+  const sub = subcellAt(r, c, i);
+  if (!sub) return;
+  const had = hasContent(sub);
+  Object.assign(sub, patch);
+  if (!('enabled' in patch)) seatOnNewContent(sub, had);
+  emit();
+}
+
+/** Fill / empty one sub-cell (the sub-cell twin of toggleEnabled). */
+function toggleSubcell(r, c, i) {
+  const sub = subcellAt(r, c, i);
+  if (!sub) return;
+  sub.enabled = !sub.enabled;
   emit();
 }
 
@@ -387,9 +464,27 @@ function copySquareFrom(r, c) {
     rotation: cell.rotation,
     iconFill: cell.iconFill,
     labels: (cell.labels || []).map((l) => ({ text: l.text, color: l.color })),
+    split: cell.split ? { ...cell.split } : null,
+    subcells: cell.subcells ? cell.subcells.map(cloneSubcell) : null,
   };
   emit();
   return true;
+}
+
+/** A deep copy of a sub-cell (fresh label objects), for copy/paste and restore.
+ *  Missing fields fall back to the sub-cell defaults so a partial object is safe. */
+function cloneSubcell(s) {
+  const base = makeSubcell();
+  return {
+    enabled: !!s.enabled,
+    fill: s.fill || base.fill,
+    border: s.border || base.border,
+    icon: s.icon || null,
+    iconColor: s.iconColor || base.iconColor,
+    iconFill: s.iconFill || null,
+    rotation: s.rotation || 0,
+    labels: (s.labels || []).map((l) => ({ text: String(l.text || ''), color: l.color || DEFAULTS.labelColor })),
+  };
 }
 
 /** Clone the copied square onto every listed square, label lines and all. The
@@ -411,6 +506,10 @@ function pasteSquareTo(keys) {
       cell.iconFill = f.iconFill;
       // Fresh objects per target so squares never share label instances.
       cell.labels = f.labels.map((l) => ({ text: l.text, color: l.color }));
+      // The split (and its sub-cells) travels too, deep-copied so pasted squares
+      // never share sub-cell instances.
+      if (f.split) { cell.split = { ...f.split }; cell.subcells = (f.subcells || []).map(cloneSubcell); }
+      else { cell.split = null; delete cell.subcells; }
     }
   });
   return true;
@@ -938,7 +1037,21 @@ function deserialize(data) {
     };
     state.cells = new Map();
     for (const [k, v] of data.cells || []) {
-      state.cells.set(k, { ...makeCell(), ...v, labels: (v.labels || []).map((l) => ({ ...l })) });
+      const cell = { ...makeCell(), ...v, labels: (v.labels || []).map((l) => ({ ...l })) };
+      // A split square carries a rows×cols block of sub-cells. Rebuild it with a
+      // clean shape so a stale or hand-edited save can never break rendering.
+      if (v && v.split && Array.isArray(v.subcells)) {
+        const rows = clampInt(v.split.rows, 1, 3, 1);
+        const cols = clampInt(v.split.cols, 1, 3, 1);
+        cell.split = { rows, cols };
+        cell.subcells = [];
+        for (let i = 0; i < rows * cols; i++) cell.subcells.push(cloneSubcell(v.subcells[i] || {}));
+        cell.enabled = true;
+      } else {
+        cell.split = null;
+        delete cell.subcells;
+      }
+      state.cells.set(k, cell);
     }
     state.rowWeights = Array.isArray(data.rowWeights) ? [...data.rowWeights] : [];
     state.colWeights = Array.isArray(data.colWeights) ? [...data.colWeights] : [];

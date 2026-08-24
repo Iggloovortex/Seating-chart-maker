@@ -60,6 +60,11 @@ function initInteractions(chartEl) {
   let pointer = null; // { id, x, y, cell, timer, longFired }
 
   const cellFrom = (target) => target.closest?.('.cell');
+  // Which sub-cell of a split square the pointer is over, or null.
+  const subFrom = (target) => {
+    const el = target.closest?.('.subcell');
+    return el ? Number(el.dataset.sub) : null;
+  };
 
   chartEl.addEventListener('pointerdown', (e) => {
     if (e.button === 2) return; // right-click handled via contextmenu
@@ -68,10 +73,11 @@ function initInteractions(chartEl) {
 
     const additive = e.ctrlKey || e.metaKey; // Ctrl (Win/Linux) or Cmd (Mac) = add to selection
     const shift = e.shiftKey;                 // Shift = range-select from the anchor
-    pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, cell, longFired: false, timer: 0, additive, shift };
+    const sub = subFrom(e.target);
+    pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, cell, sub, longFired: false, timer: 0, additive, shift };
     pointer.timer = window.setTimeout(() => {
       pointer.longFired = true;
-      fireEdit(cell);
+      fireEdit(cell, sub);
       if (navigator.vibrate) { try { navigator.vibrate(15); } catch {} }
     }, LONG_PRESS_MS);
   });
@@ -86,7 +92,7 @@ function initInteractions(chartEl) {
   const endHandler = (e) => {
     if (!pointer || e.pointerId !== pointer.id) return;
     window.clearTimeout(pointer.timer);
-    if (!pointer.longFired) fireTap(pointer.cell, { additive: pointer.additive, shift: pointer.shift });
+    if (!pointer.longFired) fireTap(pointer.cell, { additive: pointer.additive, shift: pointer.shift, sub: pointer.sub });
     pointer = null;
   };
   chartEl.addEventListener('pointerup', endHandler);
@@ -110,7 +116,7 @@ function initInteractions(chartEl) {
       openDeleteMenu(e.clientX, e.clientY, { keys, r, c });
       return;
     }
-    fireEdit(cell);
+    fireEdit(cell, subFrom(e.target));
   });
 
   // Keyboard: Enter/Space toggles a focused cell; "e" edits it.
@@ -124,7 +130,14 @@ function initInteractions(chartEl) {
 
 function fireTap(cell, mods = {}) {
   const [r, c] = parseKey(cell.dataset.key);
-  const { additive, shift } = mods;
+  const { additive, shift, sub } = mods;
+
+  // A tap on a piece of a split square fills or empties just that piece — it is
+  // its own little square, edited through long-press / right-click.
+  if (sub != null) {
+    const data = peekCell(r, c);
+    if (data && isSplit(data)) { toggleSubcell(r, c, sub); return; }
+  }
 
   const picking = selectMode;
 
@@ -230,8 +243,13 @@ function fireTap(cell, mods = {}) {
   }
 }
 
-function fireEdit(cell) {
+function fireEdit(cell, sub = null) {
   const [r, c] = parseKey(cell.dataset.key);
+  // A piece of a split square opens its own edit pane.
+  if (sub != null) {
+    const data = peekCell(r, c);
+    if (data && isSplit(data)) { openEditor(r, c, sub); return; }
+  }
   // In select mode, editing a square that's part of the selection edits the
   // whole selection; anything else falls through to the single-square pane.
   if (selectMode && state.selection.has(keyOf(r, c))) {

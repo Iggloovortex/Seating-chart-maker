@@ -93,6 +93,10 @@ function fitCellLabels() {
   const BASE = 12;        // .cell__label font-size, px
   const LINE = BASE * 1.25; // line box at the base font (line-height 1.15 + gap)
   for (const cell of chart.querySelectorAll('.cell')) {
+    // A split cell's label spans belong to its sub-cells, each far narrower than
+    // the whole cell — sizing them against the cell width would let them overflow.
+    // The sub-cells clip and ellipsize their own labels via CSS instead.
+    if (cell.classList.contains('cell--split')) continue;
     const spans = cell.querySelectorAll('.cell__label');
     if (!spans.length) continue;
     const availW = cell.clientWidth - 10;
@@ -679,6 +683,60 @@ function surfaceLabelColor(color) {
   return typeof contrastLabelColor === 'function' ? contrastLabelColor(color, GRID_SURFACE) : color;
 }
 
+/** The sub-grid of a split square: a CSS-grid of rows×cols sub-cells. */
+function buildSplitGrid(r, c, data) {
+  const wrap = document.createElement('div');
+  wrap.className = 'cell__split';
+  wrap.style.gridTemplateColumns = `repeat(${data.split.cols}, 1fr)`;
+  wrap.style.gridTemplateRows = `repeat(${data.split.rows}, 1fr)`;
+  data.subcells.forEach((sub, i) => wrap.appendChild(buildSubcell(sub, i)));
+  return wrap;
+}
+
+/** One sub-cell of a split square — a mini desk: fill/border when seated, its
+ *  icon and labels turned to its own facing, faded when it holds content but is
+ *  empty (the same ghost treatment a whole square gets). */
+function buildSubcell(sub, i) {
+  const el = document.createElement('div');
+  el.className = 'subcell';
+  el.dataset.sub = i;
+  const ghost = !sub.enabled && hasContent(sub);
+  if (sub.enabled) {
+    el.classList.add('subcell--on');
+    el.style.background = sub.fill;
+    el.style.borderColor = sub.border;
+  }
+  if (sub.enabled || ghost) {
+    const content = document.createElement('div');
+    content.className = ghost ? 'cell__content cell__content--ghost' : 'cell__content';
+    content.style.setProperty('--rot', `${sub.rotation || 0}deg`);
+    if (sub.icon) {
+      const svg = iconUse(sub.icon, 'cell__icon', sub.iconFill);
+      if (svg) {
+        const ic = sub.iconColor || '#1f2933';
+        svg.style.color = ghost ? surfaceLabelColor(ic) : contrastLabelColor(ic, sub.fill || '#dbe7ff');
+        content.appendChild(svg);
+      }
+    }
+    if (sub.labels && sub.labels.some((l) => l.text)) {
+      const labels = document.createElement('div');
+      labels.className = 'cell__labels';
+      for (const line of sub.labels) {
+        if (!line.text) continue;
+        const span = document.createElement('span');
+        span.className = 'cell__label';
+        span.textContent = line.text;
+        span.style.color = ghost ? surfaceLabelColor(line.color)
+                                 : contrastLabelColor(line.color, sub.fill || '#dbe7ff');
+        labels.appendChild(span);
+      }
+      content.appendChild(labels);
+    }
+    el.appendChild(content);
+  }
+  return el;
+}
+
 function buildCell(r, c, rects) {
   const key = keyOf(r, c);
   const data = peekCell(r, c);
@@ -703,6 +761,16 @@ function buildCell(r, c, rects) {
   if (state.selection.has(key)) {
     el.classList.add('cell--selected');
     el.appendChild(checkBadge());
+  }
+
+  // A split square renders as a small block of independent sub-cells instead of a
+  // single desk. Tapping a piece fills it; long-press / right-click edits it
+  // (see interactions.js). Everything below (furniture, ghost, desk) is skipped.
+  if (data && isSplit(data)) {
+    el.classList.add('cell--split');
+    el.appendChild(buildSplitGrid(r, c, data));
+    el.setAttribute('aria-label', `Split square, row ${r + 1}, column ${c + 1}`);
+    return el;
   }
 
   // A square that has been emptied but still holds a label or an icon shows them

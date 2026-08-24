@@ -51,6 +51,22 @@ and push it; don't stack new work directly on `main`.
 
 ## Backlog (planned, not built)
 
+- **Split Square — DONE.** A square can divide into halves (side-by-side or
+  stacked), quarters, or ninths (3×3). Model: `cell.split = {rows, cols}` +
+  `cell.subcells[]` (each a mini cell via `makeSubcell`), in `js/state.js`
+  (`splitCell`/`unsplitCell`/`updateSubcell`/`toggleSubcell`, carried by
+  serialize/copy-paste). Rendered by `buildSplitGrid`/`buildSubcell` (grid) and
+  `drawSplit` (export); a piece is tapped to fill and long-press/right-click (or
+  the Pieces list) to edit via `openSubcellEditor`. TSV is lossy for splits.
+- **Merge (planned, next):** two options — (1) polygon table from the *shape* of
+  the selection (L/T/+: labels across the widest run, icons in the slimmest); (2)
+  a single square centred across N cells, kept 1:1. Wire `#btn-table-merge`.
+- **Walls (planned):** edge objects drawn on the seams between squares. Kinds
+  from the reference: solid wall (filled black), hollow wall (double outline,
+  white interior), railing (line with a smaller inner line of another colour),
+  door (a wood/brown panel set in a wall gap with jamb lines), window (a gap
+  spanned by thin light-blue double lines). New edge-based model + both renderers
+  + editor + serialize.
 - **2-column labels** for the KVM and Dual Monitor icons — a per-row optional 2nd
   column, activating when any row has 2nd-column content. Touches the label data
   model, editor, both renderers, and TSV. (Scoped, not started.)
