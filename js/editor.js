@@ -7,7 +7,7 @@ const editorEl = document.getElementById('editor');
 const bodyEl = document.getElementById('editor-body');
 const titleEl = document.getElementById('editor-title');
 
-let current = null; // { r, c }
+let current = null; // { r, c } — or { r, c, sub } while editing a piece of a split square
 let presetMode = null; // 1 | 2 while the pane is editing a preset instead of a cell
 
 function initEditor() {
@@ -19,7 +19,8 @@ function initEditor() {
   });
 }
 
-function openEditor(r, c) {
+function openEditor(r, c, sub = null) {
+  if (sub != null) { openSubcellEditor(r, c, sub); return; }
   current = { r, c };
   const cell = getCell(r, c); // ensures it exists so edits persist
   titleEl.textContent = `Square — Row ${r + 1}, Col ${c + 1}`;
@@ -224,10 +225,16 @@ function editorSquare() {
  *  preset, so the pane's Preset buttons switch from disabled to live. */
 function refreshEditor() {
   if (editorEl.hidden || !current) return;
+  if (current.sub != null) { renderSubcellEditor(); return; }
   render(peekCell(current.r, current.c));
 }
 
 function render(cell) {
+  // A split square is a container for its pieces — its own fill/labels/icon are
+  // not drawn — so it gets a dedicated pane (the split picker + a piece list)
+  // rather than the desk controls.
+  if (isSplit(cell)) { renderSplitParent(cell); return; }
+
   bodyEl.replaceChildren();
   renderSquareActions();
 
@@ -314,6 +321,12 @@ function render(cell) {
     g.appendChild(add);
   }));
 
+  // --- Merge / Split -------------------------------------------------------
+  // A merged desk's anchor gets merge controls (shape vs centred, unmerge); an
+  // ordinary square gets the split options. A square can't be both.
+  const merge = mergeAt(current.r, current.c);
+  bodyEl.appendChild(merge ? mergeSection(merge) : splitSection(cell));
+
   // --- Row / column size (empty row & column height) ----------------------
   bodyEl.appendChild(group('Size (this row & column)', (g) => {
     const row = document.createElement('div');
@@ -390,6 +403,366 @@ function specialSection(cell) {
       g.appendChild(note);
     }
   });
+}
+
+// ---------------------------------------------------------------- merged square
+//
+// The anchor cell of a merge carries the merged desk's content, so its normal
+// pane doubles as the merge editor: this section switches the merge between its
+// polygon ('poly') and centred-single-square ('unit') kinds, or unmerges it.
+
+function mergeSection(merge) {
+  return group('Merged square', (g) => {
+    const seg = document.createElement('div');
+    seg.className = 'mergekind';
+    const kindBtn = (kind, label, desc) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `btn ${merge.kind === kind ? 'btn--primary' : ''}`;
+      b.textContent = label;
+      b.title = desc;
+      b.setAttribute('aria-pressed', String(merge.kind === kind));
+      b.addEventListener('click', () => { updateMerge(merge.id, { kind }); render(peekCell(current.r, current.c)); });
+      return b;
+    };
+    seg.append(
+      kindBtn('poly', 'Shape', 'Fill the exact shape of the group (L, T, +): labels across the widest part, icon in the slimmest.'),
+      kindBtn('unit', 'Centered', 'One square, centred in the group and kept 1:1 — so it can straddle the seam between cells.'),
+    );
+    g.appendChild(seg);
+
+    const unmerge = document.createElement('button');
+    unmerge.type = 'button';
+    unmerge.className = 'btn btn--empty';
+    unmerge.style.marginTop = '8px';
+    unmerge.textContent = 'Unmerge';
+    unmerge.title = 'Split the merged desk back into its separate squares';
+    unmerge.addEventListener('click', () => {
+      removeMerge(merge.id);
+      render(peekCell(current.r, current.c));
+    });
+    g.appendChild(unmerge);
+
+    const note = document.createElement('p');
+    note.className = 'egroup__note';
+    note.textContent = `This desk spans ${merge.keys.length} squares. Its fill, border, icon, labels and facing above apply to the whole merged desk.`;
+    g.appendChild(note);
+  });
+}
+
+// ---------------------------------------------------------------- split square
+//
+// A square can be split into a small block of independent sub-squares: two
+// halves (side by side or stacked), quarters, or ninths (thirds). Each piece is
+// filled by a tap on the grid and edited through its own pane (openSubcellEditor),
+// reached by long-press / right-click on the piece or from the piece list here.
+
+const SPLIT_KINDS = [
+  { key: 'none', rows: 0, cols: 0, label: 'None' },
+  { key: 'v2',   rows: 1, cols: 2, label: 'Halves' },   // side by side (two 0.5-wide)
+  { key: 'h2',   rows: 2, cols: 1, label: 'Stacked' },  // stacked (two 0.5-tall)
+  { key: 'g4',   rows: 2, cols: 2, label: 'Quarters' },
+  { key: 'g9',   rows: 3, cols: 3, label: 'Ninths' },   // 3×3 equal thirds
+];
+
+/** A tiny diagram of a split shape, for the option buttons. */
+function splitPreview(rows, cols) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.classList.add('split-opt__svg');
+  const box = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  box.setAttribute('x', '2'); box.setAttribute('y', '2');
+  box.setAttribute('width', '20'); box.setAttribute('height', '20');
+  box.setAttribute('rx', '2'); box.setAttribute('fill', 'none');
+  box.setAttribute('stroke', 'currentColor'); box.setAttribute('stroke-width', '1.6');
+  svg.appendChild(box);
+  const line = (x1, y1, x2, y2) => {
+    const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    l.setAttribute('x1', x1); l.setAttribute('y1', y1); l.setAttribute('x2', x2); l.setAttribute('y2', y2);
+    l.setAttribute('stroke', 'currentColor'); l.setAttribute('stroke-width', '1.4');
+    svg.appendChild(l);
+  };
+  for (let c = 1; c < cols; c++) { const x = 2 + (20 * c) / cols; line(x, 2, x, 22); }
+  for (let r = 1; r < rows; r++) { const y = 2 + (20 * r) / rows; line(2, y, 22, y); }
+  return svg;
+}
+
+/** The Split section shown in the normal square pane — pick a split shape (or
+ *  None). Choosing a shape re-renders the pane, which then switches to the
+ *  split-parent view. */
+function splitSection(cell) {
+  return group('Split square', (g) => {
+    const picker = document.createElement('div');
+    picker.className = 'icon-picker';
+    for (const o of SPLIT_KINDS) {
+      const active = o.key === 'none' ? !isSplit(cell)
+        : isSplit(cell) && cell.split.rows === o.rows && cell.split.cols === o.cols;
+      picker.appendChild(splitOptionButton(o, active, () => {
+        if (o.key === 'none') unsplitCell(current.r, current.c);
+        else splitCell(current.r, current.c, o.rows, o.cols);
+        render(peekCell(current.r, current.c));
+      }));
+    }
+    g.appendChild(picker);
+    const note = document.createElement('p');
+    note.className = 'egroup__note';
+    note.textContent = 'Divide this square into smaller squares. Tap a piece to fill it; long-press or right-click a piece to edit it.';
+    g.appendChild(note);
+  });
+}
+
+function splitOptionButton(o, active, onClick) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'icon-picker__btn split-opt';
+  btn.title = o.label;
+  btn.setAttribute('aria-label', o.label);
+  btn.setAttribute('aria-pressed', String(active));
+  if (o.key === 'none') btn.textContent = 'None';
+  else btn.appendChild(splitPreview(o.rows, o.cols));
+  btn.addEventListener('click', onClick);
+  return btn;
+}
+
+/** The pane for a split square: change or clear the split, and a list of pieces,
+ *  each opening its own editor with a live preview of its state. */
+function renderSplitParent(cell) {
+  bodyEl.replaceChildren();
+  renderSquareActions();
+
+  bodyEl.appendChild(splitSection(cell));
+
+  bodyEl.appendChild(group('Pieces', (g) => {
+    const grid = document.createElement('div');
+    grid.className = 'piece-grid';
+    grid.style.gridTemplateColumns = `repeat(${cell.split.cols}, 1fr)`;
+    cell.subcells.forEach((sub, i) => grid.appendChild(pieceButton(sub, i)));
+    g.appendChild(grid);
+    const note = document.createElement('p');
+    note.className = 'egroup__note';
+    note.textContent = 'Click a piece to edit its fill, icon, labels and facing.';
+    g.appendChild(note);
+  }));
+
+  const foot = document.createElement('div');
+  foot.className = 'editor__foot';
+  foot.appendChild(deleteButton(() => [keyOf(current.r, current.c)],
+                                () => ({ r: current.r, c: current.c })));
+  const done = document.createElement('button');
+  done.type = 'button';
+  done.className = 'btn btn--primary';
+  done.textContent = 'Done';
+  done.addEventListener('click', closeEditor);
+  foot.appendChild(done);
+  bodyEl.appendChild(foot);
+}
+
+/** One button in the piece list: a preview of the sub-cell's fill/border with its
+ *  label/icon, opening that piece's editor. */
+function pieceButton(sub, i) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'piece-btn';
+  if (sub.enabled) {
+    btn.style.background = sub.fill;
+    btn.style.borderColor = sub.border;
+  }
+  const text = (sub.labels || []).map((l) => l.text).filter(Boolean).join(' ');
+  if (sub.icon) {
+    const svg = iconUse(sub.icon, 'piece-btn__icon', sub.iconFill);
+    if (svg) { svg.style.color = sub.iconColor || 'var(--ink)'; btn.appendChild(svg); }
+  }
+  const cap = document.createElement('span');
+  cap.className = 'piece-btn__cap';
+  cap.textContent = text || (sub.enabled ? 'Filled' : 'Empty');
+  btn.appendChild(cap);
+  btn.setAttribute('aria-label', `Edit piece ${i + 1}${text ? `: ${text}` : ''}`);
+  btn.addEventListener('click', () => openSubcellEditor(current.r, current.c, i));
+  return btn;
+}
+
+// -------------------------------------------------- sub-cell (piece) editor
+//
+// A compact pane bound to one piece of a split square. Like the preset editor,
+// it writes straight through a mutation (updateSubcell / direct label edits) and
+// re-renders, so it reuses the decoupled builders without touching the
+// current.r/current.c-bound single-square path.
+
+function openSubcellEditor(r, c, i) {
+  current = { r, c, sub: i };
+  titleEl.textContent = `Piece ${i + 1} — Row ${r + 1}, Col ${c + 1}`;
+  renderSubcellEditor();
+  showPane();
+}
+
+/** The piece currently being edited. */
+function subCur() { return subcellAt(current.r, current.c, current.sub); }
+
+function renderSubcellEditor() {
+  const sub = subCur();
+  if (!sub) { closeEditor(); return; }
+  bodyEl.replaceChildren();
+  document.getElementById('editor-actions').replaceChildren();
+
+  // Back to the whole split square.
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.className = 'link-btn';
+  back.textContent = '‹ Back to split square';
+  back.addEventListener('click', () => openEditor(current.r, current.c));
+  bodyEl.appendChild(back);
+
+  const set = (patch) => { updateSubcell(current.r, current.c, current.sub, patch); renderSubcellEditor(); };
+
+  // Fill, facing and colors on one row, mirroring the square pane.
+  bodyEl.appendChild(group(null, (g) => {
+    const row = document.createElement('div');
+    row.className = 'erow erow--controls';
+
+    const fill = controlGroup('Fill');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `btn ${sub.enabled ? 'btn--seat' : 'btn--empty'}`;
+    btn.textContent = sub.enabled ? 'Filled' : 'Empty';
+    btn.setAttribute('aria-pressed', String(sub.enabled));
+    btn.addEventListener('click', () => set({ enabled: !sub.enabled }));
+    fill.appendChild(btn);
+
+    const facing = controlGroup('Facing');
+    facing.appendChild(buildCompass(sub.rotation || 0, (deg) => set({ rotation: deg })));
+
+    const colors = controlGroup('Colors');
+    const sw = document.createElement('div');
+    sw.className = 'swatches';
+    sw.append(
+      swatch('Fill', sub.fill, (v) => updateSubcell(current.r, current.c, current.sub, { fill: v })),
+      swatch('Border', sub.border, (v) => updateSubcell(current.r, current.c, current.sub, { border: v })),
+      swatch('Icon', sub.iconColor, (v) => updateSubcell(current.r, current.c, current.sub, { iconColor: v })),
+      subIconFillSwatch(sub),
+    );
+    colors.appendChild(sw);
+
+    row.append(fill, facing, colors);
+    g.appendChild(row);
+  }));
+
+  // Icon (+ library), like the square pane.
+  bodyEl.appendChild(group('Icon', (g) => {
+    const picker = document.createElement('div');
+    picker.className = 'icon-picker';
+    const none = document.createElement('button');
+    none.type = 'button';
+    none.className = 'icon-picker__btn icon-picker__btn--none';
+    none.textContent = 'None';
+    none.setAttribute('aria-pressed', String(!sub.icon));
+    none.addEventListener('click', () => set({ icon: null }));
+    picker.appendChild(none);
+    for (const id of pickableIconIds()) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'icon-picker__btn';
+      b.title = iconLabel(id);
+      b.setAttribute('aria-label', iconLabel(id));
+      b.setAttribute('aria-pressed', String(sub.icon === id));
+      const svg = iconUse(id, '');
+      if (svg) b.appendChild(svg);
+      b.addEventListener('click', () => set({ icon: id }));
+      picker.appendChild(b);
+    }
+    g.appendChild(picker);
+    if (typeof iconLibraryAvailable === 'function' && iconLibraryAvailable()) {
+      const browse = document.createElement('button');
+      browse.type = 'button';
+      browse.className = 'link-btn';
+      browse.textContent = '+ Browse icon library';
+      browse.addEventListener('click', () => openIconLibrary((id) => set({ icon: id })));
+      g.appendChild(browse);
+    }
+  }));
+
+  // Labels — text + colour per line.
+  bodyEl.appendChild(group('Labels', (g) => {
+    if (sub.labels.length === 0) sub.labels.push({ text: '', color: defaultLabelColor(0) });
+    sub.labels.forEach((line, i) => g.appendChild(subLabelRow(line, i)));
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'link-btn';
+    add.textContent = '+ Add label line';
+    add.addEventListener('click', () => {
+      subCur().labels.push({ text: '', color: defaultLabelColor(subCur().labels.length) });
+      set({});
+      const inputs = bodyEl.querySelectorAll('.erow input[type="text"]');
+      inputs[inputs.length - 1]?.focus();
+    });
+    g.appendChild(add);
+  }));
+
+  const foot = document.createElement('div');
+  foot.className = 'editor__foot';
+  const done = document.createElement('button');
+  done.type = 'button';
+  done.className = 'btn btn--primary';
+  done.textContent = 'Done';
+  done.addEventListener('click', () => openEditor(current.r, current.c));
+  foot.appendChild(done);
+  bodyEl.appendChild(foot);
+}
+
+function subIconFillSwatch(sub) {
+  const on = !!sub.iconFill;
+  const item = swatch('Icon fill', sub.iconFill || sub.fill,
+                      (v) => updateSubcell(current.r, current.c, current.sub, { iconFill: v }));
+  const input = item.querySelector('input');
+  input.disabled = !on;
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.className = 'swatch__toggle';
+  box.checked = on;
+  box.setAttribute('aria-label', 'Fill the space inside the icon');
+  box.addEventListener('change', () => {
+    updateSubcell(current.r, current.c, current.sub, { iconFill: box.checked ? input.value : null });
+    renderSubcellEditor();
+  });
+  item.querySelector('.defaults__label').prepend(box);
+  return item;
+}
+
+/** One label line for the piece editor: text (live, no re-render so the caret
+ *  survives), colour, and remove. */
+function subLabelRow(line, index) {
+  const row = document.createElement('div');
+  row.className = 'erow';
+  const text = document.createElement('input');
+  text.type = 'text';
+  text.className = 'field__input';
+  text.placeholder = `Line ${index + 1}`;
+  text.value = line.text || '';
+  text.addEventListener('input', () => {
+    const s = subCur();
+    if (!s || !s.labels[index]) return;
+    s.labels[index].text = text.value;
+    updateSubcell(current.r, current.c, current.sub, {}); // emit + seat, no re-render
+  });
+  const color = document.createElement('input');
+  color.type = 'color';
+  color.className = 'field__input field__input--color erow__color';
+  color.value = line.color || DEFAULTS.labelColor;
+  bindColorInput(color, () => {
+    const s = subCur();
+    if (s && s.labels[index]) { s.labels[index].color = color.value; updateSubcell(current.r, current.c, current.sub, {}); }
+  });
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'btn btn--icon btn--ghost';
+  del.textContent = '✕';
+  del.setAttribute('aria-label', `Remove label line ${index + 1}`);
+  del.addEventListener('click', () => {
+    const s = subCur();
+    if (s) { s.labels.splice(index, 1); updateSubcell(current.r, current.c, current.sub, {}); renderSubcellEditor(); }
+  });
+  row.append(text, color, del);
+  return row;
 }
 
 /** One compact label + number entry for the Size row, so both sit on one line. */

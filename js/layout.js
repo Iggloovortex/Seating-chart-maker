@@ -18,6 +18,54 @@ function footprintOf(cellKeys) {
   return { minR, maxR, minC, maxC };
 }
 
+/** Geometry of a merged square, shared by the grid and the export so the two
+ *  agree. `has(r,c)` tests membership; `labelRun` is the widest horizontal run of
+ *  cells (where the labels sit); `iconCell` is the slimmest cell (the thinnest
+ *  arm, where the icon sits); `isRect` is true when the block is a full rectangle
+ *  (then both renderers lay the content out centred, like an ordinary desk). */
+function mergePlan(merge) {
+  const keys = merge.keys;
+  const set = new Set(keys);
+  const cells = keys.map((k) => parseKey(k));
+  const bbox = footprintOf(keys);
+  const has = (r, c) => set.has(keyOf(r, c));
+
+  // The widest horizontal run of contiguous member cells; on a tie, the run
+  // nearest the block's vertical centre, so labels land in the body of a T or +.
+  const midR = (bbox.minR + bbox.maxR) / 2;
+  let labelRun = null;
+  for (let r = bbox.minR; r <= bbox.maxR; r++) {
+    let start = null;
+    for (let c = bbox.minC; c <= bbox.maxC + 1; c++) {
+      if (c <= bbox.maxC && has(r, c)) { if (start === null) start = c; continue; }
+      if (start !== null) {
+        const len = c - start;
+        const better = !labelRun || len > labelRun.len ||
+          (len === labelRun.len && Math.abs(r - midR) < Math.abs(labelRun.r - midR));
+        if (better) labelRun = { r, cStart: start, cEnd: c - 1, len };
+        start = null;
+      }
+    }
+  }
+
+  // The slimmest cell: the one whose horizontal + vertical runs are shortest — a
+  // tip of an arm. Ties resolve to the topmost/leftmost (cells are pre-sorted).
+  const runLen = (r, c, dr, dc) => {
+    let n = 1;
+    for (let y = r - dr, x = c - dc; has(y, x); y -= dr, x -= dc) n++;
+    for (let y = r + dr, x = c + dc; has(y, x); y += dr, x += dc) n++;
+    return n;
+  };
+  let iconCell = null, best = Infinity;
+  for (const [r, c] of cells) {
+    const score = runLen(r, c, 0, 1) + runLen(r, c, 1, 0);
+    if (score < best) { best = score; iconCell = { r, c }; }
+  }
+
+  const isRect = keys.length === (bbox.maxR - bbox.minR + 1) * (bbox.maxC - bbox.minC + 1);
+  return { set, has, bbox, cells, labelRun, iconCell, isRect };
+}
+
 /** Per-square sizing rules for the current state. Computes table footprints
  *  once, then exposes the lookups both renderers need. */
 function layoutRules() {

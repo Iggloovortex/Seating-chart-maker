@@ -158,6 +158,123 @@ const SYMBOL_MARKUP = {
     '<path d="M12 3l2.5 5.3 5.5.8-4 4 1 5.6L12 16l-5 2.7 1-5.6-4-4 5.5-.8L12 3z" fill="FILL" stroke="COLOR" stroke-width="1.6" stroke-linejoin="round"/>',
 };
 
+// --- imported-icon "fill the open spaces" silhouette --------------------------
+//
+// Built-in icons are stroke outlines, so their `--icon-fill` naturally paints the
+// region enclosed by the strokes. Imported icons (e.g. Bootstrap Icons) instead
+// draw their ink as a *filled* shape, where an interior "hole" (a screen, the gap
+// in a ring) is a subpath that subtracts from the shape under its winding/evenodd
+// rule — so a plain fill of the glyph has no separate interior to colour.
+//
+// To give them the same behaviour we lay a solid silhouette of the glyph behind
+// the ink and paint it with the fill colour: the ink (redrawn on top) keeps the
+// icon colour, the holes show the fill colour, and everything outside the glyph
+// stays transparent. The silhouette is built by splitting every path into its
+// subpaths and filling each one on its own — a hole subpath, filled independently,
+// becomes a positive fill instead of a subtraction, so the union is the full body.
+
+/** Numbers consumed per repetition of each path command (0 for Z). */
+const PATH_CMD_ARGS = { M: 2, L: 2, T: 2, H: 1, V: 1, C: 6, S: 4, Q: 4, A: 7, Z: 0 };
+
+/** Split a path `d` into standalone subpath strings, each starting with an
+ *  absolute moveto, so a later subpath (often a relative `m…` hole) can be filled
+ *  on its own. Tracks the current point through every command so relative moves
+ *  resolve correctly; unparseable input yields a single verbatim subpath. */
+function splitAbsSubpaths(d) {
+  const re = /([MmLlHhVvCcSsQqTtAaZz])|(-?(?:\d*\.\d+|\d+\.?)(?:[eE][+-]?\d+)?)/g;
+  const cmds = []; // { c, nums:[…] }
+  let m, cur = null;
+  while ((m = re.exec(d))) {
+    if (m[1]) { cur = { c: m[1], nums: [] }; cmds.push(cur); }
+    else if (cur) cur.nums.push(parseFloat(m[2]));
+    else return [d]; // number before any command — bail out, keep verbatim
+  }
+
+  const subpaths = [];
+  let out = null, x = 0, y = 0, sx = 0, sy = 0;
+  const flush = () => { if (out && out.length) subpaths.push(out.join(' ')); };
+
+  for (const { c, nums } of cmds) {
+    const U = c.toUpperCase();
+    const rel = c !== U;
+    if (U === 'Z') { if (out) out.push('Z'); x = sx; y = sy; continue; }
+    const n = PATH_CMD_ARGS[U];
+    if (!n) return [d]; // unknown command — don't risk it
+    const reps = Math.max(1, Math.floor(nums.length / n));
+    for (let i = 0; i < reps; i++) {
+      const a = nums.slice(i * n, i * n + n);
+      if (a.length < n) break;
+      if (U === 'M' && i === 0) {
+        // subpath start: resolve to an absolute point and open a new subpath
+        x = rel ? x + a[0] : a[0];
+        y = rel ? y + a[1] : a[1];
+        sx = x; sy = y;
+        flush();
+        out = [`M ${x} ${y}`];
+        continue;
+      }
+      // an extra M pair is an implicit lineto; keep everything else verbatim
+      const letter = (U === 'M') ? (rel ? 'l' : 'L') : c;
+      out.push(letter + ' ' + a.join(' '));
+      // advance the current point to this segment's endpoint
+      if (U === 'H') x = rel ? x + a[0] : a[0];
+      else if (U === 'V') y = rel ? y + a[0] : a[0];
+      else {
+        const ex = a[n - 2], ey = a[n - 1];
+        x = rel ? x + ex : ex;
+        y = rel ? y + ey : ey;
+      }
+    }
+  }
+  flush();
+  return subpaths.length ? subpaths : [d];
+}
+
+const _iconSilhouetteCache = new Map(); // inner markup → array of shape strings
+
+/** The glyph's shapes rebuilt as a solid, holes-filled silhouette (no fill colour
+ *  baked in yet). Cached per icon since it depends only on the geometry. */
+function customIconSilhouette(inner) {
+  if (_iconSilhouetteCache.has(inner)) return _iconSilhouetteCache.get(inner);
+  const parts = [];
+  let doc;
+  try { doc = new DOMParser().parseFromString(`<svg>${inner}</svg>`, 'image/svg+xml'); }
+  catch { doc = null; }
+  if (doc && !doc.querySelector('parsererror')) {
+    const walk = (el) => {
+      for (const node of el.children) {
+        const tag = node.tagName.toLowerCase();
+        if (tag === 'g') { walk(node); continue; }
+        if (tag === 'path') {
+          for (const sub of splitAbsSubpaths(node.getAttribute('d') || '')) {
+            if (sub.trim()) parts.push(`<path d="${sub}"/>`);
+          }
+        } else if (tag === 'circle' || tag === 'ellipse' || tag === 'rect' || tag === 'polygon') {
+          // already closed positive fills — carry only their geometry attributes
+          let attrs = '';
+          for (const a of node.attributes) {
+            if (/^(fill|stroke|opacity)/i.test(a.name)) continue;
+            attrs += ` ${a.name}="${a.value.replace(/"/g, '&quot;')}"`;
+          }
+          parts.push(`<${tag}${attrs}/>`);
+        }
+        // line / polyline enclose no area — nothing to fill
+      }
+    };
+    walk(doc.documentElement);
+  }
+  _iconSilhouetteCache.set(inner, parts);
+  return parts;
+}
+
+/** A silhouette group painted with `fill` to sit *behind* an imported icon's ink,
+ *  colouring only its enclosed open spaces. Empty when there is nothing to fill. */
+function customIconFillLayer(inner, fill) {
+  const parts = customIconSilhouette(inner);
+  if (!parts.length) return '';
+  return `<g fill="${fill}" fill-rule="nonzero" stroke="none">${parts.join('')}</g>`;
+}
+
 /** A `<svg><use>` element referencing an inline symbol — for grid & picker.
  *  `fill` paints the space enclosed by the icon's strokes; leave it out and the
  *  icon stays an outline, which is the default. */
@@ -170,7 +287,10 @@ function iconUse(id, className = 'cell__icon', fill = null) {
     svg.setAttribute('class', className);
     svg.setAttribute('viewBox', custom.viewBox);
     svg.setAttribute('fill', 'currentColor');
-    svg.innerHTML = custom.inner; // sanitized shapes only
+    // A fill colour paints the glyph's open spaces (silhouette behind the ink).
+    svg.innerHTML = fill
+      ? customIconFillLayer(custom.inner, fill) + custom.inner
+      : custom.inner; // sanitized shapes only
     return svg;
   }
   const meta = ICONS[id];
@@ -190,8 +310,9 @@ function iconDataUrl(id, color, fill = null) {
   const custom = customIcon(id);
   if (custom) {
     const inner = custom.inner.replaceAll('currentColor', color);
+    const bg = fill ? customIconFillLayer(custom.inner, fill) : '';
     const svg =
-      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${custom.viewBox}" fill="${color}">${inner}</svg>`;
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${custom.viewBox}" fill="${color}">${bg}${inner}</svg>`;
     return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   }
   const meta = ICONS[id];

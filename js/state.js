@@ -95,6 +95,23 @@ function makeCell() {
     rotation: 0,                // 0 | 90 | 180 | 270
     fill: state.defaults.fill,
     border: state.defaults.border,
+    split: null,                // null, or { rows, cols } — see subcells below
+  };
+}
+
+/** A sub-cell of a split square: a mini square with its own content, but never
+ *  itself split. A split square divides its cell into rows×cols of these, each
+ *  filled, coloured, iconed and labelled on its own. */
+function makeSubcell() {
+  return {
+    enabled: false,
+    labels: [],
+    icon: null,
+    iconColor: state.defaults.iconColor,
+    iconFill: state.defaults.iconFill,
+    rotation: 0,
+    fill: state.defaults.fill,
+    border: state.defaults.border,
   };
 }
 
@@ -117,6 +134,8 @@ const state = {
   rowWeights: [],               // per-row size weight (empty => DEFAULTS.rowWeight)
   colWeights: [],               // per-col size weight
   tables: [],                   // [{ id, cellKeys:[], shape:'round'|'square', color }]
+  merges: [],                   // [{ id, keys:[], kind:'poly'|'unit' }] — see merge ops
+                                //   content lives on the anchor cell (sorted keys[0])
   paper: 'letter',              // preset id or { w, h, unit }
   landscape: true,              // paper orientation; false swaps width/height
   exportBg: '#ffffff',          // page background of the exported / printed output
@@ -168,6 +187,7 @@ function setGrid(cols, rows) {
     if (r >= rows || c >= cols) state.cells.delete(k);
   }
   pruneTables();
+  pruneMerges();
   pruneSelection();
   state.rowWeights.length = rows;
   state.colWeights.length = cols;
@@ -199,6 +219,66 @@ function updateCell(r, c, patch) {
   const had = hasContent(cell);
   Object.assign(cell, patch);
   if (!('enabled' in patch)) seatOnNewContent(cell, had);
+  emit();
+}
+
+// ---------------------------------------------------------------- split square
+//
+// A split square divides its one grid cell into a rows×cols block of sub-cells,
+// each an independent mini square (own fill, icon, labels, facing). The parent
+// stays one cell to the layout — it always occupies its full unit — so splitting
+// never disturbs the grid, tables, moves or row/column sizing around it.
+
+/** True when a cell is currently split into sub-cells. */
+function isSplit(cell) {
+  return !!(cell && cell.split && Array.isArray(cell.subcells) && cell.subcells.length);
+}
+
+/** Divide a square into rows×cols sub-cells, keeping any sub-cell content that
+ *  still fits when re-splitting to a different shape. A split square is always
+ *  "filled" so it claims a full unit in the output layout. */
+function splitCell(r, c, rows, cols) {
+  const cell = getCell(r, c);
+  const n = Math.max(1, rows) * Math.max(1, cols);
+  const prev = cell.subcells || [];
+  const subs = [];
+  for (let i = 0; i < n; i++) subs.push(prev[i] || makeSubcell());
+  cell.split = { rows, cols };
+  cell.subcells = subs;
+  cell.enabled = true;
+  emit();
+}
+
+/** Turn a split square back into a single square, dropping its sub-cells. */
+function unsplitCell(r, c) {
+  const cell = getCell(r, c);
+  cell.split = null;
+  delete cell.subcells;
+  emit();
+}
+
+/** The sub-cell at index `i` of a split square, or null. */
+function subcellAt(r, c, i) {
+  const cell = peekCell(r, c);
+  return cell && cell.subcells ? cell.subcells[i] || null : null;
+}
+
+/** Patch one sub-cell, seating it when this is its first content (mirrors
+ *  updateCell for a whole square). */
+function updateSubcell(r, c, i, patch) {
+  const sub = subcellAt(r, c, i);
+  if (!sub) return;
+  const had = hasContent(sub);
+  Object.assign(sub, patch);
+  if (!('enabled' in patch)) seatOnNewContent(sub, had);
+  emit();
+}
+
+/** Fill / empty one sub-cell (the sub-cell twin of toggleEnabled). */
+function toggleSubcell(r, c, i) {
+  const sub = subcellAt(r, c, i);
+  if (!sub) return;
+  sub.enabled = !sub.enabled;
   emit();
 }
 
@@ -387,9 +467,27 @@ function copySquareFrom(r, c) {
     rotation: cell.rotation,
     iconFill: cell.iconFill,
     labels: (cell.labels || []).map((l) => ({ text: l.text, color: l.color })),
+    split: cell.split ? { ...cell.split } : null,
+    subcells: cell.subcells ? cell.subcells.map(cloneSubcell) : null,
   };
   emit();
   return true;
+}
+
+/** A deep copy of a sub-cell (fresh label objects), for copy/paste and restore.
+ *  Missing fields fall back to the sub-cell defaults so a partial object is safe. */
+function cloneSubcell(s) {
+  const base = makeSubcell();
+  return {
+    enabled: !!s.enabled,
+    fill: s.fill || base.fill,
+    border: s.border || base.border,
+    icon: s.icon || null,
+    iconColor: s.iconColor || base.iconColor,
+    iconFill: s.iconFill || null,
+    rotation: s.rotation || 0,
+    labels: (s.labels || []).map((l) => ({ text: String(l.text || ''), color: l.color || DEFAULTS.labelColor })),
+  };
 }
 
 /** Clone the copied square onto every listed square, label lines and all. The
@@ -411,6 +509,10 @@ function pasteSquareTo(keys) {
       cell.iconFill = f.iconFill;
       // Fresh objects per target so squares never share label instances.
       cell.labels = f.labels.map((l) => ({ text: l.text, color: l.color }));
+      // The split (and its sub-cells) travels too, deep-copied so pasted squares
+      // never share sub-cell instances.
+      if (f.split) { cell.split = { ...f.split }; cell.subcells = (f.subcells || []).map(cloneSubcell); }
+      else { cell.split = null; delete cell.subcells; }
     }
   });
   return true;
@@ -449,6 +551,15 @@ function moveSelection(dr, dc) {
           const [r, c] = parseKey(k);
           return keyOf(r + dr, c + dc);
         });
+      }
+    }
+    // A merge travels only when its whole self is in the moved selection.
+    for (const m of state.merges) {
+      if (m.keys.every((k) => selected.has(k))) {
+        m.keys = sortCellKeys(m.keys.map((k) => {
+          const [r, c] = parseKey(k);
+          return keyOf(r + dr, c + dc);
+        }));
       }
     }
     // The moved squares travel with the drag; filters stay out of it, since a
@@ -496,6 +607,7 @@ function insertLine(axis, index) {
     state.cells = moved;
     remapSelection(shift);
     for (const t of state.tables) t.cellKeys = t.cellKeys.map(shift);
+    for (const m of state.merges) m.keys = sortCellKeys(m.keys.map(shift));
     const weights = isRow ? state.rowWeights : state.colWeights;
     weights.splice(index, 0, undefined);          // the new line takes the default
     if (isRow) state.grid = { ...state.grid, rows: state.grid.rows + 1 };
@@ -540,6 +652,9 @@ function deleteLine(axis, index) {
     for (const t of state.tables) {
       t.cellKeys = t.cellKeys.map(shift).filter((k) => k !== undefined);
     }
+    for (const m of state.merges) {
+      m.keys = sortCellKeys(m.keys.map(shift).filter((k) => k !== undefined));
+    }
     const weights = isRow ? state.rowWeights : state.colWeights;
     weights.splice(index, 1);
     if (isRow) state.grid = { ...state.grid, rows: state.grid.rows - 1 };
@@ -547,6 +662,7 @@ function deleteLine(axis, index) {
     state.rowWeights.length = state.grid.rows;
     state.colWeights.length = state.grid.cols;
     pruneTables();      // a table that lived entirely on that line is gone now
+    pruneMerges();      // and a merge left with fewer than two cells
     pruneSelection();
   });
   return true;
@@ -576,6 +692,9 @@ function resetSquares(keys) {
       state.cells.set(k, makeCell());
       if (!inBounds(r, c)) state.cells.delete(k);
     }
+    // A reset square can no longer belong to a merge — drop any merge it was in.
+    const gone = new Set(keys);
+    state.merges = state.merges.filter((m) => !m.keys.some((k) => gone.has(k)));
   });
 }
 
@@ -864,6 +983,75 @@ function pruneTables() {
   state.tables = state.tables.filter((t) => t.cellKeys.length > 0);
 }
 
+// ---------------------------------------------------------------- merged squares
+//
+// A merge fuses a block of selected squares into ONE desk. Two kinds:
+//   'poly' — the desk takes the exact SHAPE of the selection (an L, a T, a +),
+//            filling every member cell; its labels sit across the widest run and
+//            its icon in the slimmest arm (see mergePlan in js/layout.js).
+//   'unit' — a single 1×1 square, centred in the block, so a square can straddle
+//            the seam between cells while staying square.
+// The merged content is just the ANCHOR cell (sorted keys[0]); member cells keep
+// their own data for when the merge is undone, but it is not drawn while merged.
+
+/** Keys sorted top-to-bottom, left-to-right — so keys[0] is the anchor. */
+function sortCellKeys(keys) {
+  return [...keys].sort((a, b) => {
+    const [ra, ca] = parseKey(a), [rb, cb] = parseKey(b);
+    return ra - rb || ca - cb;
+  });
+}
+
+/** Fuse the current selection into one merged desk of `kind`. Seats every member
+ *  cell (the desk fills its whole footprint) and clears the selection, like a
+ *  table. Needs at least two squares. */
+function addMerge(kind = 'poly') {
+  const keys = sortCellKeys(state.selection);
+  if (keys.length < 2) return null;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  const merge = { id: `m${Date.now().toString(36)}`, keys, kind };
+  state.merges.push(merge);
+  for (const k of keys) { const [r, c] = parseKey(k); getCell(r, c).enabled = true; }
+  clearManualSelection();
+  emit();
+  return merge;
+}
+
+/** The merge covering a square, or null. Later merges win, matching paint order. */
+function mergeAt(r, c) {
+  const k = keyOf(r, c);
+  let found = null;
+  for (const m of state.merges) if (m.keys.includes(k)) found = m;
+  return found;
+}
+
+/** The anchor "r,c" of a merge — where its drawn content lives. */
+function mergeAnchorKey(merge) { return merge.keys[0]; }
+
+function updateMerge(id, patch) {
+  const m = state.merges.find((x) => x.id === id);
+  if (!m) return;
+  Object.assign(m, patch);
+  emit();
+}
+
+/** Undo a merge: the squares stand alone again with their own content. */
+function removeMerge(id) {
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  state.merges = state.merges.filter((m) => m.id !== id);
+  emit();
+}
+
+function pruneMerges() {
+  for (const m of state.merges) {
+    m.keys = m.keys.filter((k) => { const [r, c] = parseKey(k); return inBounds(r, c); });
+  }
+  // A merge needs at least two cells to mean anything.
+  state.merges = state.merges.filter((m) => m.keys.length >= 2);
+  // keys[0] must stay the anchor after any pruning.
+  for (const m of state.merges) m.keys = sortCellKeys(m.keys);
+}
+
 // ---------------------------------------------------------------- reset
 
 /** Empty every square on the grid. Non-destructive, like any unseating: labels,
@@ -876,6 +1064,7 @@ function clearGrid() {
   batch(() => {
     for (const cell of state.cells.values()) cell.enabled = false;
     state.tables = [];
+    state.merges = [];
     state.tableSelection.clear();
   });
 }
@@ -888,6 +1077,7 @@ function clearAll() {
     state.title = '';
     state.cells.clear();
     state.tables = [];
+    state.merges = [];
     clearManualSelection();
     state.tableSelection.clear();
     state.rowWeights = [];
@@ -909,6 +1099,7 @@ function serialize() {
     rowWeights: [...state.rowWeights],
     colWeights: [...state.colWeights],
     tables: state.tables.map((t) => ({ ...t, cellKeys: [...t.cellKeys] })),
+    merges: state.merges.map((m) => ({ id: m.id, kind: m.kind, keys: [...m.keys] })),
     paper: state.paper,
     landscape: state.landscape,
     exportBg: state.exportBg,
@@ -938,7 +1129,21 @@ function deserialize(data) {
     };
     state.cells = new Map();
     for (const [k, v] of data.cells || []) {
-      state.cells.set(k, { ...makeCell(), ...v, labels: (v.labels || []).map((l) => ({ ...l })) });
+      const cell = { ...makeCell(), ...v, labels: (v.labels || []).map((l) => ({ ...l })) };
+      // A split square carries a rows×cols block of sub-cells. Rebuild it with a
+      // clean shape so a stale or hand-edited save can never break rendering.
+      if (v && v.split && Array.isArray(v.subcells)) {
+        const rows = clampInt(v.split.rows, 1, 3, 1);
+        const cols = clampInt(v.split.cols, 1, 3, 1);
+        cell.split = { rows, cols };
+        cell.subcells = [];
+        for (let i = 0; i < rows * cols; i++) cell.subcells.push(cloneSubcell(v.subcells[i] || {}));
+        cell.enabled = true;
+      } else {
+        cell.split = null;
+        delete cell.subcells;
+      }
+      state.cells.set(k, cell);
     }
     state.rowWeights = Array.isArray(data.rowWeights) ? [...data.rowWeights] : [];
     state.colWeights = Array.isArray(data.colWeights) ? [...data.colWeights] : [];
@@ -950,12 +1155,20 @@ function deserialize(data) {
                                   rotation: t.rotation || 0,
                                   cellKeys: [...(t.cellKeys || [])] }))
       : [];
+    state.merges = Array.isArray(data.merges)
+      ? data.merges
+          .filter((m) => m && Array.isArray(m.keys) && m.keys.length >= 2)
+          .map((m) => ({ id: String(m.id || `m${Math.random().toString(36).slice(2)}`),
+                         kind: m.kind === 'unit' ? 'unit' : 'poly',
+                         keys: sortCellKeys(m.keys.map(String)) }))
+      : [];
     state.paper = data.paper || 'letter';
     state.landscape = data.landscape !== false;
     state.exportBg = data.exportBg || '#ffffff';
     clearManualSelection();
     state.tableSelection = new Set();
     pruneTables();
+    pruneMerges();
   });
   return true;
 }

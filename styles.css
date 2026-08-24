@@ -634,6 +634,104 @@ body {
   white-space: nowrap;
 }
 
+/* A split square: its cell divided into a small block of independent sub-cells.
+   The thin gaps (over a --line background) are the seams between pieces. */
+.cell--split { padding: 0; cursor: default; }
+.cell__split {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  gap: 1px;
+  background: var(--line);
+  border-radius: inherit;
+  overflow: hidden;
+}
+.subcell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  overflow: hidden;
+}
+.subcell:not(.subcell--on):hover { background: var(--surface-2); }
+.subcell--on { background: var(--seat); }
+.subcell .cell__content { padding: 1px; gap: 1px; }
+.subcell .cell__icon { width: 42%; max-width: 22px; }
+.subcell .cell__label { font-size: 9px; line-height: 1.1; }
+
+/* A merged desk spans several cells; each member cell renders blank (transparent)
+   and the merge overlays (drawn by renderMerges) show the fused desk on top. */
+.cell--merged { background: transparent; border-color: transparent; }
+/* Keep a selected member's outline visible above the merge overlay. */
+.cell--merged.cell--selected { z-index: 5; }
+.merge-shape,
+.merge-content,
+.merge-unit {
+  position: absolute;
+  pointer-events: none;   /* clicks pass to the cells below, which edit the anchor */
+  z-index: 1;
+}
+.merge-content,
+.merge-unit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.merge-unit {
+  box-sizing: border-box;
+  border: 1px solid var(--seat-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* Merge-kind toggle in the editor (Shape vs Centered). */
+.mergekind { display: flex; gap: 6px; }
+.mergekind .btn { flex: 1; }
+
+/* Split-shape option buttons (in the editor): each shows a tiny grid diagram. */
+.split-opt__svg { width: 24px; height: 24px; color: var(--ink); }
+
+/* The piece list in a split square's pane — one preview button per sub-cell. */
+.piece-grid {
+  display: grid;
+  gap: 6px;
+  max-width: 220px;
+}
+.piece-btn {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--ink);
+  cursor: pointer;
+  overflow: hidden;
+}
+.piece-btn:hover { border-color: var(--line-strong); }
+.piece-btn__icon { width: 40%; max-width: 26px; height: auto; aspect-ratio: 1; }
+.piece-btn__cap {
+  max-width: 100%;
+  font-size: 11px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Picked in table mode: a dashed accent ring around the shape. */
 .table-shape--picked {
   outline: 3px dashed var(--accent);
