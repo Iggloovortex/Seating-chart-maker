@@ -101,6 +101,8 @@ const WALL_INK = '#000000';
 const DOOR_FILL = '#6c4c00';
 const DOOR_INK = '#392b00';
 const RAIL_INK = '#343434';
+const RAIL_STROKE = WALL_STROKE * 0.8;  // a railing is drawn finer than a wall
+const RAIL_POST_R = 0.87;    // corner post's ring radius, as a share of half-thickness
 const HINGE_R = 0.0424;      // hinge ring's mid-radius
 
 /** A point `p` along the seam and `q` across it. */
@@ -179,24 +181,58 @@ function paintWall(seg, type, ops, opts = {}) {
  *  half-thickness shaft between them, and a 45° chamfer joining the two. The
  *  posts end in a bevelled point on the grid and square on the export. */
 function paintRailing(seg, ops, opts = {}) {
-  const { bevel = true } = opts;
+  const { bevel = true, endA = 'post', endB = 'post' } = opts;
   const u = seg.u;
-  const { h, a0, a1 } = wallSpan(seg, opts);
+  const h = (WALL_THICK * u) / 2;
   const s = h / 2;                    // shaft half-thickness
+  // A shaft stops at the ring's centreline where a railing turns the corner, so
+  // the octagonal post covers its cut end.
+  const a0 = seg.a0 + (endA === 'corner' ? RAIL_POST_R * h : 0);
+  const a1 = seg.a1 - (endB === 'corner' ? RAIL_POST_R * h : 0);
   const lead = bevel ? h : 0;         // the bevel tip's overhang
   const flat = lead + h;              // post's full-thickness run
   const neck = flat + s;              // where the chamfer meets the shaft
   const P = (p, q) => wallPt(seg, p, q);
+  const postA = endA === 'post', postB = endB === 'post';
 
   const pts = [];
-  if (bevel) pts.push(P(a0 + lead, -h)); else pts.push(P(a0, -h));
-  pts.push(P(a0 + flat, -h), P(a0 + neck, -s), P(a1 - neck, -s), P(a1 - flat, -h));
-  if (bevel) pts.push(P(a1 - lead, -h), P(a1, 0), P(a1 - lead, h));
-  else pts.push(P(a1, -h), P(a1, h));
-  pts.push(P(a1 - flat, h), P(a1 - neck, s), P(a0 + neck, s), P(a0 + flat, h));
-  if (bevel) pts.push(P(a0 + lead, h), P(a0, 0)); else pts.push(P(a0, h));
+  // Leading end: an end post flares to full thickness, otherwise the slim shaft
+  // simply runs out to the seam so two railings join without a lump.
+  if (postA) {
+    if (bevel) pts.push(P(a0 + lead, -h)); else pts.push(P(a0, -h));
+    pts.push(P(a0 + flat, -h), P(a0 + neck, -s));
+  } else {
+    pts.push(P(a0, -s));
+  }
+  if (postB) {
+    pts.push(P(a1 - neck, -s), P(a1 - flat, -h));
+    if (bevel) pts.push(P(a1 - lead, -h), P(a1, 0), P(a1 - lead, h));
+    else pts.push(P(a1, -h), P(a1, h));
+    pts.push(P(a1 - flat, h), P(a1 - neck, s));
+  } else {
+    pts.push(P(a1, -s), P(a1, s));
+  }
+  if (postA) {
+    pts.push(P(a0 + neck, s), P(a0 + flat, h));
+    if (bevel) pts.push(P(a0 + lead, h), P(a0, 0)); else pts.push(P(a0, h));
+  } else {
+    pts.push(P(a0, s));
+  }
 
-  ops.poly(pts, 'none', RAIL_INK, WALL_STROKE * u * 0.8);
+  ops.poly(pts, 'none', RAIL_INK, RAIL_STROKE * u);
+}
+
+/** The octagonal post where railings turn a corner: a regular octagon ring with
+ *  its vertices on the axes and the diagonals, centred on the junction. */
+function paintRailingPost(cx, cy, u, ops) {
+  const h = (WALL_THICK * u) / 2;
+  const r = RAIL_POST_R * h;
+  const pts = [];
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI) / 4;
+    pts.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) });
+  }
+  ops.poly(pts, 'none', RAIL_INK, RAIL_STROKE * u);
 }
 
 /** Paint a door: a brown frame filling the opening, a hinge RING at one end, and

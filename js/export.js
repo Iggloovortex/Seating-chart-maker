@@ -263,12 +263,28 @@ function drawWalls(ctx, rectOf) {
   }
 
   const ops = canvasWallOps(ctx);
+  // Railings: posts only at free ends, so a run's shaft passes through unbroken;
+  // where railings turn, one octagonal post is drawn on the shared junction.
+  const posts = new Map();
   for (const it of items) {
-    if (isWallBar(it.type)) continue;
+    if (it.type !== 'railing') continue;
+    const endA = railingEnd(it.o, it.r, it.c, 'A');
+    const endB = railingEnd(it.o, it.r, it.c, 'B');
+    for (const [end, mode] of [['A', endA], ['B', endB]]) {
+      if (mode !== 'corner') continue;
+      const along = end === 'A' ? it.seg.a0 : it.seg.a1;
+      const p = wallPt(it.seg, along, 0);
+      posts.set(`${Math.round(p.x)},${Math.round(p.y)}`, { p, u: it.seg.u });
+    }
+    paintRailing(it.seg, ops, { bevel: false, endA, endB });
+  }
+  for (const { p, u } of posts.values()) paintRailingPost(p.x, p.y, u, ops);
+
+  for (const it of items) {
+    if (isWallBar(it.type) || it.type === 'railing') continue;
     const opts = { bevel: false, endA: wallEndJoin(it.o, it.r, it.c, 'A'),
                    endB: wallEndJoin(it.o, it.r, it.c, 'B') };
-    if (it.type === 'door') paintDoor(it.seg, wallOrient(it.value), ops, opts);
-    else paintWall(it.seg, it.type, ops, opts);
+    paintDoor(it.seg, wallOrient(it.value), ops, opts);
   }
 }
 

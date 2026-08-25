@@ -1140,6 +1140,25 @@ function wallEndJoin(o, r, c, end) {
   return (collinear || anyPerp) ? 'trim' : 'plain';   // a railing always gives way
 }
 
+/** How one end of a RAILING finishes:
+ *    'post'   — a free end, which flares out into a full-thickness end post
+ *    'open'   — another railing carries straight on, so the slim shaft runs
+ *               through: no posts back to back in the middle of a run
+ *    'corner' — a railing turns here, so the shaft stops short and an octagonal
+ *               post is drawn on the junction instead (see paintRailingPost) */
+function railingEnd(o, r, c, end) {
+  const R = o === 'h' ? r : (end === 'A' ? r : r + 1);
+  const C = o === 'h' ? (end === 'A' ? c : c + 1) : c;
+  const perp = (o === 'h'
+    ? [wallAt('v', R - 1, C), wallAt('v', R, C)]
+    : [wallAt('h', R, C - 1), wallAt('h', R, C)]).map(wallTypeOf);
+  if (perp.some((t) => t === 'railing')) return 'corner';
+  const collinear = wallTypeOf(o === 'h'
+    ? wallAt('h', R, end === 'A' ? C - 1 : C)
+    : wallAt('v', end === 'A' ? R - 1 : R, C));
+  return collinear === 'railing' ? 'open' : 'post';
+}
+
 /** Coerce a wall value to a stored form, or null when it isn't a real wall. */
 function normalizeWallValue(value) {
   if (!value) return null;
