@@ -54,6 +54,8 @@ const DEFAULTS = {
   iconFill: null,           // null => new icons stay outlines
   tableColor: '#8d6e63',
   tableBorder: '#5d4037',
+  wallFill: '#909090',      // a solid wall's body
+  wallBorder: '#000000',    // the outline every wall bar is drawn with
   rowWeight: 1,
   colWeight: 1,
 };
@@ -128,6 +130,8 @@ const state = {
     iconFill: DEFAULTS.iconFill,
     tableColor: DEFAULTS.tableColor,
     tableBorder: DEFAULTS.tableBorder,
+    wallFill: DEFAULTS.wallFill,
+    wallBorder: DEFAULTS.wallBorder,
   },
   grid: { cols: 6, rows: 5 },
   cells: new Map(),             // key "r,c" -> cell
@@ -1279,6 +1283,8 @@ function deserialize(data) {
       iconFill: data.defaults?.iconFill || DEFAULTS.iconFill,
       tableColor: data.defaults?.tableColor || DEFAULTS.tableColor,
       tableBorder: data.defaults?.tableBorder || DEFAULTS.tableBorder,
+      wallFill: data.defaults?.wallFill || DEFAULTS.wallFill,
+      wallBorder: data.defaults?.wallBorder || DEFAULTS.wallBorder,
     };
     state.grid = {
       cols: clampInt(data.grid?.cols, 1, 40, 6),

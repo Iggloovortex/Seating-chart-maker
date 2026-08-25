@@ -54,6 +54,23 @@ function initWalls() {
     typeWrap.appendChild(b);
   }
 
+  // Wall colours. These are chart-wide (walls are not individually selectable),
+  // stored with the other defaults so they travel with a save.
+  const fillInput = document.getElementById('wall-fill');
+  const borderInput = document.getElementById('wall-border');
+  if (fillInput && borderInput) {
+    fillInput.value = state.defaults.wallFill;
+    borderInput.value = state.defaults.wallBorder;
+    bindColorInput(fillInput, () => setDefault('wallFill', fillInput.value));
+    bindColorInput(borderInput, () => setDefault('wallBorder', borderInput.value));
+    // Keep them in step when a file is opened or an edit is undone.
+    subscribe(() => {
+      if (document.activeElement === fillInput || document.activeElement === borderInput) return;
+      fillInput.value = state.defaults.wallFill;
+      borderInput.value = state.defaults.wallBorder;
+    });
+  }
+
   document.getElementById('wall-clear').addEventListener('click', () => {
     if (hasWalls() && confirm('Remove every wall, railing, door and window?')) clearWalls();
   });

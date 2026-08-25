@@ -75,7 +75,14 @@ and push it; don't stack new work directly on `main`.
   export draws every wall measure scaled by `WALL_OUT_SCALE` (0.5, opted into
   with `out: true`): at full weight a wall centred on a seam buries the 0.03u
   borders of the squares either side, so the thin version keeps the layout
-  readable. It is the one dial for how heavy exported walls look.
+  readable. It is the one dial for how heavy exported walls look. A RAILING is
+  exempt — it is a rail sitting ON a square rather than a divider between them,
+  so it uses `RAIL_OUT_SCALE` (1.1) and stays bolder than the walls.
+  Wall colours are chart-wide (walls are not individually selectable):
+  `state.defaults.wallFill` / `wallBorder`, set from the two swatches in the
+  Walls bar, read via `wallFillColor()` / `wallInkColor()` and serialized with
+  the other defaults. A window keeps its own `#d8feff` glass tint, and doors and
+  railings keep their own palettes.
   **Two looks, one geometry** (`wallBar`, js/layout.js): the editing grid draws
   45° **bevelled** ends so perpendicular runs miter at corners; the export draws
   **square** ends and, where the neighbouring collinear edge carries the SAME

@@ -112,9 +112,20 @@ const WALL_INK = '#000000';
 const DOOR_FILL = '#6c4c00';
 const DOOR_INK = '#392b00';
 const RAIL_INK = '#343434';
-const RAIL_STROKE = WALL_STROKE * 0.8;  // a railing is drawn finer than a wall
+// A railing is NOT thinned on export. It is a low rail rather than a wall — it
+// reads as a line ON a square rather than a divider between them, so it is drawn
+// a little heavier than full weight to stay visible over a filled square.
+const RAIL_OUT_SCALE = 1.1;
+function railScale(opts) { return opts && opts.out ? RAIL_OUT_SCALE : 1; }
+const RAIL_STROKE = WALL_STROKE;
 const RAIL_POST_R = 0.87;    // corner post's ring radius, as a share of half-thickness
 const HINGE_R = 0.0424;      // hinge ring's mid-radius
+
+/** The user's wall colours (Walls bar), falling back to the reference values.
+ *  A window keeps its own glass tint — that is what makes it read as glass — and
+ *  doors and railings keep their own palette. */
+function wallFillColor() { return (state.defaults && state.defaults.wallFill) || '#909090'; }
+function wallInkColor() { return (state.defaults && state.defaults.wallBorder) || WALL_INK; }
 
 /** A point `p` along the seam and `q` across it. */
 function wallPt(seg, p, q) {
@@ -181,12 +192,13 @@ function paintWall(seg, type, ops, opts = {}) {
   if (type === 'railing') return paintRailing(seg, ops, opts);
   const sw = WALL_STROKE * seg.u * wallScale(opts);
   const bar = wallBar(seg, opts);
-  const fill = type === 'wall' ? '#909090' : type === 'window' ? '#d8feff' : 'none';
+  const ink = wallInkColor();
+  const fill = type === 'wall' ? wallFillColor() : type === 'window' ? '#d8feff' : 'none';
   if (fill !== 'none') ops.poly(bar.pts, fill, 'none', 0);
-  ops.line(bar.topA.x, bar.topA.y, bar.topB.x, bar.topB.y, WALL_INK, sw);
-  ops.line(bar.botA.x, bar.botA.y, bar.botB.x, bar.botB.y, WALL_INK, sw);
-  if (bar.capA) strokeWallCap(ops, bar, 'A', WALL_INK, sw);
-  if (bar.capB) strokeWallCap(ops, bar, 'B', WALL_INK, sw);
+  ops.line(bar.topA.x, bar.topA.y, bar.topB.x, bar.topB.y, ink, sw);
+  ops.line(bar.botA.x, bar.botA.y, bar.botB.x, bar.botB.y, ink, sw);
+  if (bar.capA) strokeWallCap(ops, bar, 'A', ink, sw);
+  if (bar.capB) strokeWallCap(ops, bar, 'B', ink, sw);
 }
 
 /** A railing: an outlined dumbbell — a full-thickness post at each end, a
@@ -194,7 +206,7 @@ function paintWall(seg, type, ops, opts = {}) {
  *  posts end in a bevelled point on the grid and square on the export. */
 function paintRailing(seg, ops, opts = {}) {
   const { bevel = true, endA = 'post', endB = 'post' } = opts;
-  const u = seg.u * wallScale(opts);
+  const u = seg.u * railScale(opts);
   const h = (WALL_THICK * u) / 2;
   const s = h / 2;                    // shaft half-thickness
   // A shaft stops at the ring's centreline where a railing turns the corner, so
@@ -237,7 +249,7 @@ function paintRailing(seg, ops, opts = {}) {
 /** The octagonal post where railings turn a corner: a regular octagon ring with
  *  its vertices on the axes and the diagonals, centred on the junction. */
 function paintRailingPost(cx, cy, cellU, ops, opts = {}) {
-  const u = cellU * wallScale(opts);
+  const u = cellU * railScale(opts);
   const h = (WALL_THICK * u) / 2;
   const r = RAIL_POST_R * h;
   const pts = [];

@@ -249,9 +249,9 @@ function drawWalls(ctx, rectOf) {
   const rank = { hollow: 0, window: 1, wall: 2 };
   const bars = items.filter((it) => isWallBar(it.type))
                     .sort((a, b) => rank[a.type] - rank[b.type]);
-  const fill = (t) => (t === 'wall' ? '#909090' : t === 'window' ? '#d8feff' : bg);
+  const fill = (t) => (t === 'wall' ? wallFillColor() : t === 'window' ? '#d8feff' : bg);
 
-  ctx.fillStyle = WALL_INK;
+  ctx.fillStyle = wallInkColor();
   for (const it of bars) {
     const b = wallBarRect(it, 1);
     ctx.fillRect(b.x, b.y, b.w, b.h);
