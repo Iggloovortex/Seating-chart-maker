@@ -91,9 +91,11 @@ and push it; don't stack new work directly on `main`.
   export draws every wall measure scaled by `WALL_OUT_SCALE` (0.5, opted into
   with `out: true`): at full weight a wall centred on a seam buries the 0.03u
   borders of the squares either side, so the thin version keeps the layout
-  readable. It is the one dial for how heavy exported walls look. A RAILING is
-  exempt — it is a rail sitting ON a square rather than a divider between them,
-  so it uses `RAIL_OUT_SCALE` (1.1) and stays bolder than the walls.
+  readable. It is the one dial for how heavy exported walls look. A RAILING uses
+  `RAIL_OUT_SCALE`, which on export equals `WALL_OUT_SCALE`: that makes its end
+  posts exactly a wall thick and its slim shaft half of that, so a rail tucks
+  inside a wall's footprint. The editing grid keeps railings at full weight,
+  where they have room to read.
   Colours are chart-wide (walls are not individually selectable) and serialized
   with the other defaults. The UNIVERSAL pair — `wallFill` / `wallBorder`, used
   by wall, hollow and window — is the 4th section of the toolbar's Default

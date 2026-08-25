@@ -112,10 +112,11 @@ const WALL_INK = '#000000';
 const DOOR_FILL = '#6c4c00';
 const DOOR_INK = '#392b00';
 const RAIL_INK = '#343434';
-// A railing is NOT thinned on export. It is a low rail rather than a wall — it
-// reads as a line ON a square rather than a divider between them, so it is drawn
-// a little heavier than full weight to stay visible over a filled square.
-const RAIL_OUT_SCALE = 1.1;
+// On export a railing is drawn to the WALL's weight, which sets both halves of
+// the dumbbell against something real: its end posts come out exactly a wall
+// thick, and its slim shaft — half of that — fits inside a wall's footprint. The
+// editing grid keeps the railing at full weight, where it has room to read.
+const RAIL_OUT_SCALE = WALL_OUT_SCALE;
 function railScale(opts) { return opts && opts.out ? RAIL_OUT_SCALE : 1; }
 // The railing's outline is finer than a wall's — 0.194 of its own thickness,
 // measured off the reference, which is what keeps the dumbbell reading as an
