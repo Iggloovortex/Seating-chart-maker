@@ -43,12 +43,12 @@ const DEFAULT_COLOR_INPUTS = {
 };
 for (const [key, id] of Object.entries(DEFAULT_COLOR_INPUTS)) {
   const el = document.getElementById(id);
-  el.value = state.defaults[key];
-  bindColorInput(el, () => setDefault(key, el.value));
+  setColorInput(el, state.defaults[key]);
+  bindColorInput(el, () => setDefault(key, colorOf(el)));
 }
 function reflectDefaults() {
   for (const [key, id] of Object.entries(DEFAULT_COLOR_INPUTS)) {
-    document.getElementById(id).value = state.defaults[key];
+    setColorInput(document.getElementById(id), state.defaults[key]);
   }
   reflectIconFillDefault();
 }

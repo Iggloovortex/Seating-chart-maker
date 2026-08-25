@@ -366,7 +366,56 @@ body {
   width: var(--bar-swatch);
   height: var(--bar-swatch);
   min-height: 0;
-  padding: 3px;
+  padding: 0;              /* the colour fills the whole rounded box */
+}
+
+/* A colour input paints its swatch inside its own wrapper, which carries padding
+   and a border of the browser's choosing. At bar size that inset eats most of
+   the well, so strip it: the colour fills the box right up to our own border. */
+.field__input--color::-webkit-color-swatch-wrapper { padding: 0; }
+.field__input--color::-webkit-color-swatch,
+.defaults__swatch::-webkit-color-swatch { border: 0; border-radius: calc(var(--radius-sm) - 2px); }
+.field__input--color::-moz-color-swatch,
+.defaults__swatch::-moz-color-swatch { border: 0; border-radius: calc(var(--radius-sm) - 2px); }
+
+/* Transparent: the swatch is hidden and a checkerboard shows through, the way
+   every image editor says "nothing here". */
+.field__input--color.is-transparent,
+.defaults__swatch.is-transparent {
+  background-image:
+    linear-gradient(45deg, var(--line-strong) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--line-strong) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--line-strong) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--line-strong) 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+}
+.field__input--color.is-transparent::-webkit-color-swatch,
+.defaults__swatch.is-transparent::-webkit-color-swatch { opacity: 0; }
+.field__input--color.is-transparent::-moz-color-swatch,
+.defaults__swatch.is-transparent::-moz-color-swatch { opacity: 0; }
+
+/* The picker's own "Transparent" choice. */
+.cpick__clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+}
+.cpick__clearswatch {
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background-image:
+    linear-gradient(45deg, var(--line-strong) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--line-strong) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--line-strong) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--line-strong) 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0;
 }
 .selectbar__actions {
   display: flex;

@@ -76,9 +76,9 @@ function initWalls() {
   const swatch = (id, key) => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.value = state.defaults[key];
-    bindColorInput(el, () => setDefault(key, el.value));
-    subscribe(() => { if (document.activeElement !== el) el.value = state.defaults[key]; });
+    setColorInput(el, state.defaults[key]);
+    bindColorInput(el, () => setDefault(key, colorOf(el)));
+    subscribe(() => { if (document.activeElement !== el) setColorInput(el, state.defaults[key]); });
   };
   swatch('rail-fill', 'railFill');
   swatch('rail-border', 'railBorder');

@@ -91,6 +91,33 @@ function hslToRgb(h, s, l) {
 
 /** Called by bindColorInput on every color input. Suppresses the OS dialog and
  *  opens the themed popover in its place. Idempotent per input. */
+// A colour input can hold one value its own `.value` cannot express: nothing at
+// all. TRANSPARENT is kept as a flag on the element beside the hex, so the input
+// still remembers the colour you had if you turn transparency back off.
+const TRANSPARENT = 'transparent';
+
+/** What a colour input is currently worth — its hex, or TRANSPARENT. Every place
+ *  that reads a swatch goes through this rather than `.value`. */
+function colorOf(input) {
+  return input && input.dataset.transparent === '1' ? TRANSPARENT : (input ? input.value : '');
+}
+
+/** Put a value into a colour input, transparency included. A transparent input
+ *  keeps its last hex, so the picker opens where you left it. */
+function setColorInput(input, value) {
+  if (!input) return;
+  const clear = value === TRANSPARENT;
+  input.dataset.transparent = clear ? '1' : '';
+  input.classList.toggle('is-transparent', clear);
+  if (!clear && value) input.value = value;
+}
+
+/** Whether this swatch may be made transparent. Fills opt out: a transparent
+ *  fill is just an empty square, which the app already has other ways to say. */
+function allowsTransparent(input) {
+  return !!input && input.dataset.noTransparent !== '1';
+}
+
 function enhanceColorInput(input) {
   if (!input || input.type !== 'color' || input.dataset.cpick) return;
   input.dataset.cpick = '1';
@@ -98,7 +125,7 @@ function enhanceColorInput(input) {
     if (input.disabled) return;
     e.preventDefault();   // cancels the input's activation → the OS picker never shows
     openColorPopover(input, input.value, (hex, commit) => {
-      input.value = hex;
+      setColorInput(input, hex);
       input.dispatchEvent(new Event('input', { bubbles: true }));
       if (commit) input.dispatchEvent(new Event('change', { bubbles: true }));
     });
@@ -274,6 +301,23 @@ function openColorPopover(anchor, value, onPick) {
     n.addEventListener('input', () => readHsl(false));
     n.addEventListener('change', () => { readHsl(true); render(); });
   });
+
+  // ---- Transparent --------------------------------------------------------
+  // Offered on every swatch that is not a fill. Picking it commits at once and
+  // closes, since there is nothing left to adjust.
+  if (allowsTransparent(anchor)) {
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'btn cpick__clear';
+    const chip = document.createElement('span');
+    chip.className = 'cpick__clearswatch';
+    chip.setAttribute('aria-hidden', 'true');
+    clear.append(chip, document.createTextNode('Transparent'));
+    clear.title = 'Draw nothing here';
+    clear.setAttribute('aria-pressed', String(colorOf(anchor) === TRANSPARENT));
+    clear.addEventListener('click', () => { onPick(TRANSPARENT, true); closeColorPopover(); });
+    el.appendChild(clear);
+  }
 
   render();
   document.addEventListener('pointerdown', cpickOutside, true);

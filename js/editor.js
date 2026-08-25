@@ -196,9 +196,9 @@ function presetLabelRow(n, cur, line, index) {
   const color = document.createElement('input');
   color.type = 'color';
   color.className = 'field__input field__input--color erow__color';
-  color.value = line.color;
+  setColorInput(color, line.color);
   bindColorInput(color, () => {
-    const labels = cur().labels.map((l, i) => i === index ? { ...l, color: color.value } : l);
+    const labels = cur().labels.map((l, i) => i === index ? { ...l, color: colorOf(color) } : l);
     updateConfigPreset(n, { ...cur(), labels });
   });
   const del = document.createElement('button');
@@ -766,10 +766,10 @@ function subLabelRow(line, index) {
   const color = document.createElement('input');
   color.type = 'color';
   color.className = 'field__input field__input--color erow__color';
-  color.value = line.color || DEFAULTS.labelColor;
+  setColorInput(color, line.color || DEFAULTS.labelColor);
   bindColorInput(color, () => {
     const s = subCur();
-    if (s && s.labels[index]) { s.labels[index].color = color.value; updateSubcell(current.r, current.c, current.sub, {}); }
+    if (s && s.labels[index]) { s.labels[index].color = colorOf(color); updateSubcell(current.r, current.c, current.sub, {}); }
   });
   const del = document.createElement('button');
   del.type = 'button';
@@ -1010,7 +1010,7 @@ function bulkLabelRow(keys, index) {
   color.type = 'color';
   color.className = 'field__input field__input--color erow__color';
   color.value = seedLineColor(keys, index);
-  bindColorInput(color, () => setLineColorForCells(keys, index, color.value));
+  bindColorInput(color, () => setLineColorForCells(keys, index, colorOf(color)));
 
   const del = document.createElement('button');
   del.type = 'button';
@@ -1136,10 +1136,10 @@ function labelRow(line, index) {
   const color = document.createElement('input');
   color.type = 'color';
   color.className = 'field__input field__input--color erow__color';
-  color.value = line.color || DEFAULTS.labelColor;
+  setColorInput(color, line.color || DEFAULTS.labelColor);
   bindColorInput(color, () => {
     const cell = getCell(current.r, current.c);
-    cell.labels[index].color = color.value;
+    cell.labels[index].color = colorOf(color);
     updateCell(current.r, current.c, {});
   });
 
@@ -1177,7 +1177,7 @@ function colorRow(label, value, onChange) {
   color.type = 'color';
   color.className = 'field__input field__input--color';
   color.value = value;
-  bindColorInput(color, () => onChange(color.value));
+  bindColorInput(color, () => onChange(colorOf(color)));
   row.append(span, color);
   return row;
 }
@@ -1401,9 +1401,12 @@ function swatch(label, value, onChange) {
   const input = document.createElement('input');
   input.type = 'color';
   input.className = 'defaults__swatch';
-  input.value = value;
+  // A FILL is the one colour that cannot be nothing — an empty square already
+  // says that — so fills opt out of the picker's Transparent choice.
+  if (/fill/i.test(label)) input.dataset.noTransparent = '1';
+  setColorInput(input, value);
   input.setAttribute('aria-label', label);
-  bindColorInput(input, () => onChange(input.value));
+  bindColorInput(input, () => onChange(colorOf(input)));
   item.append(name, input);
   return item;
 }

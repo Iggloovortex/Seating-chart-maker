@@ -135,8 +135,8 @@ function initTables() {
     const box = e.currentTarget.getBoundingClientRect();
     openMergeMenu(box.left, box.bottom + 4);
   });
-  bindColorInput(colorInput, () => updateTables(tableIds(), { color: colorInput.value }));
-  bindColorInput(borderInput, () => updateTables(tableIds(), { border: borderInput.value }));
+  bindColorInput(colorInput, () => updateTables(tableIds(), { color: colorOf(colorInput) }));
+  bindColorInput(borderInput, () => updateTables(tableIds(), { border: colorOf(borderInput) }));
 
   // Remove covers everything that is picked, squares and tables alike, through
   // the same menu the grid and the edit panes open.
@@ -167,8 +167,8 @@ function initTables() {
     const picked = state.tables.filter((t) => state.tableSelection.has(t.id));
     const agreed = (key, fallback) =>
       picked.length && picked.every((t) => t[key] === picked[0][key]) ? picked[0][key] : fallback;
-    colorInput.value = agreed('color', state.defaults.tableColor);
-    borderInput.value = agreed('border', state.defaults.tableBorder);
+    setColorInput(colorInput, agreed('color', state.defaults.tableColor));
+    setColorInput(borderInput, agreed('border', state.defaults.tableBorder));
   });
 }
 

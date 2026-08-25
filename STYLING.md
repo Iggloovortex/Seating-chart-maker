@@ -47,8 +47,16 @@ inputs, chips), `--tap: 44px` (min touch target — buttons/inputs/swatches),
   with an inline `<svg><use href="#ui-…"></svg>` from the symbol sheet at the top
   of `index.html`. Min height `--tap`.
 - **Colour swatches** are **square** everywhere (`.defaults__swatch`,
-  `.field__input--color`) — keep them square. The custom picker popover is wired
-  by `enhanceColorInput` (`js/colorpicker.js`); hex accepts values with/without `#`.
+  `.field__input--color`) — keep them square, and the colour fills the whole
+  rounded box (padding 0, the browser's inner swatch stripped). The custom picker
+  popover is wired by `enhanceColorInput` (`js/colorpicker.js`); hex accepts
+  values with/without `#`. Every swatch also offers **Transparent** — except a
+  FILL, which opts out with `data-no-transparent="1"` (an empty square already
+  says "nothing"); `swatch()` sets that automatically for any label matching
+  /fill/i. Read a swatch with `colorOf(input)` and write one with
+  `setColorInput(input, value)` — never `.value`, which cannot carry the
+  transparent state. The stored value is the string `'transparent'`, which canvas,
+  CSS and SVG all accept, and which the contrast helpers pass through untouched.
 - **Modals** — `.modal` > `.modal__panel` (`--settings` = left pane, `--iconlib`
   = wide) with `.modal__head` / `.modal__body` / `.modal__foot`. Settings tabs
   (`.settings-tabs` / `.settings-tab`) live in the header under the title.

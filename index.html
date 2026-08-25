@@ -418,7 +418,7 @@
         <div class="defaults__set">
           <label class="defaults__item">
             <span class="defaults__label">Fill</span>
-            <input id="def-fill" type="color" class="defaults__swatch" aria-label="Default square fill" />
+            <input id="def-fill" data-no-transparent="1" type="color" class="defaults__swatch" aria-label="Default square fill" />
           </label>
           <label class="defaults__item">
             <span class="defaults__label">Border</span>
@@ -444,7 +444,7 @@
               <input id="def-icon-fill-on" type="checkbox" class="swatch__toggle"
                      aria-label="Fill the space inside icons by default" />Fill
             </span>
-            <input id="def-icon-fill" type="color" class="defaults__swatch" aria-label="Default icon fill color" />
+            <input id="def-icon-fill" data-no-transparent="1" type="color" class="defaults__swatch" aria-label="Default icon fill color" />
           </label>
         </div>
         <span class="defaults__rule" aria-hidden="true"></span>
@@ -462,7 +462,7 @@
         <div class="defaults__set defaults__set--wall">
           <label class="defaults__item">
             <span class="defaults__label">Wall</span>
-            <input id="def-wall-fill" type="color" class="defaults__swatch" aria-label="Wall fill color" />
+            <input id="def-wall-fill" data-no-transparent="1" type="color" class="defaults__swatch" aria-label="Wall fill color" />
           </label>
           <label class="defaults__item">
             <span class="defaults__label">Border</span>
@@ -499,7 +499,7 @@
         </button>
         <label class="field">
           <span class="field__label">Color</span>
-          <input id="table-edit-color" class="field__input field__input--color" type="color" value="#8d6e63" />
+          <input id="table-edit-color" data-no-transparent="1" class="field__input field__input--color" type="color" value="#8d6e63" />
         </label>
         <label class="field">
           <span class="field__label">Border</span>
@@ -534,7 +534,7 @@
           <div id="wall-types-rail" class="wall-types"></div>
           <label class="field">
             <span class="field__label">Fill</span>
-            <input id="rail-fill" class="field__input field__input--color" type="color" value="#909090"
+            <input id="rail-fill" data-no-transparent="1" class="field__input field__input--color" type="color" value="#909090"
                    title="Railing fill" />
           </label>
           <label class="field">
@@ -548,7 +548,7 @@
           <div id="wall-types-door" class="wall-types"></div>
           <label class="field">
             <span class="field__label">Fill</span>
-            <input id="door-fill" class="field__input field__input--color" type="color" value="#6c4c00"
+            <input id="door-fill" data-no-transparent="1" class="field__input field__input--color" type="color" value="#6c4c00"
                    title="Door fill" />
           </label>
           <label class="field">
@@ -644,7 +644,7 @@
         </div>
         <label class="field field--export-bg">
           <span class="field__label">Background</span>
-          <input id="export-bg" class="field__input field__input--color" type="color" value="#ffffff"
+          <input id="export-bg" data-no-transparent="1" class="field__input field__input--color" type="color" value="#ffffff"
                  aria-label="Exported page background colour" />
         </label>
         <button class="btn btn--icon" type="button" data-close-preview aria-label="Close">✕</button>
