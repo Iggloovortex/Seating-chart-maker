@@ -206,18 +206,26 @@ function canvasWallOps(ctx) {
   };
 }
 
-/** Draw every wall on its edge: a beveled hexagon bar (wall / hollow / window) or
- *  a door (brown frame + hinge + swing leaf). The export grid is gapless, so the
- *  bevelled ends meet exactly at each junction. */
+/** Draw every wall on its edge. The export look is SQUARE-ended and seamless: the
+ *  layout is gapless, so where the next edge carries the same wall its cap is
+ *  dropped and the two run together — a row of hollow walls stays hollow end to
+ *  end, and a row of solid walls reads as one unbroken wall. (Bevelled ends are
+ *  the editing grid's look; see renderWalls.) */
 function drawWalls(ctx, rectOf) {
   const ops = canvasWallOps(ctx);
   for (const [key, value] of Object.entries(state.walls)) {
     const m = /^([hv]):(\d+),(\d+)$/.exec(key);
     if (!m) continue;
-    const seg = wallSegment(m[1], Number(m[2]), Number(m[3]), rectOf);
+    const o = m[1], r = Number(m[2]), c = Number(m[3]);
+    const seg = wallSegment(o, r, c, rectOf);
     const type = wallTypeOf(value);
-    if (type === 'door') paintDoor(seg, wallOrient(value), ops);
-    else paintWall(seg, type, ops);
+    // Only plain bars merge; a door or railing is a discrete object and keeps
+    // both of its ends.
+    const merges = type === 'wall' || type === 'hollow' || type === 'window';
+    const [na, nb] = merges ? wallNeighbors(o, r, c) : [null, null];
+    const opts = { bevel: false, capA: wallTypeOf(na) !== type, capB: wallTypeOf(nb) !== type };
+    if (type === 'door') paintDoor(seg, wallOrient(value), ops, opts);
+    else paintWall(seg, type, ops, opts);
   }
 }
 

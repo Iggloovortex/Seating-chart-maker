@@ -1099,6 +1099,15 @@ function wallAt(o, r, c) { return state.walls[wallKey(o, r, c)] || null; }
 function wallTypeOf(v) { return v && typeof v === 'object' ? v.t : v; }
 function wallOrient(v) { return v && typeof v === 'object' ? (((v.o | 0) % 4) + 4) % 4 : 0; }
 
+/** The walls on the two collinear edges either side of this one — A is its low
+ *  end (left / top), B its high end. Lets the export drop the cap between two
+ *  walls of the same type so a run reads as one continuous wall. */
+function wallNeighbors(o, r, c) {
+  return o === 'h'
+    ? [wallAt('h', r, c - 1), wallAt('h', r, c + 1)]
+    : [wallAt('v', r - 1, c), wallAt('v', r + 1, c)];
+}
+
 /** Coerce a wall value to a stored form, or null when it isn't a real wall. */
 function normalizeWallValue(value) {
   if (!value) return null;

@@ -1179,9 +1179,11 @@ function renderWalls() {
     if (!m) continue;
     const seg = wallSegment(m[1], Number(m[2]), Number(m[3]), rectOf, CELL_GAP);
     if (!seg || !Number.isFinite(seg.cross)) continue;
+    // The editing grid keeps the bevelled ends, so runs miter at their corners.
     const type = wallTypeOf(value);
-    if (type === 'door') paintDoor(seg, wallOrient(value), ops);
-    else paintWall(seg, type, ops);
+    const opts = { bevel: true };
+    if (type === 'door') paintDoor(seg, wallOrient(value), ops, opts);
+    else paintWall(seg, type, ops, opts);
   }
   chart.appendChild(svg);
 }

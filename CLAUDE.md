@@ -70,22 +70,31 @@ and push it; don't stack new work directly on `main`.
   kind / unmerges.
 - **Walls — DONE** (branch `claude/walls-tmdavo`). Edge objects on the seams
   between squares and the outer border, styled from user-supplied reference SVGs.
-  Every type is the same beveled-hexagon bar (length = 1 cell, thickness ~0.09u,
-  45° mitred ends so perpendicular runs join at corners): `wall` (grey `#909090`
-  fill + black outline), `hollow` (outline only), `window` (hollow + light-blue
-  `#d8feff` glass fill), `railing` (a line with a thinner colour line inside),
-  and `door` — a brown `#6c4c00` hexagon frame + hinge circle + a 45° swing leaf,
-  carrying an orientation (0..3 = hinge end × swing side; click a placed door to
-  rotate/flip). Model: `state.walls` is a map, key `"h:r,c"` (top edge of cell
-  r,c) / `"v:r,c"` (left edge); the value is a type string, or `{t:'door',o}` for
-  a door. Remapped/pruned on insert/delete/setGrid, carried by serialize (Clear
-  Grid keeps walls; New clears them). Geometry `wallSegment` (+ `gap` so grid and
-  gapless export both miter) and `wallHex`/`paintWall`/`paintDoor` (js/layout.js)
-  are shared by the grid overlay `renderWalls` (SVG polygons) and export
-  `drawWalls` (canvas), via matching poly/circle/line op sets. Walls mode
-  (`js/walls.js`, `#btn-walls` + `#wall-bar`) shows an interactive edge layer
-  (`renderWallEdges`); pick a type, click a seam to place, click again / Erase to
-  remove.
+  Every type is a bar one cell long and `WALL_THICK` (0.0909u) thick, outlined at
+  `WALL_STROKE` (0.0295u) — proportions measured off the reference SVGs.
+  **Two looks, one geometry** (`wallBar`, js/layout.js): the editing grid draws
+  45° **bevelled** ends so perpendicular runs miter at corners; the export draws
+  **square** ends and, where the neighbouring collinear edge carries the SAME
+  type, drops that end cap entirely (`wallNeighbors` → `capA`/`capB`), so a row of
+  hollow walls stays hollow end-to-end and solid walls read as one unbroken run.
+  Uncapped ends bleed half a stroke past the seam so no hairline shows.
+  Types: `wall` (grey `#909090` fill + black outline), `hollow` (outline only),
+  `window` (hollow + light-blue `#d8feff` tint), `railing` (`paintRailing` — an
+  outlined dumbbell: full-thickness end posts, half-thickness shaft, 45° chamfer
+  between, `#343434`), and `door` (`paintDoor` — a brown `#6c4c00` frame, a hinge
+  RING of mid-radius 0.0424u, and a 45° swing leaf the length of the opening and
+  the width of the wall, outlined at 46% opacity). A door carries an orientation
+  (0..3 = hinge end × swing side); clicking a placed door cycles it — its rotate
+  and flip. Model: `state.walls` is a map, key `"h:r,c"` (top edge of cell r,c) /
+  `"v:r,c"` (left edge); the value is a type string, or `{t:'door',o}` for a door
+  (`wallTypeOf`/`wallOrient`/`normalizeWallValue` read either shape). Remapped and
+  pruned on insert/delete/setGrid, carried by serialize (Clear Grid keeps walls;
+  New clears them). `wallSegment` takes the grid's `gap` (0 in the gapless export)
+  so both renderers sit on the true seam. The grid overlay `renderWalls` (SVG) and
+  the export `drawWalls` (canvas) share all painting via matching
+  poly/circle/line op sets. Walls mode (`js/walls.js`, `#btn-walls` + `#wall-bar`)
+  shows an interactive edge layer (`renderWallEdges`); pick a type, click a seam
+  to place, click again / Erase to remove.
 - **2-column labels** for the KVM and Dual Monitor icons — a per-row optional 2nd
   column, activating when any row has 2nd-column content. Touches the label data
   model, editor, both renderers, and TSV. (Scoped, not started.)

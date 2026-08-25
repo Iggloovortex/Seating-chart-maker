@@ -86,59 +86,132 @@ function wallSegment(o, r, c, rectOf, gap = 0) {
   return { o, cross: x, a0: cell.y - g, a1: cell.y + cell.h + g, u: Math.min(cell.w, cell.h) };
 }
 
-// Wall proportions, taken from the reference SVGs (a cell is 825 units there):
-// the beveled bar's fill is ~0.09 of a cell thick, its outline ~0.03. The 45°
-// bevels at each end let perpendicular walls miter together at a corner.
-const WALL_THICK = 0.091;
-const WALL_STROKE = 0.03;
+// Wall proportions, measured from the reference SVGs (where a bar spans one cell
+// of 2578 units): the bar is 0.0909 of a cell thick and its outline 0.0295.
+//
+// A bar has TWO looks, and they are the same geometry with different ends:
+//   grid   — 45° bevelled ends (a hexagon), so perpendicular runs miter at corners
+//   export — plain square ends, drawn seamlessly: where the next edge carries the
+//            same wall, that end's cap is left off entirely, so a row of hollow
+//            walls reads as one continuous hollow run (see the 3-hollow-walls
+//            reference, whose middle segment has no caps at all).
+const WALL_THICK = 0.0909;
+const WALL_STROKE = 0.0295;
+const WALL_INK = '#000000';
+const DOOR_FILL = '#6c4c00';
+const DOOR_INK = '#392b00';
+const RAIL_INK = '#343434';
+const HINGE_R = 0.0424;      // hinge ring's mid-radius
 
-/** The six points of a wall's beveled hexagon bar (a rectangle whose short ends
- *  are cut to 45° points at the seam's endpoints), in draw order. */
-function wallHex(seg) {
-  const { o, cross, a0, a1, u } = seg;
+/** A point `p` along the seam and `q` across it. */
+function wallPt(seg, p, q) {
+  return seg.o === 'h' ? { x: p, y: seg.cross + q } : { x: seg.cross + q, y: p };
+}
+
+/** The outline of a wall bar. A capped end is bevelled to a 45° point when
+ *  `bevel` is on (the grid look) and square otherwise (the export look); an
+ *  UNcapped end is always square, so the bar butts flush against its neighbour.
+ *  Returns the polygon plus the four corners and two tips, so the caller can
+ *  stroke the long sides and each cap separately. */
+function wallBar(seg, { bevel = true, capA = true, capB = true } = {}) {
+  const { u } = seg;
   const h = (WALL_THICK * u) / 2;
-  const P = (p, q) => (o === 'h' ? { x: p, y: cross + q } : { x: cross + q, y: p });
-  return [P(a1, 0), P(a1 - h, -h), P(a0 + h, -h), P(a0, 0), P(a0 + h, h), P(a1 - h, h)];
+  // An uncapped end runs a hair past the seam so it overlaps the wall continuing
+  // there, leaving no hairline where the two fills meet.
+  const bleed = WALL_STROKE * u * 0.5;
+  const a0 = seg.a0 - (capA ? 0 : bleed);
+  const a1 = seg.a1 + (capB ? 0 : bleed);
+  const bevA = bevel && capA, bevB = bevel && capB;
+  const P = (p, q) => wallPt(seg, p, q);
+  const topA = P(bevA ? a0 + h : a0, -h), topB = P(bevB ? a1 - h : a1, -h);
+  const botA = P(bevA ? a0 + h : a0, h),  botB = P(bevB ? a1 - h : a1, h);
+  const tipA = bevA ? P(a0, 0) : null,    tipB = bevB ? P(a1, 0) : null;
+  const pts = [topA, topB];
+  if (tipB) pts.push(tipB);
+  pts.push(botB, botA);
+  if (tipA) pts.push(tipA);
+  return { pts, topA, topB, botA, botB, tipA, tipB, h };
 }
 
-/** Paint one non-door wall by handing shapes to `ops` — `poly(points, fill,
- *  stroke, sw)` and `line(x1,y1,x2,y2, stroke, sw)`. Wall is a grey-filled bar,
- *  hollow is its outline, window is the outline with a light-blue glass fill, and
- *  railing is a line with a thinner coloured line inside it. */
-function paintWall(seg, type, ops) {
-  const sw = WALL_STROKE * seg.u;
-  if (type === 'railing') {
-    const { o, cross, a0, a1, u } = seg;
-    const P = (p) => (o === 'h' ? { x: p, y: cross } : { x: cross, y: p });
-    const A = P(a0), B = P(a1);
-    ops.line(A.x, A.y, B.x, B.y, '#3a3a3a', 0.05 * u);
-    ops.line(A.x, A.y, B.x, B.y, '#8fb3ff', 0.018 * u);
-    return;
+/** Stroke one end of a bar: a 45° "V" when bevelled, otherwise a straight cap. */
+function strokeWallCap(ops, bar, end, ink, sw) {
+  const top = end === 'A' ? bar.topA : bar.topB;
+  const bot = end === 'A' ? bar.botA : bar.botB;
+  const tip = end === 'A' ? bar.tipA : bar.tipB;
+  if (tip) {
+    ops.line(top.x, top.y, tip.x, tip.y, ink, sw);
+    ops.line(tip.x, tip.y, bot.x, bot.y, ink, sw);
+  } else {
+    ops.line(top.x, top.y, bot.x, bot.y, ink, sw);
   }
-  const fill = type === 'wall' ? '#909090' : type === 'window' ? '#d8feff' : 'none';
-  ops.poly(wallHex(seg), fill, '#000000', sw);
 }
 
-/** Paint a door: a brown hexagon frame in the opening, a hinge circle at one end,
- *  and a 45° swing leaf into the adjacent cell. `orient` (0..3) picks the hinge
- *  end (bit 1) and the swing side (bit 0) — its rotate and flip. */
-function paintDoor(seg, orient, ops) {
-  const { o, cross, a0, a1, u } = seg;
-  const sw = WALL_STROKE * u;
-  ops.poly(wallHex(seg), '#6c4c00', '#392b00', sw);
+/** Paint one non-door wall through `ops` — `poly(points, fill, stroke, sw)`,
+ *  `line(x1,y1,x2,y2, stroke, sw)` and `circle(...)`. Wall is a grey-filled bar,
+ *  hollow is the bare outline, window is that outline with a light-blue glass
+ *  tint, and railing is a dumbbell (see paintRailing). The long sides are always
+ *  stroked; each end cap only when `opts` asks for it. */
+function paintWall(seg, type, ops, opts = {}) {
+  if (type === 'railing') return paintRailing(seg, ops, opts);
+  const sw = WALL_STROKE * seg.u;
+  const bar = wallBar(seg, opts);
+  const fill = type === 'wall' ? '#909090' : type === 'window' ? '#d8feff' : 'none';
+  if (fill !== 'none') ops.poly(bar.pts, fill, 'none', 0);
+  ops.line(bar.topA.x, bar.topA.y, bar.topB.x, bar.topB.y, WALL_INK, sw);
+  ops.line(bar.botA.x, bar.botA.y, bar.botB.x, bar.botB.y, WALL_INK, sw);
+  if (opts.capA !== false) strokeWallCap(ops, bar, 'A', WALL_INK, sw);
+  if (opts.capB !== false) strokeWallCap(ops, bar, 'B', WALL_INK, sw);
+}
 
-  const P = (p, q) => (o === 'h' ? { x: p, y: cross + q } : { x: cross + q, y: p });
+/** A railing: an outlined dumbbell — a full-thickness post at each end, a
+ *  half-thickness shaft between them, and a 45° chamfer joining the two. The
+ *  posts end in a bevelled point on the grid and square on the export. */
+function paintRailing(seg, ops, { bevel = true } = {}) {
+  const { a0, a1, u } = seg;
+  const h = (WALL_THICK * u) / 2;
+  const s = h / 2;                    // shaft half-thickness
+  const lead = bevel ? h : 0;         // the bevel tip's overhang
+  const flat = lead + h;              // post's full-thickness run
+  const neck = flat + s;              // where the chamfer meets the shaft
+  const P = (p, q) => wallPt(seg, p, q);
+
+  const pts = [];
+  if (bevel) pts.push(P(a0 + lead, -h)); else pts.push(P(a0, -h));
+  pts.push(P(a0 + flat, -h), P(a0 + neck, -s), P(a1 - neck, -s), P(a1 - flat, -h));
+  if (bevel) pts.push(P(a1 - lead, -h), P(a1, 0), P(a1 - lead, h));
+  else pts.push(P(a1, -h), P(a1, h));
+  pts.push(P(a1 - flat, h), P(a1 - neck, s), P(a0 + neck, s), P(a0 + flat, h));
+  if (bevel) pts.push(P(a0 + lead, h), P(a0, 0)); else pts.push(P(a0, h));
+
+  ops.poly(pts, 'none', RAIL_INK, WALL_STROKE * u * 0.8);
+}
+
+/** Paint a door: a brown frame filling the opening, a hinge RING at one end, and
+ *  a 45° swing leaf — a panel as long as the opening and as wide as the wall —
+ *  sweeping into the adjacent cell. `orient` (0..3) picks the hinge end (bit 1)
+ *  and the swing side (bit 0), which is its rotate and its flip. */
+function paintDoor(seg, orient, ops, opts = {}) {
+  const { a0, a1, u } = seg;
+  const sw = WALL_STROKE * u;
+  const bar = wallBar(seg, opts);
+  ops.poly(bar.pts, DOOR_FILL, DOOR_INK, sw);
+
   const hingeAtEnd = (orient & 2) !== 0;
   const swing = (orient & 1) ? -1 : 1;
-  const hp = hingeAtEnd ? a1 : a0;         // which end the hinge sits on
-  const dir = hingeAtEnd ? -1 : 1;         // the leaf sweeps toward the other end
-  const hinge = P(hp, 0);
-  ops.circle(hinge.x, hinge.y, 0.03 * u, 'none', '#392b00', sw);
+  const r = HINGE_R * u;
+  const inset = (opts.bevel === false ? 0 : bar.h) + r;
+  const hp = hingeAtEnd ? a1 - inset : a0 + inset;
+  const dir = hingeAtEnd ? -1 : 1;                 // the leaf sweeps to the far end
+  const hinge = wallPt(seg, hp, 0);
+  ops.circle(hinge.x, hinge.y, r, 'none', DOOR_INK, sw);
 
-  const comp = (a1 - a0) / Math.SQRT2;     // a 45° leaf of length = opening width
-  const tip = P(hp + dir * comp, swing * comp);
+  // The panel is the opening's length (less the wall's own thickness), laid at
+  // 45°, and is drawn as an outline so the floor shows through it.
+  const leaf = (a1 - a0) - bar.h * 2;
+  const comp = leaf / Math.SQRT2;
+  const tip = wallPt(seg, hp + dir * comp, swing * comp);
   const dx = tip.x - hinge.x, dy = tip.y - hinge.y, len = Math.hypot(dx, dy) || 1;
-  const lw = 0.06 * u, nx = (-dy / len) * (lw / 2), ny = (dx / len) * (lw / 2);
+  const nx = (-dy / len) * bar.h, ny = (dx / len) * bar.h;
   ops.poly([
     { x: hinge.x + nx, y: hinge.y + ny }, { x: tip.x + nx, y: tip.y + ny },
     { x: tip.x - nx, y: tip.y - ny }, { x: hinge.x - nx, y: hinge.y - ny },
