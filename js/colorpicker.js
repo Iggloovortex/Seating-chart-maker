@@ -136,11 +136,14 @@ function enhanceColorInput(input) {
 }
 
 // Icon glyphs for the picker's tool row (Bootstrap Icons style, MIT).
+// Drawn as an OUTLINE, not a solid: it sits beside the palette, and every other
+// icon in the app is a stroked shape rather than a filled silhouette.
 const CPICK_EYE =
   '<path d="M13.354.646a1.207 1.207 0 0 0-1.708 0L8.5 3.793l-.646-.647a.5.5 0 1 0-.708.708' +
   'L8.293 5l-7.147 7.146A.5.5 0 0 0 1 12.5v1.793l-.854.853a.5.5 0 1 0 .708.707L1.707 15H3.5' +
   'a.5.5 0 0 0 .354-.146L11 7.707l1.146 1.147a.5.5 0 0 0 .708-.708l-.647-.646 3.147-3.146' +
-  'a1.207 1.207 0 0 0 0-1.708z"/>';
+  'a1.207 1.207 0 0 0 0-1.708z" fill="none" stroke="currentColor" stroke-width="1.1" ' +
+  'stroke-linejoin="round"/>';
 const CPICK_PALETTE =
   '<path d="M8 1a7 7 0 1 0 0 14h1.5a1.5 1.5 0 0 0 0-3H9a1 1 0 0 1 0-2h2a4 4 0 0 0 4-4' +
   'c0-3.3-3.1-5-7-5z" fill="none" stroke="currentColor" stroke-width="1.3"/>' +
@@ -328,14 +331,21 @@ function openColorPopover(anchor, value, onPick) {
     });
   }
 
-  // Transparent — offered on every swatch that is not a fill.
+  // Transparent — offered on every swatch that is not a fill, and a TOGGLE: the
+  // swatch keeps the colour it had underneath, so turning transparency back off
+  // restores it rather than making you find that colour again. The popover stays
+  // open, since a toggle you cannot immediately undo is not much of a toggle.
   if (allowsTransparent(anchor)) {
-    const t = tool('Transparent — draw nothing here', (b) => {
+    const t = tool('Transparent — draw nothing here (click again to restore)', (b) => {
       const chip = document.createElement('span');
       chip.className = 'cpick__checker';
       chip.setAttribute('aria-hidden', 'true');
       b.appendChild(chip);
-    }, () => { onPick(TRANSPARENT, true); closeColorPopover(); });
+    }, () => {
+      const goClear = colorOf(anchor) !== TRANSPARENT;
+      onPick(goClear ? TRANSPARENT : anchor.value, true);
+      t.setAttribute('aria-pressed', String(goClear));
+    });
     t.setAttribute('aria-pressed', String(colorOf(anchor) === TRANSPARENT));
   }
 

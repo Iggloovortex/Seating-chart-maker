@@ -52,8 +52,10 @@ inputs, chips), `--tap: 44px` (min touch target — buttons/inputs/swatches),
   popover is wired by `enhanceColorInput` (`js/colorpicker.js`); hex accepts
   values with/without `#`. Its footer is one row of equal icon-only tools —
   eyedropper, Transparent, save-to-palette — over a 5-slot saved-colour bar
-  (`config.customColors`, newest first, `saveCustomColor`). Every swatch offers
-  **Transparent** — except a
+  (`config.customColors`, newest first, `saveCustomColor`). Transparent is a
+  **toggle**: the swatch keeps the colour underneath, so turning it off restores
+  that colour rather than making you find it again. Every swatch offers it —
+  except a
   FILL, which opts out with `data-no-transparent="1"` (an empty square already
   says "nothing"); `swatch()` sets that automatically for any label matching
   /fill/i. Read a swatch with `colorOf(input)` and write one with
