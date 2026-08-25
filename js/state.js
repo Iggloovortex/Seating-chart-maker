@@ -602,69 +602,94 @@ function pasteSquareTo(keys) {
 /** Shift every selected square (and any table wholly inside the selection) by
  *  `dr, dc`. Returns false and changes nothing when the move would leave the
  *  grid, so the caller can silently ignore it and let the user try again. */
-function moveSelection(dr, dc) {
-  if (!dr && !dc) return false;
-  const keys = [...state.selection];
-  if (!keys.length) return false;
-
+/** Shift a set of squares by `dr, dc` — the cells themselves plus any table or
+ *  merge lying wholly inside the set. Returns false and changes nothing when the
+ *  move would leave the grid. `displaced`, when given, collects the cells that
+ *  were standing on the destinations, so a caller can put them somewhere rather
+ *  than let them be overwritten.
+ *
+ *  This is the one move: both the selection's move handle and a square dragged
+ *  to a new cell go through it, so they can never drift apart. Call it inside a
+ *  batch — it does not emit. */
+function shiftCells(keys, dr, dc, displaced) {
   for (const k of keys) {
     const [r, c] = parseKey(k);
     if (!inBounds(r + dr, c + dc)) return false; // off-grid: silent no-op
   }
+  const at = (k) => { const [r, c] = parseKey(k); return keyOf(r + dr, c + dc); };
 
   // Capture before deleting, so moves that overlap their own source still work.
   const moved = new Map();
   for (const k of keys) {
-    const [r, c] = parseKey(k);
     const cell = state.cells.get(k);
-    if (cell) moved.set(keyOf(r + dr, c + dc), cell);
+    if (cell) moved.set(at(k), cell);
   }
   const selected = new Set(keys);
+  if (displaced) {
+    for (const k of keys) {
+      const dest = at(k);
+      if (selected.has(dest)) continue;     // landing on ground we are vacating
+      const cell = state.cells.get(dest);
+      if (cell) displaced.set(dest, cell);
+    }
+  }
 
-  batch(() => {
-    for (const k of keys) state.cells.delete(k);
-    for (const [k, cell] of moved) state.cells.set(k, cell);
-    for (const t of state.tables) {
-      if (t.cellKeys.every((k) => selected.has(k))) {
-        t.cellKeys = t.cellKeys.map((k) => {
-          const [r, c] = parseKey(k);
-          return keyOf(r + dr, c + dc);
-        });
-      }
+  for (const k of keys) state.cells.delete(k);
+  for (const [k, cell] of moved) state.cells.set(k, cell);
+  for (const t of state.tables) {
+    if (t.cellKeys.every((k) => selected.has(k))) t.cellKeys = t.cellKeys.map(at);
+  }
+  // A table or merge travels only when its whole self is in the moved set.
+  for (const m of state.merges) {
+    if (m.keys.every((k) => selected.has(k))) {
+      m.keys = sortCellKeys(m.keys.map(at));
+      if (m.anchor) m.anchor = at(m.anchor);
     }
-    // A merge travels only when its whole self is in the moved selection.
-    for (const m of state.merges) {
-      if (m.keys.every((k) => selected.has(k))) {
-        const move = (k) => { const [r, c] = parseKey(k); return keyOf(r + dr, c + dc); };
-        m.keys = sortCellKeys(m.keys.map(move));
-        if (m.anchor) m.anchor = move(m.anchor);
-      }
-    }
-    // The moved squares travel with the drag; filters stay out of it, since a
-    // move is as explicit a pick as a rectangle.
-    selectionReplace(keys.map((k) => {
-      const [r, c] = parseKey(k);
-      return keyOf(r + dr, c + dc);
-    }));
-  });
+  }
   return true;
 }
 
-/** Swap two squares outright — everything they hold, a split and its pieces
- *  included, since the whole cell travels. This is what dragging one square onto
- *  another does: an empty target simply receives it, an occupied one trades
- *  places, so a drag never destroys anything. */
-function swapCells(aKey, bKey) {
-  if (aKey === bKey) return false;
-  const [ar, ac] = parseKey(aKey), [br, bc] = parseKey(bKey);
-  if (!inBounds(ar, ac) || !inBounds(br, bc)) return false;
-  if (typeof historyCheckpoint === 'function') historyCheckpoint();
-  const a = state.cells.get(aKey), b = state.cells.get(bKey);
+/** Shift every selected square (and any table wholly inside the selection) by
+ *  `dr, dc`. Returns false and changes nothing when the move would leave the
+ *  grid, so the caller can silently ignore it and let the user try again. */
+function moveSelection(dr, dc) {
+  if (!dr && !dc) return false;
+  const keys = [...state.selection];
+  if (!keys.length) return false;
+  let ok = false;
   batch(() => {
-    if (a) state.cells.set(bKey, a); else state.cells.delete(bKey);
-    if (b) state.cells.set(aKey, b); else state.cells.delete(aKey);
+    ok = shiftCells(keys, dr, dc);
+    // The moved squares travel with the drag; filters stay out of it, since a
+    // move is as explicit a pick as a rectangle.
+    if (ok) {
+      selectionReplace(keys.map((k) => {
+        const [r, c] = parseKey(k);
+        return keyOf(r + dr, c + dc);
+      }));
+    }
   });
-  return true;
+  return ok;
+}
+
+/** Drag one square onto another — the same move as the handle's, for a single
+ *  square, and non-destructive: whatever was standing on the destination comes
+ *  back to the square being vacated, so a drop onto an occupied square trades
+ *  places instead of overwriting it. The whole cell travels, a split square and
+ *  its pieces included. The selection is left alone, since a drag outside select
+ *  mode is not a pick. */
+function moveSquare(fromKey, toKey) {
+  if (fromKey === toKey) return false;
+  const [fr, fc] = parseKey(fromKey), [tr, tc] = parseKey(toKey);
+  if (!inBounds(fr, fc) || !inBounds(tr, tc)) return false;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  let ok = false;
+  batch(() => {
+    const displaced = new Map();
+    ok = shiftCells([fromKey], tr - fr, tc - fc, displaced);
+    const other = ok && displaced.get(toKey);
+    if (other) state.cells.set(fromKey, other);
+  });
+  return ok;
 }
 
 /** Bounding box of the current selection, or null when nothing is selected. */

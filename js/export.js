@@ -212,12 +212,25 @@ function wallBarRect(it, sign) {
   const { seg, o } = it;
   const u = seg.u * WALL_OUT_SCALE;    // the export's thinner wall weight
   const half = (WALL_THICK * u) / 2;
-  const grow = (sign * WALL_STROKE * u) / 2;
-  const reach = (m) => (m === 'extend' ? half : m === 'trim' ? -half : 0);
-  const cap = (m) => (m === 'plain' ? grow : 0);
+  const s = (WALL_STROKE * u) / 2;
+  const grow = sign * s;
+  const out = sign > 0;
+  // How far each end runs past the seam — and the two passes want different
+  // things at a junction:
+  //   outline  — claims the whole junction square (and a hair more), so at a
+  //              corner the two bars cover it between them with nothing notched
+  //   interior — reaches exactly its own half-thickness, which lands on the far
+  //              wall's interior edge: the two voids meet in a square corner,
+  //              and it stops short of that wall's OUTER outline instead of
+  //              biting a piece out of it.
+  //   trim     — the far side owns this junction: stop at its face either way.
+  //   plain    — a free end: the outline caps it, so the interior pulls back.
+  const reach = (m) => (m === 'trim' ? -half
+    : m === 'extend' ? (out ? half + s : half - s)
+    : (out ? s : -s));
   const mA = wallEndJoin(o, it.r, it.c, 'A'), mB = wallEndJoin(o, it.r, it.c, 'B');
-  const a0 = seg.a0 - reach(mA) - cap(mA);
-  const a1 = seg.a1 + reach(mB) + cap(mB);
+  const a0 = seg.a0 - reach(mA);
+  const a1 = seg.a1 + reach(mB);
   const t = half + grow;
   return o === 'h'
     ? { x: a0, y: seg.cross - t, w: a1 - a0, h: t * 2 }

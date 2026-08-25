@@ -185,7 +185,7 @@ function initInteractions(chartEl) {
     if (!drag) return;
     const { from, target } = drag;
     cancelSquareDrag();
-    if (target) swapCells(from, target);
+    if (target) moveSquare(from, target);
   }
 
   function cancelSquareDrag() {
