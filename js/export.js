@@ -211,8 +211,9 @@ function canvasWallOps(ctx) {
  *  free end grows, so an outline pass caps it without bleeding into a neighbour. */
 function wallBarRect(it, sign) {
   const { seg, o } = it;
-  const half = (WALL_THICK * seg.u) / 2;
-  const grow = (sign * WALL_STROKE * seg.u) / 2;
+  const u = seg.u * WALL_OUT_SCALE;    // the export's thinner wall weight
+  const half = (WALL_THICK * u) / 2;
+  const grow = (sign * WALL_STROKE * u) / 2;
   const reach = (m) => (m === 'extend' ? half : m === 'trim' ? -half : 0);
   const cap = (m) => (m === 'plain' ? grow : 0);
   const mA = wallEndJoin(o, it.r, it.c, 'A'), mB = wallEndJoin(o, it.r, it.c, 'B');
@@ -276,13 +277,13 @@ function drawWalls(ctx, rectOf) {
       const p = wallPt(it.seg, along, 0);
       posts.set(`${Math.round(p.x)},${Math.round(p.y)}`, { p, u: it.seg.u });
     }
-    paintRailing(it.seg, ops, { bevel: false, endA, endB });
+    paintRailing(it.seg, ops, { bevel: false, out: true, endA, endB });
   }
-  for (const { p, u } of posts.values()) paintRailingPost(p.x, p.y, u, ops);
+  for (const { p, u } of posts.values()) paintRailingPost(p.x, p.y, u, ops, { out: true });
 
   for (const it of items) {
     if (isWallBar(it.type) || it.type === 'railing') continue;
-    const opts = { bevel: false, endA: wallEndJoin(it.o, it.r, it.c, 'A'),
+    const opts = { bevel: false, out: true, endA: wallEndJoin(it.o, it.r, it.c, 'A'),
                    endB: wallEndJoin(it.o, it.r, it.c, 'B') };
     paintDoor(it.seg, wallOrient(it.value), ops, opts);
   }

@@ -95,8 +95,19 @@ function wallSegment(o, r, c, rectOf, gap = 0) {
 //            same wall, that end's cap is left off entirely, so a row of hollow
 //            walls reads as one continuous hollow run (see the 3-hollow-walls
 //            reference, whose middle segment has no caps at all).
+//
+// The export additionally draws everything THINNER (WALL_OUT_SCALE). At full
+// reference weight a wall is 0.0909 of a cell, which — sitting centred on a seam
+// — is wide enough to bury the 0.03-cell borders of the squares either side of
+// it. Scaled down, a wall still reads as a wall but the layout it runs through
+// stays visible. Every wall measure scales together, so the proportions (and so
+// the look) are unchanged.
 const WALL_THICK = 0.0909;
 const WALL_STROKE = 0.0295;
+const WALL_OUT_SCALE = 0.5;
+/** Weight multiplier for a set of paint options: the export's thin walls, or the
+ *  grid's full-weight ones. */
+function wallScale(opts) { return opts && opts.out ? WALL_OUT_SCALE : 1; }
 const WALL_INK = '#000000';
 const DOOR_FILL = '#6c4c00';
 const DOOR_INK = '#392b00';
@@ -118,8 +129,9 @@ function wallPt(seg, p, q) {
 /** How far an end moves for its join mode: a 'through' end bleeds a hair past the
  *  seam so two bars fuse with no hairline; 'extend' claims the corner square;
  *  'trim' gives it up and stops against the perpendicular wall's face. */
-function wallSpan(seg, { endA = 'plain', endB = 'plain' } = {}) {
-  const u = seg.u;
+function wallSpan(seg, opts = {}) {
+  const { endA = 'plain', endB = 'plain' } = opts;
+  const u = seg.u * wallScale(opts);
   const h = (WALL_THICK * u) / 2;
   const bleed = WALL_STROKE * u * 0.5;
   const adj = (m) => (m === 'through' ? -bleed : m === 'extend' ? -h : m === 'trim' ? h : 0);
@@ -167,7 +179,7 @@ function strokeWallCap(ops, bar, end, ink, sw) {
  *  stroked; each end cap only when `opts` asks for it. */
 function paintWall(seg, type, ops, opts = {}) {
   if (type === 'railing') return paintRailing(seg, ops, opts);
-  const sw = WALL_STROKE * seg.u;
+  const sw = WALL_STROKE * seg.u * wallScale(opts);
   const bar = wallBar(seg, opts);
   const fill = type === 'wall' ? '#909090' : type === 'window' ? '#d8feff' : 'none';
   if (fill !== 'none') ops.poly(bar.pts, fill, 'none', 0);
@@ -182,7 +194,7 @@ function paintWall(seg, type, ops, opts = {}) {
  *  posts end in a bevelled point on the grid and square on the export. */
 function paintRailing(seg, ops, opts = {}) {
   const { bevel = true, endA = 'post', endB = 'post' } = opts;
-  const u = seg.u;
+  const u = seg.u * wallScale(opts);
   const h = (WALL_THICK * u) / 2;
   const s = h / 2;                    // shaft half-thickness
   // A shaft stops at the ring's centreline where a railing turns the corner, so
@@ -224,7 +236,8 @@ function paintRailing(seg, ops, opts = {}) {
 
 /** The octagonal post where railings turn a corner: a regular octagon ring with
  *  its vertices on the axes and the diagonals, centred on the junction. */
-function paintRailingPost(cx, cy, u, ops) {
+function paintRailingPost(cx, cy, cellU, ops, opts = {}) {
+  const u = cellU * wallScale(opts);
   const h = (WALL_THICK * u) / 2;
   const r = RAIL_POST_R * h;
   const pts = [];
@@ -240,7 +253,7 @@ function paintRailingPost(cx, cy, u, ops) {
  *  sweeping into the adjacent cell. `orient` (0..3) picks the hinge end (bit 1)
  *  and the swing side (bit 0), which is its rotate and its flip. */
 function paintDoor(seg, orient, ops, opts = {}) {
-  const u = seg.u;
+  const u = seg.u * wallScale(opts);
   const sw = WALL_STROKE * u;
   const bar = wallBar(seg, opts);
   const { a0, a1 } = bar;

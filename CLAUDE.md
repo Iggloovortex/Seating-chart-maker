@@ -71,7 +71,11 @@ and push it; don't stack new work directly on `main`.
 - **Walls — DONE** (branch `claude/walls-tmdavo`). Edge objects on the seams
   between squares and the outer border, styled from user-supplied reference SVGs.
   Every type is a bar one cell long and `WALL_THICK` (0.0909u) thick, outlined at
-  `WALL_STROKE` (0.0295u) — proportions measured off the reference SVGs.
+  `WALL_STROKE` (0.0295u) — proportions measured off the reference SVGs. The
+  export draws every wall measure scaled by `WALL_OUT_SCALE` (0.5, opted into
+  with `out: true`): at full weight a wall centred on a seam buries the 0.03u
+  borders of the squares either side, so the thin version keeps the layout
+  readable. It is the one dial for how heavy exported walls look.
   **Two looks, one geometry** (`wallBar`, js/layout.js): the editing grid draws
   45° **bevelled** ends so perpendicular runs miter at corners; the export draws
   **square** ends and, where the neighbouring collinear edge carries the SAME
