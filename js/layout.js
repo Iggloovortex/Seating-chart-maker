@@ -124,11 +124,57 @@ const RAIL_STROKE = WALL_STROKE * 0.6;
 const RAIL_POST_R = 1.35;    // corner post's ring radius, as a share of half-thickness
 const HINGE_R = 0.0424;      // hinge ring's mid-radius
 
+/** A hex colour at partial strength, for the marks that should read as notation
+ *  rather than structure — a door's swing arc, a window's glass hatch. */
+function fadeInk(hex, alpha) {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(hex || ''));
+  if (!m) return hex;
+  return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, ${alpha})`;
+}
+
+/** The swing leaf is drawn faded, so it reads as the door's arc rather than
+ *  another wall. Follows the door's own outline colour. */
+function doorLeafInk() { return fadeInk(doorInkColor(), 0.46); }
+
 /** The user's wall colours (Walls bar), falling back to the reference values.
  *  A window keeps its own glass tint — that is what makes it read as glass — and
  *  doors and railings keep their own palette. */
 function wallFillColor() { return (state.defaults && state.defaults.wallFill) || '#909090'; }
 function wallInkColor() { return (state.defaults && state.defaults.wallBorder) || WALL_INK; }
+function railFillColor() { return (state.defaults && state.defaults.railFill) || '#909090'; }
+function railInkColor() { return (state.defaults && state.defaults.railBorder) || RAIL_INK; }
+function doorFillColor() { return (state.defaults && state.defaults.doorFill) || DOOR_FILL; }
+function doorInkColor() { return (state.defaults && state.defaults.doorBorder) || DOOR_INK; }
+
+/** Rule a window's glass with the `/ / /` hatch that names it as glass at a
+ *  glance. `rect` is the pane — the bar's INSIDE, which each renderer already
+ *  computes — and `u` its cell size, so the spacing and weight scale with it. */
+function paintWindowHatch(rect, u, ops) {
+  const sw = WALL_STROKE * u * 0.5;
+  // Widely spaced and faint: enough to say "glass" at a glance without the rule
+  // competing with the wall it sits in.
+  const ink = fadeInk(wallInkColor(), 0.3);
+  for (const l of hatchSegments(rect, WALL_THICK * u * 1.7)) {
+    ops.line(l.x1, l.y1, l.x2, l.y2, ink, sw);
+  }
+}
+
+/** The `/ / /` hatch that marks a window as glass. Returns the line segments of
+ *  a 45° rule clipped to `rect` — the same geometry for the SVG grid overlay and
+ *  the canvas export, so the two hatch identically. */
+function hatchSegments(rect, spacing) {
+  const x0 = rect.x, y0 = rect.y, x1 = rect.x + rect.w, y1 = rect.y + rect.h;
+  const out = [];
+  if (!(spacing > 0) || x1 <= x0 || y1 <= y0) return out;
+  // Every line is x + y = c; walking c across the box sweeps the whole rule.
+  const first = Math.ceil((x0 + y0) / spacing) * spacing;
+  for (let c = first; c <= x1 + y1; c += spacing) {
+    const ax = Math.max(x0, c - y1), bx = Math.min(x1, c - y0);
+    if (ax >= bx) continue;
+    out.push({ x1: ax, y1: c - ax, x2: bx, y2: c - bx });
+  }
+  return out;
+}
 
 /** A point `p` along the seam and `q` across it. */
 function wallPt(seg, p, q) {
@@ -208,14 +254,15 @@ function paintWall(seg, type, ops, opts = {}) {
  *  half-thickness shaft between them, and a 45° chamfer joining the two. The
  *  posts end in a bevelled point on the grid and square on the export. */
 function paintRailing(seg, ops, opts = {}) {
-  const { bevel = true, endA = 'post', endB = 'post' } = opts;
+  const { bevel = true, endA = 'post', endB = 'post', clipA = 0, clipB = 0 } = opts;
   const u = seg.u * railScale(opts);
   const h = (WALL_THICK * u) / 2;
   const s = h / 2;                    // shaft half-thickness
   // A shaft stops at the ring's centreline where a railing turns the corner, so
-  // the octagonal post covers its cut end.
-  const a0 = seg.a0 + (endA === 'corner' ? RAIL_POST_R * h : 0);
-  const a1 = seg.a1 - (endB === 'corner' ? RAIL_POST_R * h : 0);
+  // the octagonal post covers its cut end. `clipA`/`clipB` shorten it further at
+  // an end that runs into a wall or a door, so the two never overlap.
+  const a0 = seg.a0 + (endA === 'corner' ? RAIL_POST_R * h : 0) + clipA;
+  const a1 = seg.a1 - (endB === 'corner' ? RAIL_POST_R * h : 0) - clipB;
   const lead = bevel ? h : 0;         // the bevel tip's overhang
   const flat = lead + h;              // post's full-thickness run
   const neck = flat + s;              // where the chamfer meets the shaft
@@ -246,7 +293,7 @@ function paintRailing(seg, ops, opts = {}) {
     pts.push(P(a0, s));
   }
 
-  ops.poly(pts, 'none', RAIL_INK, RAIL_STROKE * u);
+  ops.poly(pts, railFillColor(), railInkColor(), RAIL_STROKE * u);
 }
 
 /** The octagonal post where railings turn a corner: a regular octagon ring with
@@ -256,11 +303,13 @@ function paintRailingPost(cx, cy, cellU, ops, opts = {}) {
   const h = (WALL_THICK * u) / 2;
   const r = RAIL_POST_R * h;
   const pts = [];
+  // Turned an eighth of a turn from vertex-up, so the top, bottom, left and
+  // right of the ring are FLAT faces squared to the grid rather than points.
   for (let i = 0; i < 8; i++) {
-    const a = (i * Math.PI) / 4;
+    const a = (i + 0.5) * (Math.PI / 4);
     pts.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) });
   }
-  ops.poly(pts, 'none', RAIL_INK, RAIL_STROKE * u);
+  ops.poly(pts, railFillColor(), railInkColor(), RAIL_STROKE * u);
 }
 
 /** Paint a door: a brown frame filling the opening, a hinge RING at one end, and
@@ -272,7 +321,7 @@ function paintDoor(seg, orient, ops, opts = {}) {
   const sw = WALL_STROKE * u;
   const bar = wallBar(seg, opts);
   const { a0, a1 } = bar;
-  ops.poly(bar.pts, DOOR_FILL, DOOR_INK, sw);
+  ops.poly(bar.pts, doorFillColor(), doorInkColor(), sw);
 
   const hingeAtEnd = (orient & 2) !== 0;
   const swing = (orient & 1) ? -1 : 1;
@@ -281,7 +330,7 @@ function paintDoor(seg, orient, ops, opts = {}) {
   const hp = hingeAtEnd ? a1 - inset : a0 + inset;
   const dir = hingeAtEnd ? -1 : 1;                 // the leaf sweeps to the far end
   const hinge = wallPt(seg, hp, 0);
-  ops.circle(hinge.x, hinge.y, r, 'none', DOOR_INK, sw);
+  ops.circle(hinge.x, hinge.y, r, 'none', doorInkColor(), sw);
 
   // The panel is the opening's length (less the wall's own thickness), laid at
   // 45°, and is drawn as an outline so the floor shows through it.
@@ -293,7 +342,7 @@ function paintDoor(seg, orient, ops, opts = {}) {
   ops.poly([
     { x: hinge.x + nx, y: hinge.y + ny }, { x: tip.x + nx, y: tip.y + ny },
     { x: tip.x - nx, y: tip.y - ny }, { x: hinge.x - nx, y: hinge.y - ny },
-  ], 'none', 'rgba(57,43,0,0.46)', sw);
+  ], 'none', doorLeafInk(), sw);
 }
 
 /** Per-square sizing rules for the current state. Computes table footprints

@@ -458,6 +458,17 @@
             <input id="def-table-border" type="color" class="defaults__swatch" aria-label="Default table border color" />
           </label>
         </div>
+        <span class="defaults__rule" aria-hidden="true"></span>
+        <div class="defaults__set defaults__set--wall">
+          <label class="defaults__item">
+            <span class="defaults__label">Wall</span>
+            <input id="def-wall-fill" type="color" class="defaults__swatch" aria-label="Wall fill color" />
+          </label>
+          <label class="defaults__item">
+            <span class="defaults__label">Border</span>
+            <input id="def-wall-border" type="color" class="defaults__swatch" aria-label="Wall border color" />
+          </label>
+        </div>
       </div>
     </header>
 
@@ -505,23 +516,52 @@
     </div>
 
     <!-- Walls bar: pick a wall type, then click the seams to place it. -->
+    <!-- Walls bar: pick a wall type, then click the seams to place it. Each
+         group of types sits in its own section, with the colours that belong to
+         it; the universal Fill/Border live in Default Colors above. -->
     <div id="wall-bar" class="selectbar" hidden>
-      <span class="selectbar__count">Click a seam to place · click a door again to rotate/flip:</span>
+      <span class="selectbar__count">Click a seam to place &middot; click a door again to rotate/flip:</span>
       <div class="selectbar__actions">
-        <div id="wall-types" class="wall-types" role="group" aria-label="Wall type"></div>
+        <div class="wall-sec" role="group" aria-label="Walls">
+          <div id="wall-types" class="wall-types"></div>
+        </div>
         <span class="toolbar__sep" aria-hidden="true"></span>
-        <label class="field">
-          <span class="field__label">Fill</span>
-          <input id="wall-fill" class="field__input field__input--color" type="color" value="#909090"
-                 title="Body colour of a solid wall" />
-        </label>
-        <label class="field">
-          <span class="field__label">Border</span>
-          <input id="wall-border" class="field__input field__input--color" type="color" value="#000000"
-                 title="Outline colour of every wall" />
-        </label>
+        <div class="wall-sec" role="group" aria-label="Glass">
+          <div id="wall-types-glass" class="wall-types"></div>
+        </div>
         <span class="toolbar__sep" aria-hidden="true"></span>
-        <button id="wall-clear" class="btn btn--empty" type="button" title="Remove every wall">Clear walls</button>
+        <div class="wall-sec" role="group" aria-label="Railing">
+          <div id="wall-types-rail" class="wall-types"></div>
+          <label class="field">
+            <span class="field__label">Fill</span>
+            <input id="rail-fill" class="field__input field__input--color" type="color" value="#909090"
+                   title="Railing fill" />
+          </label>
+          <label class="field">
+            <span class="field__label">Border</span>
+            <input id="rail-border" class="field__input field__input--color" type="color" value="#000000"
+                   title="Railing border" />
+          </label>
+        </div>
+        <span class="toolbar__sep" aria-hidden="true"></span>
+        <div class="wall-sec" role="group" aria-label="Door">
+          <div id="wall-types-door" class="wall-types"></div>
+          <label class="field">
+            <span class="field__label">Fill</span>
+            <input id="door-fill" class="field__input field__input--color" type="color" value="#6c4c00"
+                   title="Door fill" />
+          </label>
+          <label class="field">
+            <span class="field__label">Border</span>
+            <input id="door-border" class="field__input field__input--color" type="color" value="#392b00"
+                   title="Door border" />
+          </label>
+        </div>
+        <span class="toolbar__sep" aria-hidden="true"></span>
+        <div class="wall-sec" role="group" aria-label="Tools">
+          <div id="wall-types-tool" class="wall-types"></div>
+          <button id="wall-clear" class="btn btn--empty" type="button" title="Remove every wall">Clear walls</button>
+        </div>
       </div>
     </div>
 

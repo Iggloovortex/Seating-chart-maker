@@ -276,20 +276,31 @@ function drawWalls(ctx, rectOf) {
   }
 
   const ops = canvasWallOps(ctx);
+  // Glass: rule each window's pane, which is exactly the interior rect the pass
+  // above just filled.
+  for (const it of bars) {
+    if (it.type !== 'window') continue;
+    const b = wallBarRect(it, -1);
+    if (b.w > 0 && b.h > 0) paintWindowHatch(b, it.seg.u * WALL_OUT_SCALE, ops);
+  }
   // Railings: posts only at free ends, so a run's shaft passes through unbroken;
   // where railings turn, one octagonal post is drawn on the shared junction.
   const posts = new Map();
   for (const it of items) {
     if (it.type !== 'railing') continue;
-    const endA = railingEnd(it.o, it.r, it.c, 'A');
-    const endB = railingEnd(it.o, it.r, it.c, 'B');
+    const jA = railingJoin(it.o, it.r, it.c, 'A'), jB = railingJoin(it.o, it.r, it.c, 'B');
+    const endA = jA.mode, endB = jB.mode;
+    // Stop short of anything that is not a railing, by that wall's own half
+    // thickness, so a rail never runs into a wall or a door.
+    const wallHalf = (WALL_THICK * it.seg.u * WALL_OUT_SCALE) / 2;
+    const clipA = jA.meetsWall ? wallHalf : 0, clipB = jB.meetsWall ? wallHalf : 0;
     for (const [end, mode] of [['A', endA], ['B', endB]]) {
       if (mode !== 'corner') continue;
       const along = end === 'A' ? it.seg.a0 : it.seg.a1;
       const p = wallPt(it.seg, along, 0);
       posts.set(`${Math.round(p.x)},${Math.round(p.y)}`, { p, u: it.seg.u });
     }
-    paintRailing(it.seg, ops, { bevel: false, out: true, endA, endB });
+    paintRailing(it.seg, ops, { bevel: false, out: true, endA, endB, clipA, clipB });
   }
   for (const { p, u } of posts.values()) paintRailingPost(p.x, p.y, u, ops, { out: true });
 

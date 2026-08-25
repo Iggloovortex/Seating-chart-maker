@@ -183,7 +183,8 @@ body {
   gap: 6px 10px;
 }
 .defaults__set--icon,
-.defaults__set--table { grid-template-columns: auto; }
+.defaults__set--table,
+.defaults__set--wall { grid-template-columns: auto; }
 .defaults__rule { width: 1px; background: var(--line); }
 .defaults__item {
   display: flex;
@@ -724,20 +725,26 @@ body {
   overflow: visible;
   z-index: 3;
 }
-/* The interactive edge layer, only shown in walls mode (renderWallEdges). */
+/* The interactive edge layer, only shown in walls mode (renderWallEdges). The
+   layer itself is transparent to the pointer — only the seam strips take clicks
+   — so a click that misses a seam still reaches the square underneath (the same
+   pattern the table overlays use). */
 .wall-edges {
   position: absolute;
   left: 0;
   top: 0;
   overflow: visible;
   z-index: 6;
+  pointer-events: none;
 }
-.wall-edge { fill: transparent; cursor: pointer; }
+.wall-edge { fill: transparent; cursor: pointer; pointer-events: all; }
 .wall-edge:hover { fill: rgba(47, 111, 235, .35); }
 .wall-edge--set { fill: rgba(47, 111, 235, .14); }
 
-/* Wall-type picker in the walls bar. */
+/* Wall-type picker in the walls bar. Each section groups the types that belong
+   together with the colours that drive them; a toolbar rule divides them. */
 .wall-types { display: flex; gap: 6px; flex-wrap: wrap; }
+.wall-sec { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .wall-type[aria-pressed="true"] {
   background: var(--accent);
   color: var(--accent-ink);

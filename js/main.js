@@ -39,6 +39,7 @@ const DEFAULT_COLOR_INPUTS = {
   fill: 'def-fill', border: 'def-border', iconColor: 'def-icon',
   labelColor: 'def-label', labelColor2: 'def-label2',
   tableColor: 'def-table', tableBorder: 'def-table-border',
+  wallFill: 'def-wall-fill', wallBorder: 'def-wall-border',
 };
 for (const [key, id] of Object.entries(DEFAULT_COLOR_INPUTS)) {
   const el = document.getElementById(id);

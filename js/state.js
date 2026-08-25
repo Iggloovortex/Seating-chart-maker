@@ -56,6 +56,10 @@ const DEFAULTS = {
   tableBorder: '#5d4037',
   wallFill: '#909090',      // a solid wall's body
   wallBorder: '#000000',    // the outline every wall bar is drawn with
+  railFill: '#909090',      // a railing's body
+  railBorder: '#000000',    // a railing's outline
+  doorFill: '#6c4c00',      // a door's leaf and frame
+  doorBorder: '#392b00',    // a door's outline, hinge ring and swing leaf
   rowWeight: 1,
   colWeight: 1,
 };
@@ -132,6 +136,10 @@ const state = {
     tableBorder: DEFAULTS.tableBorder,
     wallFill: DEFAULTS.wallFill,
     wallBorder: DEFAULTS.wallBorder,
+    railFill: DEFAULTS.railFill,
+    railBorder: DEFAULTS.railBorder,
+    doorFill: DEFAULTS.doorFill,
+    doorBorder: DEFAULTS.doorBorder,
   },
   grid: { cols: 6, rows: 5 },
   cells: new Map(),             // key "r,c" -> cell
@@ -1285,17 +1293,25 @@ function wallEndJoin(o, r, c, end) {
  *               through: no posts back to back in the middle of a run
  *    'corner' — a railing turns here, so the shaft stops short and an octagonal
  *               post is drawn on the junction instead (see paintRailingPost) */
-function railingEnd(o, r, c, end) {
+function railingJoin(o, r, c, end) {
   const R = o === 'h' ? r : (end === 'A' ? r : r + 1);
   const C = o === 'h' ? (end === 'A' ? c : c + 1) : c;
-  const perp = (o === 'h'
-    ? [wallAt('v', R - 1, C), wallAt('v', R, C)]
-    : [wallAt('h', R, C - 1), wallAt('h', R, C)]).map(wallTypeOf);
-  if (perp.some((t) => t === 'railing')) return 'corner';
   const collinear = wallTypeOf(o === 'h'
     ? wallAt('h', R, end === 'A' ? C - 1 : C)
     : wallAt('v', end === 'A' ? R - 1 : R, C));
-  return collinear === 'railing' ? 'open' : 'post';
+  const perp = (o === 'h'
+    ? [wallAt('v', R - 1, C), wallAt('v', R, C)]
+    : [wallAt('h', R, C - 1), wallAt('h', R, C)]).map(wallTypeOf);
+  const arms = [collinear, ...perp];
+  return {
+    // A turn, a tee or a multi-way meeting is where a railing changes direction:
+    // that junction gets the octagonal post. A straight run does not — its
+    // segments simply meet end post to end post.
+    mode: perp.some((t) => t === 'railing') ? 'corner' : 'post',
+    // Anything that is not a railing — a wall, hollow, window or door — owns the
+    // junction, and the railing stops short of it rather than running into it.
+    meetsWall: arms.some((t) => t && t !== 'railing'),
+  };
 }
 
 /** Coerce a wall value to a stored form, or null when it isn't a real wall. */
@@ -1420,6 +1436,10 @@ function deserialize(data) {
       tableBorder: data.defaults?.tableBorder || DEFAULTS.tableBorder,
       wallFill: data.defaults?.wallFill || DEFAULTS.wallFill,
       wallBorder: data.defaults?.wallBorder || DEFAULTS.wallBorder,
+      railFill: data.defaults?.railFill || DEFAULTS.railFill,
+      railBorder: data.defaults?.railBorder || DEFAULTS.railBorder,
+      doorFill: data.defaults?.doorFill || DEFAULTS.doorFill,
+      doorBorder: data.defaults?.doorBorder || DEFAULTS.doorBorder,
     };
     state.grid = {
       cols: clampInt(data.grid?.cols, 1, 40, 6),

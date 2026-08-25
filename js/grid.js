@@ -1200,6 +1200,7 @@ function renderWalls() {
   const svg = makeWallsSvg('walls-layer');
   const ops = svgWallOps(svg);
   const rectOf = (r, c) => cellXYWH(r, c);
+  const posts = new Map();   // railing corners, one octagon per junction
   for (const [key, value] of Object.entries(state.walls)) {
     const m = /^([hv]):(\d+),(\d+)$/.exec(key);
     if (!m) continue;
@@ -1207,11 +1208,64 @@ function renderWalls() {
     if (!seg || !Number.isFinite(seg.cross)) continue;
     // The editing grid keeps the bevelled ends, so runs miter at their corners.
     const type = wallTypeOf(value);
+    const o = m[1], r = Number(m[2]), c = Number(m[3]);
     const opts = { bevel: true };
-    if (type === 'door') paintDoor(seg, wallOrient(value), ops, opts);
-    else paintWall(seg, type, ops, opts);
+    if (type === 'railing') {
+      const jA = railingJoin(o, r, c, 'A'), jB = railingJoin(o, r, c, 'B');
+      const wallHalf = (WALL_THICK * seg.u) / 2;
+      paintRailing(seg, ops, { ...opts, endA: jA.mode, endB: jB.mode,
+                               clipA: jA.meetsWall ? wallHalf : 0,
+                               clipB: jB.meetsWall ? wallHalf : 0 });
+      for (const [end, j] of [['A', jA], ['B', jB]]) {
+        if (j.mode !== 'corner') continue;
+        const p = wallPt(seg, end === 'A' ? seg.a0 : seg.a1, 0);
+        posts.set(`${Math.round(p.x)},${Math.round(p.y)}`, { p, u: seg.u });
+      }
+    } else if (type === 'door') {
+      paintDoor(seg, wallOrient(value), ops, opts);
+    } else {
+      paintWall(seg, type, ops, opts);
+      // Glass gets its `/ / /` rule, ruled inside the pane.
+      if (type === 'window') {
+        const bar = wallBar(seg, opts);
+        const t = bar.h - WALL_STROKE * seg.u * 0.5;
+        const lo = Math.min(bar.a0, bar.a1), hi = Math.max(bar.a0, bar.a1);
+        const pane = seg.o === 'h'
+          ? { x: lo, y: seg.cross - t, w: hi - lo, h: t * 2 }
+          : { x: seg.cross - t, y: lo, w: t * 2, h: hi - lo };
+        paintWindowHatch(pane, seg.u, ops);
+      }
+    }
   }
+  // One octagonal post per railing junction, over the shafts that meet there.
+  for (const { p, u } of posts.values()) paintRailingPost(p.x, p.y, u, ops);
   chart.appendChild(svg);
+}
+
+/** Which wall a page point lands on, or null. Walls are painted in a
+ *  pointer-events:none layer, so this tests the geometry instead — the same
+ *  segments renderWalls draws, with a little slack for the pointer. Lets a
+ *  right-click on a wall reach the wall rather than the square under it. */
+function wallAtPoint(clientX, clientY) {
+  if (!hasWalls()) return null;
+  const chartRect = chart.getBoundingClientRect();
+  const zoom = chartZoom();
+  const x = (clientX - chartRect.left) / zoom;
+  const y = (clientY - chartRect.top) / zoom;
+  const rectOf = (r, c) => cellXYWH(r, c);
+  for (const key of Object.keys(state.walls)) {
+    const m = /^([hv]):(\d+),(\d+)$/.exec(key);
+    if (!m) continue;
+    const seg = wallSegment(m[1], Number(m[2]), Number(m[3]), rectOf, CELL_GAP);
+    if (!seg || !Number.isFinite(seg.cross)) continue;
+    const reach = (WALL_THICK * seg.u) / 2 + 4;
+    const along = seg.o === 'h' ? x : y;
+    const across = seg.o === 'h' ? y : x;
+    if (along >= seg.a0 && along <= seg.a1 && Math.abs(across - seg.cross) <= reach) {
+      return { o: m[1], r: Number(m[2]), c: Number(m[3]) };
+    }
+  }
+  return null;
 }
 
 /** The interactive edge layer for walls mode: a clickable strip on every seam and

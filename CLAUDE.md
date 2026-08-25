@@ -90,11 +90,26 @@ and push it; don't stack new work directly on `main`.
   readable. It is the one dial for how heavy exported walls look. A RAILING is
   exempt — it is a rail sitting ON a square rather than a divider between them,
   so it uses `RAIL_OUT_SCALE` (1.1) and stays bolder than the walls.
-  Wall colours are chart-wide (walls are not individually selectable):
-  `state.defaults.wallFill` / `wallBorder`, set from the two swatches in the
-  Walls bar, read via `wallFillColor()` / `wallInkColor()` and serialized with
-  the other defaults. A window keeps its own `#d8feff` glass tint, and doors and
-  railings keep their own palettes.
+  Colours are chart-wide (walls are not individually selectable) and serialized
+  with the other defaults. The UNIVERSAL pair — `wallFill` / `wallBorder`, used
+  by wall, hollow and window — is the 4th section of the toolbar's Default
+  Colors; railings (`railFill`/`railBorder`, grey on black) and doors
+  (`doorFill`/`doorBorder`) have their own swatches beside their buttons in the
+  Walls bar, which is divided into sections: [Wall|Hollow] [Window]
+  [Railing+colours] [Door+colours] [Erase|Clear]. Read via `wallFillColor()` /
+  `wallInkColor()` / `railFillColor()` / `railInkColor()` / `doorFillColor()` /
+  `doorInkColor()`; `fadeInk(hex, a)` makes the faded marks (a door's swing arc,
+  a window's hatch). A window keeps its `#d8feff` glass tint AND is ruled with a
+  faint 30%-opacity `/ / /` hatch (`paintWindowHatch` + `hatchSegments`, shared
+  by both renderers) so it reads as glass at a glance.
+  RAILING junctions (`railingJoin`): a straight run meets end post to end post;
+  a turn, tee or multi-way meeting gets the octagonal post instead, turned an
+  eighth so its top, bottom, left and right are flat faces squared to the grid.
+  A railing stops short of anything that is not a railing, so it never runs into
+  a wall or a door.
+  RIGHT-CLICK crosses the modes: in walls mode it steps back out and edits the
+  square under the pointer; on a wall from outside walls mode (hit-tested by
+  `wallAtPoint`, since the wall layer is pointer-transparent) it steps in.
   **Two looks, one geometry** (`wallBar`, js/layout.js): the editing grid draws
   45° **bevelled** ends so perpendicular runs miter at corners; the export draws
   **square** ends and, where the neighbouring collinear edge carries the SAME
