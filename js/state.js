@@ -1099,48 +1099,45 @@ function wallAt(o, r, c) { return state.walls[wallKey(o, r, c)] || null; }
 function wallTypeOf(v) { return v && typeof v === 'object' ? v.t : v; }
 function wallOrient(v) { return v && typeof v === 'object' ? (((v.o | 0) % 4) + 4) % 4 : 0; }
 
-/** The walls on the two collinear edges either side of this one — A is its low
- *  end (left / top), B its high end. Lets the export drop the cap between two
- *  walls of the same type so a run reads as one continuous wall. */
-function wallNeighbors(o, r, c) {
-  return o === 'h'
-    ? [wallAt('h', r, c - 1), wallAt('h', r, c + 1)]
-    : [wallAt('v', r - 1, c), wallAt('v', r + 1, c)];
-}
+/** Wall bars — the types that fuse into one continuous run. A door or a railing
+ *  is a fitting: it sits IN a wall and is drawn on its own. */
+function isWallBar(t) { return t === 'wall' || t === 'hollow' || t === 'window'; }
 
-/** How one end of a wall meets whatever else is at that junction. This is what
- *  keeps the square-ended export from overlapping itself — exactly one wall owns
- *  each corner and the others stop against its face:
- *    'through' — a wall of the SAME type carries straight on: no cap, and the two
- *                bars bleed together into one continuous run
- *    'extend'  — this wall owns the corner, so it covers the whole junction
- *    'trim'    — a perpendicular wall owns the corner: stop at its face
- *    'plain'   — a free end, capped on the seam
- *  A run passing straight through a junction always owns it (it cannot be broken);
- *  where two walls merely turn a corner, the horizontal one owns it. */
+/** How one end of a wall meets whatever else is at that junction:
+ *    'extend' — reach half a thickness past the seam, into the junction. Bars do
+ *               this at every joint: they are drawn as one union (see drawWalls),
+ *               so the overlap is what makes a corner, tee or cross seamless —
+ *               no line runs through the joint.
+ *    'trim'   — stop half a thickness short, against the face of whatever owns
+ *               the junction.
+ *    'plain'  — a free end, capped on the seam.
+ *  An OPENING (a door, or a window closing a run) keeps its full width, because a
+ *  shortened opening reads as a mistake; the walls running into it give way
+ *  instead. The one thing an opening yields to is a wall passing straight through
+ *  the junction, which cannot be broken. */
 function wallEndJoin(o, r, c, end) {
   const type = wallTypeOf(wallAt(o, r, c));
-  const isBar = (t) => t === 'wall' || t === 'hollow' || t === 'window';
   // The grid point this end sits on.
   const R = o === 'h' ? r : (end === 'A' ? r : r + 1);
   const C = o === 'h' ? (end === 'A' ? c : c + 1) : c;
 
-  const collinear = o === 'h'
+  const collinear = wallTypeOf(o === 'h'
     ? wallAt('h', R, end === 'A' ? C - 1 : C)
-    : wallAt('v', end === 'A' ? R - 1 : R, C);
-  if (isBar(type) && wallTypeOf(collinear) === type) return 'through';
-
-  const perp = o === 'h'
+    : wallAt('v', end === 'A' ? R - 1 : R, C));
+  const perp = (o === 'h'
     ? [wallAt('v', R - 1, C), wallAt('v', R, C)]
-    : [wallAt('h', R, C - 1), wallAt('h', R, C)];
-  if (!perp[0] && !perp[1]) return 'plain';
+    : [wallAt('h', R, C - 1), wallAt('h', R, C)]).map(wallTypeOf);
+  const anyPerp = perp.some(Boolean);
+  // A perpendicular run passing straight through this junction owns it outright.
+  const perpThrough = perp.every((t) => isWallBar(t));
 
-  // A door or a railing is a fitting, never the owner of a junction.
-  if (!isBar(type)) return 'trim';
-  const solid = perp.filter((w) => isBar(wallTypeOf(w))).length;
-  if (solid === 2) return 'trim';                  // a run passing through owns it
-  if (solid === 1) return o === 'h' ? 'extend' : 'trim';  // horizontals own corners
-  return 'extend';                                 // only a fitting crosses here
+  if (isWallBar(type)) {
+    // A door across the junction is an opening: it keeps its width, we give way.
+    if (perp.some((t) => t === 'door')) return 'trim';
+    return (collinear || anyPerp) ? 'extend' : 'plain';
+  }
+  if (type === 'door') return perpThrough ? 'trim' : 'plain';
+  return (collinear || anyPerp) ? 'trim' : 'plain';   // a railing always gives way
 }
 
 /** Coerce a wall value to a stored form, or null when it isn't a real wall. */

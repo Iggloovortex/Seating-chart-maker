@@ -206,24 +206,69 @@ function canvasWallOps(ctx) {
   };
 }
 
-/** Draw every wall on its edge. The export look is SQUARE-ended and seamless: the
- *  layout is gapless, so where the next edge carries the same wall its cap is
- *  dropped and the two run together — a row of hollow walls stays hollow end to
- *  end, and a row of solid walls reads as one unbroken wall. (Bevelled ends are
- *  the editing grid's look; see renderWalls.) */
+/** The rectangle a wall bar covers, grown (or shrunk) by half an outline width.
+ *  Ends reach into their junctions or stop short of them per wallEndJoin; only a
+ *  free end grows, so an outline pass caps it without bleeding into a neighbour. */
+function wallBarRect(it, sign) {
+  const { seg, o } = it;
+  const half = (WALL_THICK * seg.u) / 2;
+  const grow = (sign * WALL_STROKE * seg.u) / 2;
+  const reach = (m) => (m === 'extend' ? half : m === 'trim' ? -half : 0);
+  const cap = (m) => (m === 'plain' ? grow : 0);
+  const mA = wallEndJoin(o, it.r, it.c, 'A'), mB = wallEndJoin(o, it.r, it.c, 'B');
+  const a0 = seg.a0 - reach(mA) - cap(mA);
+  const a1 = seg.a1 + reach(mB) + cap(mB);
+  const t = half + grow;
+  return o === 'h'
+    ? { x: a0, y: seg.cross - t, w: a1 - a0, h: t * 2 }
+    : { x: seg.cross - t, y: a0, w: t * 2, h: a1 - a0 };
+}
+
+/** Draw every wall on its edge, square-ended (bevels are the editing grid's look).
+ *
+ *  All the plain bars — wall, hollow and window — are drawn as ONE union: an
+ *  outline pass slightly larger than every bar, then an interior pass slightly
+ *  smaller. Because the bars reach into their shared junctions, corners, tees and
+ *  crosses come out genuinely seamless: no line runs through a joint, a run of
+ *  hollow walls stays hollow end to end, and nothing reads as overlapping.
+ *  Doors and railings are fittings, painted on top with their own outlines. */
 function drawWalls(ctx, rectOf) {
-  const ops = canvasWallOps(ctx);
+  const bg = state.exportBg || '#ffffff';
+  const items = [];
   for (const [key, value] of Object.entries(state.walls)) {
     const m = /^([hv]):(\d+),(\d+)$/.exec(key);
     if (!m) continue;
     const o = m[1], r = Number(m[2]), c = Number(m[3]);
-    const seg = wallSegment(o, r, c, rectOf);
-    const type = wallTypeOf(value);
-    // Each end resolves its own junction, so exactly one wall owns each corner
-    // and nothing overlaps (see wallEndJoin).
-    const opts = { bevel: false, endA: wallEndJoin(o, r, c, 'A'), endB: wallEndJoin(o, r, c, 'B') };
-    if (type === 'door') paintDoor(seg, wallOrient(value), ops, opts);
-    else paintWall(seg, type, ops, opts);
+    items.push({ o, r, c, value, type: wallTypeOf(value), seg: wallSegment(o, r, c, rectOf) });
+  }
+
+  // Bars reach into each other at a junction, so where two types meet the one
+  // painted last owns the overlap. Solid walls go last: a wall crossing a hollow
+  // one reads solid through the joint, rather than by whichever came first.
+  const rank = { hollow: 0, window: 1, wall: 2 };
+  const bars = items.filter((it) => isWallBar(it.type))
+                    .sort((a, b) => rank[a.type] - rank[b.type]);
+  const fill = (t) => (t === 'wall' ? '#909090' : t === 'window' ? '#d8feff' : bg);
+
+  ctx.fillStyle = WALL_INK;
+  for (const it of bars) {
+    const b = wallBarRect(it, 1);
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+  }
+  for (const it of bars) {
+    const b = wallBarRect(it, -1);
+    if (b.w <= 0 || b.h <= 0) continue;
+    ctx.fillStyle = fill(it.type);
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+  }
+
+  const ops = canvasWallOps(ctx);
+  for (const it of items) {
+    if (isWallBar(it.type)) continue;
+    const opts = { bevel: false, endA: wallEndJoin(it.o, it.r, it.c, 'A'),
+                   endB: wallEndJoin(it.o, it.r, it.c, 'B') };
+    if (it.type === 'door') paintDoor(it.seg, wallOrient(it.value), ops, opts);
+    else paintWall(it.seg, it.type, ops, opts);
   }
 }
 
