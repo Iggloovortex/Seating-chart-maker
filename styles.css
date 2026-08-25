@@ -744,7 +744,19 @@ body {
 /* Wall-type picker in the walls bar. Each section groups the types that belong
    together with the colours that drive them; a toolbar rule divides them. */
 .wall-types { display: flex; gap: 6px; flex-wrap: wrap; }
-.wall-sec { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* A section lines its controls up on their BOTTOM edge, like the select bar's
+   actions: a labelled colour field is taller than a button, so aligning on the
+   bottom puts the swatches and the buttons on one line instead of leaving the
+   buttons floating above them. */
+.wall-sec { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+/* The type buttons keep their own row height inside the section. */
+.wall-sec .wall-types { align-items: flex-end; }
+
+/* A bar moved to the foot of the screen carries its rule on top instead. */
+.selectbar--bottom {
+  border-bottom: 0;
+  border-top: 1px solid var(--line);
+}
 .wall-type[aria-pressed="true"] {
   background: var(--accent);
   color: var(--accent-ink);

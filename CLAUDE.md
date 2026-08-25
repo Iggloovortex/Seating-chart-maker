@@ -41,7 +41,11 @@ design-token/theme/component baseline so new work matches the rest of the app.
 - `js/iconbrowser.js` + `js/iconlib.js` — searchable Bootstrap Icons library
   (multi-select → Add). MIT; see `LICENSE-bootstrap-icons`.
 - `js/settings.js` — tabbed Settings modal (General / Site & export), theme
-  toggle wiring, site export.
+  toggle wiring, site export. **Mode-bar position** lives here too: the Select
+  and Walls bars sit under the toolbar or at the foot of the window, together or
+  each on its own (`config.barPosition` = 'top'|'bottom'|'custom' +
+  `config.barPositions`), applied by `applyBarPositions` — a bar is a sibling of
+  the stage, so it is just which side of it the bar is inserted on.
 - `js/editor.js` — edit pane (single/bulk/preset).
 
 ## Branch / state

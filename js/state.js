@@ -43,6 +43,10 @@ const DEFAULT_CONFIG = {
   favicon: null,                      // data: URI, or null to keep the built-in icon
   presets: { '1': null, '2': null },  // saved square configs, applied from the edit pane
   customIcons: [],                    // imported SVG icons: [{ id, label, viewBox, inner }]
+  // Where the mode bars (Select, Walls) sit: 'top' under the toolbar, 'bottom'
+  // at the foot of the window, or 'custom' to let each bar choose for itself.
+  barPosition: 'top',
+  barPositions: { select: 'top', walls: 'top' },
 };
 
 const DEFAULTS = {
@@ -1534,6 +1538,8 @@ function serializeConfig() {
     favicon: state.config.favicon,
     presets: { '1': copyPreset(state.config.presets['1']), '2': copyPreset(state.config.presets['2']) },
     customIcons: state.config.customIcons.map((c) => ({ ...c })),
+    barPosition: state.config.barPosition,
+    barPositions: { ...state.config.barPositions },
   };
 }
 
@@ -1579,6 +1585,12 @@ function applyConfig(data) {
           inner: String(c.inner),
         }))
     : [];
+  const spot = (v, fallback) => (v === 'top' || v === 'bottom' ? v : fallback);
+  cfg.barPosition = ['top', 'bottom', 'custom'].includes(data.barPosition) ? data.barPosition : 'top';
+  cfg.barPositions = {
+    select: spot(data.barPositions?.select, 'top'),
+    walls: spot(data.barPositions?.walls, 'top'),
+  };
   emitConfig();
   return true;
 }

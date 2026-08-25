@@ -109,11 +109,87 @@ function applyConfigEffects() {
   }
 
   if (typeof rebuildPaperOptions === 'function') { rebuildPaperOptions(); reflectPaper(); }
+  applyBarPositions();
   updateThemeToggle();
 
   // The grid recolors furniture/ghost labels against the theme surface at render
   // time, so a theme change (or a newly imported icon) needs a re-render.
   if (typeof renderGrid === 'function') renderGrid();
+}
+
+// ---------------------------------------------------------------- bar position
+//
+// The mode bars (Select, Walls) normally sit under the toolbar. They can be moved
+// to the foot of the window instead — nearer the thumb on a laptop, and out of the
+// way of the chart's top edge — either together or one at a time.
+
+const MODE_BARS = [
+  { key: 'select', id: 'select-bar', label: 'Select bar' },
+  { key: 'walls', id: 'wall-bar', label: 'Walls bar' },
+];
+
+/** Where one bar should sit, honouring the per-bar choice only in 'custom'. */
+function barPositionFor(key) {
+  const cfg = state.config;
+  if (cfg.barPosition === 'custom') return (cfg.barPositions && cfg.barPositions[key]) || 'top';
+  return cfg.barPosition === 'bottom' ? 'bottom' : 'top';
+}
+
+/** Move each bar to its side of the stage. A bar is a sibling of the stage, so
+ *  this is just which side of it the bar is inserted on; the rule it carries
+ *  flips with it (see .selectbar--bottom). */
+function applyBarPositions() {
+  const app = document.querySelector('.app');
+  const stage = document.getElementById('stage');
+  if (!app || !stage) return;
+  for (const bar of MODE_BARS) {
+    const el = document.getElementById(bar.id);
+    if (!el) continue;
+    const bottom = barPositionFor(bar.key) === 'bottom';
+    el.classList.toggle('selectbar--bottom', bottom);
+    if (bottom) app.appendChild(el);
+    else app.insertBefore(el, stage);
+  }
+}
+
+/** The Settings control: one dropdown for both bars, and — on "Each bar its own"
+ *  — a dropdown per bar underneath. */
+function barsSection() {
+  const g = sgroup('Mode bars');
+  const pick = (value, options, onChange) => {
+    const sel = document.createElement('select');
+    sel.className = 'field__input';
+    for (const [val, label] of options) {
+      const o = document.createElement('option');
+      o.value = val;
+      o.textContent = label;
+      o.selected = val === value;
+      sel.appendChild(o);
+    }
+    sel.addEventListener('change', () => onChange(sel.value));
+    return sel;
+  };
+
+  g.appendChild(slabel('Position', pick(state.config.barPosition, [
+    ['top', 'Top — under the toolbar'],
+    ['bottom', 'Bottom — foot of the window'],
+    ['custom', 'Each bar its own'],
+  ], (v) => { setConfig({ barPosition: v }); renderSettings(); })));
+
+  if (state.config.barPosition === 'custom') {
+    for (const bar of MODE_BARS) {
+      g.appendChild(slabel(bar.label, pick(barPositionFor(bar.key), [
+        ['top', 'Top'], ['bottom', 'Bottom'],
+      ], (v) => {
+        setConfig({ barPositions: { ...state.config.barPositions, [bar.key]: v } });
+        renderSettings();
+      })));
+    }
+  }
+
+  g.appendChild(snote('The Select and Walls bars appear when their mode is on. '
+    + 'Moving them to the bottom keeps the chart’s top edge clear.'));
+  return g;
 }
 
 // ---------------------------------------------------------------- presets
@@ -204,7 +280,7 @@ function applyPreset(n, keys) {
 let settingsTab = 'general';
 const SETTINGS_TABS = [
   { id: 'general', label: 'General', build: () => [presetSection(), customIconsSection()] },
-  { id: 'site', label: 'Site & export', build: () => [exportSection(), siteSection(), themeSection(), paperSection()] },
+  { id: 'site', label: 'Site & export', build: () => [exportSection(), siteSection(), themeSection(), barsSection(), paperSection()] },
 ];
 
 function renderSettings() {
