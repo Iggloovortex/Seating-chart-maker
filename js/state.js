@@ -1108,6 +1108,41 @@ function wallNeighbors(o, r, c) {
     : [wallAt('v', r - 1, c), wallAt('v', r + 1, c)];
 }
 
+/** How one end of a wall meets whatever else is at that junction. This is what
+ *  keeps the square-ended export from overlapping itself — exactly one wall owns
+ *  each corner and the others stop against its face:
+ *    'through' — a wall of the SAME type carries straight on: no cap, and the two
+ *                bars bleed together into one continuous run
+ *    'extend'  — this wall owns the corner, so it covers the whole junction
+ *    'trim'    — a perpendicular wall owns the corner: stop at its face
+ *    'plain'   — a free end, capped on the seam
+ *  A run passing straight through a junction always owns it (it cannot be broken);
+ *  where two walls merely turn a corner, the horizontal one owns it. */
+function wallEndJoin(o, r, c, end) {
+  const type = wallTypeOf(wallAt(o, r, c));
+  const isBar = (t) => t === 'wall' || t === 'hollow' || t === 'window';
+  // The grid point this end sits on.
+  const R = o === 'h' ? r : (end === 'A' ? r : r + 1);
+  const C = o === 'h' ? (end === 'A' ? c : c + 1) : c;
+
+  const collinear = o === 'h'
+    ? wallAt('h', R, end === 'A' ? C - 1 : C)
+    : wallAt('v', end === 'A' ? R - 1 : R, C);
+  if (isBar(type) && wallTypeOf(collinear) === type) return 'through';
+
+  const perp = o === 'h'
+    ? [wallAt('v', R - 1, C), wallAt('v', R, C)]
+    : [wallAt('h', R, C - 1), wallAt('h', R, C)];
+  if (!perp[0] && !perp[1]) return 'plain';
+
+  // A door or a railing is a fitting, never the owner of a junction.
+  if (!isBar(type)) return 'trim';
+  const solid = perp.filter((w) => isBar(wallTypeOf(w))).length;
+  if (solid === 2) return 'trim';                  // a run passing through owns it
+  if (solid === 1) return o === 'h' ? 'extend' : 'trim';  // horizontals own corners
+  return 'extend';                                 // only a fitting crosses here
+}
+
 /** Coerce a wall value to a stored form, or null when it isn't a real wall. */
 function normalizeWallValue(value) {
   if (!value) return null;

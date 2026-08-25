@@ -113,14 +113,26 @@ function wallPt(seg, p, q) {
  *  UNcapped end is always square, so the bar butts flush against its neighbour.
  *  Returns the polygon plus the four corners and two tips, so the caller can
  *  stroke the long sides and each cap separately. */
-function wallBar(seg, { bevel = true, capA = true, capB = true } = {}) {
-  const { u } = seg;
+/** How far an end moves for its join mode: a 'through' end bleeds a hair past the
+ *  seam so two bars fuse with no hairline; 'extend' claims the corner square;
+ *  'trim' gives it up and stops against the perpendicular wall's face. */
+function wallSpan(seg, { endA = 'plain', endB = 'plain' } = {}) {
+  const u = seg.u;
   const h = (WALL_THICK * u) / 2;
-  // An uncapped end runs a hair past the seam so it overlaps the wall continuing
-  // there, leaving no hairline where the two fills meet.
   const bleed = WALL_STROKE * u * 0.5;
-  const a0 = seg.a0 - (capA ? 0 : bleed);
-  const a1 = seg.a1 + (capB ? 0 : bleed);
+  const adj = (m) => (m === 'through' ? -bleed : m === 'extend' ? -h : m === 'trim' ? h : 0);
+  return {
+    h,
+    a0: seg.a0 + adj(endA),
+    a1: seg.a1 - adj(endB),
+    capA: endA !== 'through',
+    capB: endB !== 'through',
+  };
+}
+
+function wallBar(seg, opts = {}) {
+  const { bevel = true } = opts;
+  const { h, a0, a1, capA, capB } = wallSpan(seg, opts);
   const bevA = bevel && capA, bevB = bevel && capB;
   const P = (p, q) => wallPt(seg, p, q);
   const topA = P(bevA ? a0 + h : a0, -h), topB = P(bevB ? a1 - h : a1, -h);
@@ -130,7 +142,7 @@ function wallBar(seg, { bevel = true, capA = true, capB = true } = {}) {
   if (tipB) pts.push(tipB);
   pts.push(botB, botA);
   if (tipA) pts.push(tipA);
-  return { pts, topA, topB, botA, botB, tipA, tipB, h };
+  return { pts, topA, topB, botA, botB, tipA, tipB, h, a0, a1, capA, capB };
 }
 
 /** Stroke one end of a bar: a 45° "V" when bevelled, otherwise a straight cap. */
@@ -159,16 +171,17 @@ function paintWall(seg, type, ops, opts = {}) {
   if (fill !== 'none') ops.poly(bar.pts, fill, 'none', 0);
   ops.line(bar.topA.x, bar.topA.y, bar.topB.x, bar.topB.y, WALL_INK, sw);
   ops.line(bar.botA.x, bar.botA.y, bar.botB.x, bar.botB.y, WALL_INK, sw);
-  if (opts.capA !== false) strokeWallCap(ops, bar, 'A', WALL_INK, sw);
-  if (opts.capB !== false) strokeWallCap(ops, bar, 'B', WALL_INK, sw);
+  if (bar.capA) strokeWallCap(ops, bar, 'A', WALL_INK, sw);
+  if (bar.capB) strokeWallCap(ops, bar, 'B', WALL_INK, sw);
 }
 
 /** A railing: an outlined dumbbell — a full-thickness post at each end, a
  *  half-thickness shaft between them, and a 45° chamfer joining the two. The
  *  posts end in a bevelled point on the grid and square on the export. */
-function paintRailing(seg, ops, { bevel = true } = {}) {
-  const { a0, a1, u } = seg;
-  const h = (WALL_THICK * u) / 2;
+function paintRailing(seg, ops, opts = {}) {
+  const { bevel = true } = opts;
+  const u = seg.u;
+  const { h, a0, a1 } = wallSpan(seg, opts);
   const s = h / 2;                    // shaft half-thickness
   const lead = bevel ? h : 0;         // the bevel tip's overhang
   const flat = lead + h;              // post's full-thickness run
@@ -191,9 +204,10 @@ function paintRailing(seg, ops, { bevel = true } = {}) {
  *  sweeping into the adjacent cell. `orient` (0..3) picks the hinge end (bit 1)
  *  and the swing side (bit 0), which is its rotate and its flip. */
 function paintDoor(seg, orient, ops, opts = {}) {
-  const { a0, a1, u } = seg;
+  const u = seg.u;
   const sw = WALL_STROKE * u;
   const bar = wallBar(seg, opts);
+  const { a0, a1 } = bar;
   ops.poly(bar.pts, DOOR_FILL, DOOR_INK, sw);
 
   const hingeAtEnd = (orient & 2) !== 0;

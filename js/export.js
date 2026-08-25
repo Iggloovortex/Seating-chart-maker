@@ -219,11 +219,9 @@ function drawWalls(ctx, rectOf) {
     const o = m[1], r = Number(m[2]), c = Number(m[3]);
     const seg = wallSegment(o, r, c, rectOf);
     const type = wallTypeOf(value);
-    // Only plain bars merge; a door or railing is a discrete object and keeps
-    // both of its ends.
-    const merges = type === 'wall' || type === 'hollow' || type === 'window';
-    const [na, nb] = merges ? wallNeighbors(o, r, c) : [null, null];
-    const opts = { bevel: false, capA: wallTypeOf(na) !== type, capB: wallTypeOf(nb) !== type };
+    // Each end resolves its own junction, so exactly one wall owns each corner
+    // and nothing overlaps (see wallEndJoin).
+    const opts = { bevel: false, endA: wallEndJoin(o, r, c, 'A'), endB: wallEndJoin(o, r, c, 'B') };
     if (type === 'door') paintDoor(seg, wallOrient(value), ops, opts);
     else paintWall(seg, type, ops, opts);
   }
