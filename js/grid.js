@@ -692,19 +692,22 @@ function buildSplitGrid(r, c, data) {
   wrap.className = 'cell__split';
   wrap.style.gridTemplateColumns = `repeat(${data.split.cols}, 1fr)`;
   wrap.style.gridTemplateRows = `repeat(${data.split.rows}, 1fr)`;
-  data.subcells.forEach((sub, i) => wrap.appendChild(buildSubcell(sub, i)));
+  data.subcells.forEach((sub, i) => wrap.appendChild(buildSubcell(sub, i, data.split)));
   return wrap;
 }
 
 /** One sub-cell of a split square — a mini desk: fill/border when seated, its
  *  icon and labels turned to its own facing, faded when it holds content but is
  *  empty (the same ghost treatment a whole square gets). */
-function buildSubcell(sub, i) {
+function buildSubcell(sub, i, split) {
   const el = document.createElement('div');
   el.className = 'subcell';
   el.dataset.sub = i;
   const ghost = !sub.enabled && hasContent(sub);
-  if (sub.enabled) {
+  // A special icon draws as its piece of furniture while the space can still show
+  // it; below that it falls back to a plain filled square (see subcellFurniture).
+  const furniture = subcellFurniture(sub, split.rows, split.cols);
+  if (sub.enabled && !furniture) {
     el.classList.add('subcell--on');
     el.style.background = sub.fill;
     el.style.borderColor = sub.border;
@@ -721,21 +724,45 @@ function buildSubcell(sub, i) {
         content.appendChild(svg);
       }
     }
+    let labelsEl = null;
     if (sub.labels && sub.labels.some((l) => l.text)) {
-      const labels = document.createElement('div');
-      labels.className = 'cell__labels';
+      labelsEl = document.createElement('div');
+      labelsEl.className = 'cell__labels';
       for (const line of sub.labels) {
         if (!line.text) continue;
         const span = document.createElement('span');
         span.className = 'cell__label';
         span.textContent = line.text;
-        span.style.color = ghost ? surfaceLabelColor(line.color)
-                                 : contrastLabelColor(line.color, sub.fill || '#dbe7ff');
-        labels.appendChild(span);
+        // A furniture piece's label sits on the bare space, not on a fill.
+        span.style.color = (furniture || ghost)
+          ? surfaceLabelColor(line.color)
+          : contrastLabelColor(line.color, sub.fill || '#dbe7ff');
+        labelsEl.appendChild(span);
       }
-      content.appendChild(labels);
     }
-    el.appendChild(content);
+
+    if (furniture) {
+      // The piece is tucked to the edge it faces inside its own space, exactly as
+      // it would be in a whole square — just at the space's scale.
+      const rot = sub.rotation || 0;
+      const tile = document.createElement('div');
+      tile.className = `cell__furniture cell__${furniture}`;
+      tile.style.background = sub.fill;
+      tile.style.borderColor = sub.border;
+      if (furniture === 'server') placeServerTile(tile, rot); else placeChairTile(tile, rot);
+      tile.appendChild(content);
+      el.classList.add('cell--furniturehost');
+      el.appendChild(tile);
+      if (labelsEl) {
+        labelsEl.classList.add('cell__furniturelabels');
+        if (furniture === 'server') placeServerLabels(labelsEl, rot); else placeChairLabels(labelsEl, rot);
+        labelsEl.style.transform = `rotate(${rot}deg)`;
+        el.appendChild(labelsEl);
+      }
+    } else {
+      if (labelsEl) content.appendChild(labelsEl);
+      el.appendChild(content);
+    }
   }
   return el;
 }
@@ -979,8 +1006,7 @@ const MERGE_SVGNS = 'http://www.w3.org/2000/svg';
 function renderMerges() {
   if (!state.merges.length) return;
   for (const merge of state.merges) {
-    const [ar, ac] = parseKey(merge.keys[0]);
-    const data = peekCell(ar, ac) || {};
+    const data = mergeContentOf(merge);
     const fill = data.fill || '#dbe7ff';
     const border = data.border || '#2f6feb';
 

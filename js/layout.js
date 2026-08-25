@@ -118,7 +118,7 @@ const RAIL_INK = '#343434';
 const RAIL_OUT_SCALE = 1.1;
 function railScale(opts) { return opts && opts.out ? RAIL_OUT_SCALE : 1; }
 const RAIL_STROKE = WALL_STROKE;
-const RAIL_POST_R = 0.87;    // corner post's ring radius, as a share of half-thickness
+const RAIL_POST_R = 1.35;    // corner post's ring radius, as a share of half-thickness
 const HINGE_R = 0.0424;      // hinge ring's mid-radius
 
 /** The user's wall colours (Walls bar), falling back to the reference values.

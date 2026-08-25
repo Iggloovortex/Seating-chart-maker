@@ -666,6 +666,26 @@ body {
 .subcell .cell__icon { width: 42%; max-width: 22px; }
 .subcell .cell__label { font-size: 9px; line-height: 1.1; }
 
+/* Dragging a square to another cell (mouse only). The ghost is a clone of the
+   square carried under the pointer; the cell it would land on is ringed. */
+.cell--dragging {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 80;
+  pointer-events: none;
+  opacity: .85;
+  box-shadow: var(--shadow);
+  transform: scale(.94);
+}
+.chart--dragging { cursor: grabbing; }
+.chart--dragging .cell { cursor: grabbing; }
+.cell--droptarget {
+  outline: 3px dashed var(--accent);
+  outline-offset: -3px;
+  background: var(--surface-2);
+}
+
 /* A merged desk spans several cells; each member cell renders blank (transparent)
    and the merge overlays (drawn by renderMerges) show the fused desk on top. */
 .cell--merged { background: transparent; border-color: transparent; }

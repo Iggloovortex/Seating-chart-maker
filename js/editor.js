@@ -603,7 +603,26 @@ function renderSubcellEditor() {
   const sub = subCur();
   if (!sub) { closeEditor(); return; }
   bodyEl.replaceChildren();
-  document.getElementById('editor-actions').replaceChildren();
+
+  // Copy / paste for this piece, in the header where the square pane keeps them.
+  // This is how content moves between a whole square and a split space: copy a
+  // square, open a piece, paste. Special icons travel with it.
+  const bar = document.getElementById('editor-actions');
+  bar.replaceChildren();
+  const copy = document.createElement('button');
+  copy.type = 'button';
+  copy.className = 'btn';
+  copy.textContent = 'Copy';
+  copy.title = 'Copy this piece: colors, icon, facing and every label line';
+  copy.addEventListener('click', () => { copySubcell(current.r, current.c, current.sub); renderSubcellEditor(); });
+  const paste = document.createElement('button');
+  paste.type = 'button';
+  paste.className = 'btn';
+  paste.textContent = 'Paste';
+  paste.title = 'Paste the copied square into this piece';
+  paste.disabled = !hasSquareClipboard();
+  paste.addEventListener('click', () => { pasteSquareToSubcell(current.r, current.c, current.sub); renderSubcellEditor(); });
+  bar.append(copy, paste);
 
   // Back to the whole split square.
   const back = document.createElement('button');

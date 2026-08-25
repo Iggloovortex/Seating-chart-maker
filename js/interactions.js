@@ -58,6 +58,7 @@ function resetSelectAnchor() {
 
 function initInteractions(chartEl) {
   let pointer = null; // { id, x, y, cell, timer, longFired }
+  let drag = null;    // a square being carried to another cell (mouse only)
 
   const cellFrom = (target) => target.closest?.('.cell');
   // Which sub-cell of a split square the pointer is over, or null.
@@ -76,7 +77,8 @@ function initInteractions(chartEl) {
     const additive = e.ctrlKey || e.metaKey; // Ctrl (Win/Linux) or Cmd (Mac) = add to selection
     const shift = e.shiftKey;                 // Shift = range-select from the anchor
     const sub = subFrom(e.target);
-    pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, cell, sub, longFired: false, timer: 0, additive, shift };
+    pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, cell, sub, longFired: false,
+                timer: 0, additive, shift, pointerType: e.pointerType };
     pointer.timer = window.setTimeout(() => {
       pointer.longFired = true;
       fireEdit(cell, sub);
@@ -85,25 +87,116 @@ function initInteractions(chartEl) {
   });
 
   chartEl.addEventListener('pointermove', (e) => {
+    if (drag) return;                       // a drag listens on the window instead
     if (!pointer || e.pointerId !== pointer.id) return;
     if (Math.hypot(e.clientX - pointer.x, e.clientY - pointer.y) > MOVE_TOLERANCE) {
-      cancelPointer(); // treat as a scroll, not a tap
+      // On a mouse, pulling a square off its cell picks it up and carries it to
+      // another one. Touch keeps the old meaning — the travel is a scroll — so
+      // dragging is desktop-only for now.
+      if (canDragSquare(pointer)) startSquareDrag(pointer, e);
+      else cancelPointer();
     }
   });
 
   const endHandler = (e) => {
+    if (drag) return;                       // the window listeners finish a drag
     if (!pointer || e.pointerId !== pointer.id) return;
     window.clearTimeout(pointer.timer);
     if (!pointer.longFired) fireTap(pointer.cell, { additive: pointer.additive, shift: pointer.shift, sub: pointer.sub });
     pointer = null;
   };
   chartEl.addEventListener('pointerup', endHandler);
-  chartEl.addEventListener('pointercancel', () => cancelPointer());
+  chartEl.addEventListener('pointercancel', () => { if (!drag) cancelPointer(); });
 
   function cancelPointer() {
     if (!pointer) return;
     window.clearTimeout(pointer.timer);
     pointer = null;
+  }
+
+  // ---------------------------------------------------------------- drag a square
+  //
+  // Press a square and pull: it lifts off and follows the pointer, and the cell
+  // under it is outlined as the landing spot. Letting go swaps the two squares —
+  // an empty target simply receives it, an occupied one trades places — so a drag
+  // can rearrange a chart without ever destroying anything. The WHOLE square
+  // travels, a split square and all of its pieces included.
+
+  /** Only a plain mouse drag off a square that actually holds something, and only
+   *  while no other mode owns the gesture. A merged square is skipped: it is one
+   *  desk spanning several cells, so moving a single cell of it is meaningless. */
+  function canDragSquare(p) {
+    if (p.additive || p.shift || p.longFired) return false;
+    if (p.pointerType !== 'mouse') return false;
+    if (selectMode) return false;                    // select mode has its own move handle
+    if (typeof isWallsMode === 'function' && isWallsMode()) return false;
+    const [r, c] = parseKey(p.cell.dataset.key);
+    if (typeof mergeAt === 'function' && mergeAt(r, c)) return false;
+    if (typeof tableAt === 'function' && tableAt(r, c)) return false;
+    const cell = peekCell(r, c);
+    return !!(cell && (cell.enabled || cellHasAnyContent(cell)));
+  }
+
+  function startSquareDrag(p, e) {
+    window.clearTimeout(p.timer);
+    const rect = p.cell.getBoundingClientRect();
+    const ghost = p.cell.cloneNode(true);
+    ghost.classList.add('cell--dragging');
+    ghost.removeAttribute('data-key');
+    ghost.style.width = `${rect.width}px`;
+    ghost.style.height = `${rect.height}px`;
+    document.body.appendChild(ghost);
+    drag = { from: p.cell.dataset.key, ghost, target: null,
+             dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+    chartEl.classList.add('chart--dragging');
+    // The square can be carried anywhere on the page, so the drag follows the
+    // WINDOW rather than the chart — it keeps tracking past the grid's edge and
+    // still finishes if the pointer is released outside it.
+    window.addEventListener('pointermove', trackSquareDrag, true);
+    window.addEventListener('pointerup', dropSquareDrag, true);
+    window.addEventListener('pointercancel', cancelSquareDrag, true);
+    trackSquareDrag(e);
+    pointer = null;
+  }
+
+  function trackSquareDrag(e) {
+    if (!drag) return;
+    drag.ghost.style.left = `${e.clientX - drag.dx}px`;
+    drag.ghost.style.top = `${e.clientY - drag.dy}px`;
+    // The ghost sits under the pointer, so ask what is beneath IT, not the event.
+    drag.ghost.style.visibility = 'hidden';
+    const under = document.elementFromPoint(e.clientX, e.clientY);
+    drag.ghost.style.visibility = '';
+    const cell = under && under.closest ? under.closest('.cell') : null;
+    const key = cell && cell.dataset.key !== drag.from ? cell.dataset.key : null;
+    if (key === drag.target) return;
+    markDropTarget(drag.target, false);
+    drag.target = key;
+    markDropTarget(key, true);
+  }
+
+  function markDropTarget(key, on = true) {
+    if (!key) return;
+    const el = chartEl.querySelector(`.cell[data-key="${CSS.escape(key)}"]`);
+    if (el) el.classList.toggle('cell--droptarget', on);
+  }
+
+  function dropSquareDrag() {
+    if (!drag) return;
+    const { from, target } = drag;
+    cancelSquareDrag();
+    if (target) swapCells(from, target);
+  }
+
+  function cancelSquareDrag() {
+    if (!drag) return;
+    markDropTarget(drag.target, false);
+    drag.ghost.remove();
+    chartEl.classList.remove('chart--dragging');
+    drag = null;
+    window.removeEventListener('pointermove', trackSquareDrag, true);
+    window.removeEventListener('pointerup', dropSquareDrag, true);
+    window.removeEventListener('pointercancel', cancelSquareDrag, true);
   }
 
   // Desktop right-click => edit. Shift+right-click => the delete menu instead,
@@ -147,7 +240,7 @@ function fireTap(cell, mods = {}) {
   // rectangle can gather the whole group to move or delete it.
   if (!selectMode && !shift && !additive) {
     const merge = mergeAt(r, c);
-    if (merge) { const [ar, ac] = parseKey(merge.keys[0]); openEditor(ar, ac); return; }
+    if (merge) { const [ar, ac] = parseKey(mergeAnchorKey(merge)); openEditor(ar, ac); return; }
   }
 
   const picking = selectMode;
@@ -263,7 +356,7 @@ function fireEdit(cell, sub = null) {
   }
   // Editing any cell of a merged desk edits the merge's anchor (its content).
   const merge = mergeAt(r, c);
-  if (merge) { const [ar, ac] = parseKey(merge.keys[0]); editHandler(ar, ac); return; }
+  if (merge) { const [ar, ac] = parseKey(mergeAnchorKey(merge)); editHandler(ar, ac); return; }
   // In select mode, editing a square that's part of the selection edits the
   // whole selection; anything else falls through to the single-square pane.
   if (selectMode && state.selection.has(keyOf(r, c))) {

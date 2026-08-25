@@ -102,8 +102,7 @@ async function renderToCanvas(dpi = 300) {
   const mergeDraws = [];
   const mergeItems = [];
   for (const merge of state.merges) {
-    const [ar, ac] = parseKey(merge.keys[0]);
-    const data = peekCell(ar, ac);
+    const data = mergeContentOf(merge);
     if (!data) continue;
     const plan = mergePlan(merge);
     mergeDraws.push({ merge, data, plan });
@@ -423,15 +422,38 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan) {
   sp.data.subcells.forEach((sub, i) => {
     if (!sub.enabled) return;
     const rr = Math.floor(i / cols), cc = i % cols;
-    const x = rect.x + cc * cw, y = rect.y + rr * ch;
+    const box = { x: rect.x + cc * cw, y: rect.y + rr * ch, w: cw, h: ch };
+    // A special icon draws as its piece of furniture while the space can show it
+    // — the grid twin of buildSubcell — and as a plain filled square below that.
+    if (subcellFurniture(sub, rows, cols)) {
+      drawChair(ctx, { data: sub, geo: chairInRect(box, sub) }, imgCache, plan);
+      return;
+    }
     ctx.fillStyle = sub.fill || '#dbe7ff';
-    ctx.fillRect(x, y, cw, ch);
+    ctx.fillRect(box.x, box.y, cw, ch);
     ctx.strokeStyle = sub.border || '#2f6feb';
     ctx.lineWidth = Math.max(1, Math.min(cw, ch) * 0.04);
-    ctx.strokeRect(x, y, cw, ch);
-    drawContent(ctx, x + cw / 2, y + ch / 2, cw, ch, sub, imgCache, false, plan,
+    ctx.strokeRect(box.x, box.y, cw, ch);
+    drawContent(ctx, box.x + cw / 2, box.y + ch / 2, cw, ch, sub, imgCache, false, plan,
                 undefined, 0, sub.fill || '#dbe7ff');
   });
+}
+
+/** A chair sized and placed inside an arbitrary rectangle — one space of a split
+ *  square. The same rules as a whole square's chair (tucked to the edge it faces,
+ *  labels in the space left over), just at the space's own scale, so a chair in a
+ *  ninth simply comes out smaller. */
+function chairInRect(rect, data) {
+  const size = Math.min(rect.w, rect.h) * CHAIR_SCALE;
+  const inset = size * 0.04;
+  let cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;
+  const [dr, dc] = FACING_STEP[data.rotation || 0] || FACING_STEP[0];
+  if (dr < 0) cy = rect.y + size / 2 + inset;
+  if (dr > 0) cy = rect.y + rect.h - size / 2 - inset;
+  if (dc < 0) cx = rect.x + size / 2 + inset;
+  if (dc > 0) cx = rect.x + rect.w - size / 2 - inset;
+  return { cx, cy, w: size, h: size, labelBox: chairLabelBox(rect, dr, dc),
+           full: Math.min(rect.w, rect.h) };
 }
 
 /** Where a chair sits and how big it is. Split out from drawChair so the layout

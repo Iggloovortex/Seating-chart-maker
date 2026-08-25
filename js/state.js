@@ -240,6 +240,42 @@ function isSplit(cell) {
   return !!(cell && cell.split && Array.isArray(cell.subcells) && cell.subcells.length);
 }
 
+/** The smallest split space — as a share of a whole square — in which a special
+ *  icon still draws as its piece of furniture. Below that there is no room left
+ *  to tuck the piece against an edge, so it falls back to a plain filled square.
+ *  This is the rule for any special icon added later: give it the space its piece
+ *  needs, and anything smaller renders as a normal square.
+ *    chair  — a small tile, so it still reads even in a ninth of a square
+ *    server — IS a half-slab, and a split space is already that size or smaller,
+ *             so a split server is simply the filled space itself */
+const FURNITURE_MIN_SPACE = { chair: 1 / 9, server: 1 };
+
+/** Which furniture a sub-cell draws as, given the split it belongs to — or null
+ *  when the space is too small and it should render as a plain filled square. */
+function subcellFurniture(sub, rows, cols) {
+  const kind = furnitureKind(sub);
+  if (!kind) return null;
+  const space = 1 / (Math.max(1, rows) * Math.max(1, cols));
+  return space >= (FURNITURE_MIN_SPACE[kind] ?? 1) ? kind : null;
+}
+
+/** A split square holds its content in its pieces, so `hasContent` on the cell
+ *  itself misses it. This asks the question of a square however it is built. */
+function cellHasAnyContent(cell) {
+  if (!cell) return false;
+  if (isSplit(cell)) return cell.subcells.some((s) => hasContent(s));
+  return hasContent(cell);
+}
+
+/** The data a square's content should be READ from: the square itself, or — when
+ *  it is split — its first piece that actually holds something. Lets a merged
+ *  desk show a split square's content (see mergeAnchorKey). */
+function contentDataOf(cell) {
+  if (!cell) return null;
+  if (isSplit(cell)) return cell.subcells.find((s) => hasContent(s)) || cell.subcells[0] || cell;
+  return cell;
+}
+
 /** Divide a square into rows×cols sub-cells, keeping any sub-cell content that
  *  still fits when re-splitting to a different shape. A split square is always
  *  "filled" so it claims a full unit in the output layout. */
@@ -249,6 +285,10 @@ function splitCell(r, c, rows, cols) {
   const prev = cell.subcells || [];
   const subs = [];
   for (let i = 0; i < n; i++) subs.push(prev[i] || makeSubcell());
+  // Splitting a square that already holds something keeps it: the content moves
+  // into the first space rather than vanishing. (The square's own content stays
+  // put underneath, so unsplitting brings it back.)
+  if (!prev.length && hasContent(cell)) subs[0] = cloneSubcell({ ...cell, enabled: true });
   cell.split = { rows, cols };
   cell.subcells = subs;
   cell.enabled = true;
@@ -459,6 +499,39 @@ let squareClipboard = null;
 
 function hasSquareClipboard() { return !!squareClipboard; }
 
+/** Copy one PIECE of a split square onto the square clipboard, so its content can
+ *  be pasted into another piece or onto a whole square. */
+function copySubcell(r, c, i) {
+  const sub = subcellAt(r, c, i);
+  if (!sub) return false;
+  squareClipboard = {
+    enabled: sub.enabled,
+    fill: sub.fill, border: sub.border,
+    icon: sub.icon, iconColor: sub.iconColor, rotation: sub.rotation, iconFill: sub.iconFill,
+    labels: (sub.labels || []).map((l) => ({ text: l.text, color: l.color })),
+    split: null, subcells: null,
+  };
+  emit();
+  return true;
+}
+
+/** Paste the copied square INTO one piece of a split square — how content moves
+ *  from a whole square into a split space. A piece is never itself split, so the
+ *  clipboard's own split is not carried over. */
+function pasteSquareToSubcell(r, c, i) {
+  const sub = subcellAt(r, c, i);
+  if (!squareClipboard || !sub) return false;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  const f = squareClipboard;
+  Object.assign(sub, {
+    enabled: f.enabled, fill: f.fill, border: f.border,
+    icon: f.icon, iconColor: f.iconColor, rotation: f.rotation, iconFill: f.iconFill,
+    labels: f.labels.map((l) => ({ text: l.text, color: l.color })),
+  });
+  emit();
+  return true;
+}
+
 /** Copy a square: colors, icon, facing, chair size and every label line with
  *  its text and color. */
 function copySquareFrom(r, c) {
@@ -562,10 +635,9 @@ function moveSelection(dr, dc) {
     // A merge travels only when its whole self is in the moved selection.
     for (const m of state.merges) {
       if (m.keys.every((k) => selected.has(k))) {
-        m.keys = sortCellKeys(m.keys.map((k) => {
-          const [r, c] = parseKey(k);
-          return keyOf(r + dr, c + dc);
-        }));
+        const move = (k) => { const [r, c] = parseKey(k); return keyOf(r + dr, c + dc); };
+        m.keys = sortCellKeys(m.keys.map(move));
+        if (m.anchor) m.anchor = move(m.anchor);
       }
     }
     // The moved squares travel with the drag; filters stay out of it, since a
@@ -574,6 +646,23 @@ function moveSelection(dr, dc) {
       const [r, c] = parseKey(k);
       return keyOf(r + dr, c + dc);
     }));
+  });
+  return true;
+}
+
+/** Swap two squares outright — everything they hold, a split and its pieces
+ *  included, since the whole cell travels. This is what dragging one square onto
+ *  another does: an empty target simply receives it, an occupied one trades
+ *  places, so a drag never destroys anything. */
+function swapCells(aKey, bKey) {
+  if (aKey === bKey) return false;
+  const [ar, ac] = parseKey(aKey), [br, bc] = parseKey(bKey);
+  if (!inBounds(ar, ac) || !inBounds(br, bc)) return false;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  const a = state.cells.get(aKey), b = state.cells.get(bKey);
+  batch(() => {
+    if (a) state.cells.set(bKey, a); else state.cells.delete(bKey);
+    if (b) state.cells.set(aKey, b); else state.cells.delete(aKey);
   });
   return true;
 }
@@ -613,7 +702,10 @@ function insertLine(axis, index) {
     state.cells = moved;
     remapSelection(shift);
     for (const t of state.tables) t.cellKeys = t.cellKeys.map(shift);
-    for (const m of state.merges) m.keys = sortCellKeys(m.keys.map(shift));
+    for (const m of state.merges) {
+      m.keys = sortCellKeys(m.keys.map(shift));
+      if (m.anchor) m.anchor = shift(m.anchor);
+    }
     // Walls sit on edges: a line inserted at `index` pushes every edge at or past
     // it one step along the same axis.
     remapWalls((o, r, c) => isRow
@@ -665,6 +757,7 @@ function deleteLine(axis, index) {
     }
     for (const m of state.merges) {
       m.keys = sortCellKeys(m.keys.map(shift).filter((k) => k !== undefined));
+      if (m.anchor) m.anchor = shift(m.anchor);
     }
     // Walls: the deleted line's two bounding edges collapse onto one; edges past
     // it move back one. An edge that spanned a removed cell (v on a removed row,
@@ -1032,7 +1125,11 @@ function addMerge(kind = 'poly') {
   const keys = sortCellKeys(state.selection);
   if (keys.length < 2) return null;
   if (typeof historyCheckpoint === 'function') historyCheckpoint();
-  const merge = { id: `m${Date.now().toString(36)}`, keys, kind };
+  // The merged desk shows ONE square's content, so keep the one that actually has
+  // some rather than whichever happens to sit top-left. A split square counts —
+  // its content lives in its pieces. With several, the first in reading order wins.
+  const anchor = keys.find((k) => cellHasAnyContent(peekCell(...parseKey(k)))) || keys[0];
+  const merge = { id: `m${Date.now().toString(36)}`, keys, kind, anchor };
   state.merges.push(merge);
   for (const k of keys) { const [r, c] = parseKey(k); getCell(r, c).enabled = true; }
   clearManualSelection();
@@ -1048,8 +1145,19 @@ function mergeAt(r, c) {
   return found;
 }
 
-/** The anchor "r,c" of a merge — where its drawn content lives. */
-function mergeAnchorKey(merge) { return merge.keys[0]; }
+/** The anchor "r,c" of a merge — the square whose content the fused desk shows.
+ *  Chosen when the merge is made (the square that had content); falls back to the
+ *  first in reading order if that square is gone. */
+function mergeAnchorKey(merge) {
+  return (merge.anchor && merge.keys.includes(merge.anchor)) ? merge.anchor : merge.keys[0];
+}
+
+/** The data a merged desk draws: the anchor square, or — when that square is
+ *  split — the piece of it that holds the content. */
+function mergeContentOf(merge) {
+  const [r, c] = parseKey(mergeAnchorKey(merge));
+  return contentDataOf(peekCell(r, c)) || {};
+}
 
 function updateMerge(id, patch) {
   const m = state.merges.find((x) => x.id === id);
@@ -1071,8 +1179,10 @@ function pruneMerges() {
   }
   // A merge needs at least two cells to mean anything.
   state.merges = state.merges.filter((m) => m.keys.length >= 2);
-  // keys[0] must stay the anchor after any pruning.
-  for (const m of state.merges) m.keys = sortCellKeys(m.keys);
+  for (const m of state.merges) {
+    m.keys = sortCellKeys(m.keys);
+    if (m.anchor && !m.keys.includes(m.anchor)) delete m.anchor;  // falls back to keys[0]
+  }
 }
 
 // ---------------------------------------------------------------- walls
@@ -1259,7 +1369,7 @@ function serialize() {
     rowWeights: [...state.rowWeights],
     colWeights: [...state.colWeights],
     tables: state.tables.map((t) => ({ ...t, cellKeys: [...t.cellKeys] })),
-    merges: state.merges.map((m) => ({ id: m.id, kind: m.kind, keys: [...m.keys] })),
+    merges: state.merges.map((m) => ({ id: m.id, kind: m.kind, keys: [...m.keys], anchor: m.anchor })),
     walls: { ...state.walls },
     paper: state.paper,
     landscape: state.landscape,
@@ -1323,7 +1433,8 @@ function deserialize(data) {
           .filter((m) => m && Array.isArray(m.keys) && m.keys.length >= 2)
           .map((m) => ({ id: String(m.id || `m${Math.random().toString(36).slice(2)}`),
                          kind: m.kind === 'unit' ? 'unit' : 'poly',
-                         keys: sortCellKeys(m.keys.map(String)) }))
+                         keys: sortCellKeys(m.keys.map(String)),
+                         ...(m.anchor ? { anchor: String(m.anchor) } : {}) }))
       : [];
     state.walls = {};
     if (data.walls && typeof data.walls === 'object') {

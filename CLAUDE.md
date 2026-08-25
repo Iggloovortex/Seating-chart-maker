@@ -58,11 +58,23 @@ and push it; don't stack new work directly on `main`.
   serialize/copy-paste). Rendered by `buildSplitGrid`/`buildSubcell` (grid) and
   `drawSplit` (export); a piece is tapped to fill and long-press/right-click (or
   the Pieces list) to edit via `openSubcellEditor`. TSV is lossy for splits.
+  Splitting a square that already holds something keeps it — the content moves
+  into the first space. The piece editor has Copy/Paste (`copySubcell` /
+  `pasteSquareToSubcell`), which is how content moves between a whole square and
+  a split space. **Special icons in a split space** follow `FURNITURE_MIN_SPACE`:
+  a chair still draws as furniture down to a ninth (just smaller); a server IS a
+  half-slab, so a split space is already that size or less and it renders as the
+  plain filled space. Any special icon added later gets an entry — give it the
+  space its piece needs, and anything smaller acts like a normal square.
 - **Merge — DONE.** Two kinds, from the `#btn-table-merge` menu on a ≥2-square
   selection: `'poly'` fuses the selection into one desk of its exact shape (L/T/+,
   a single outline, labels across the widest run, icon in the slimmest cell) and
-  `'unit'` is one 1:1 square centred in the block (straddles seams). Model:
-  `state.merges = [{id, keys, kind}]` (content on the anchor = sorted keys[0]),
+  `'unit'` is one 1:1 square centred in the block (straddles seams). The anchor —
+  the square whose content the fused desk shows — is the first one that HAS
+  content (a split square counts, via `cellHasAnyContent`; `mergeContentOf` then
+  reads the piece holding it), falling back to first-in-reading-order when
+  several or none do. Model:
+  `state.merges = [{id, keys, kind, anchor}]`,
   remapped/pruned alongside tables in insert/delete/move/setGrid and carried by
   serialize. Geometry `mergePlan` (js/layout.js); grid overlay `renderMerges`
   (SVG fill+outline, gaps bridged) and export `drawMerge` keep parity. Tap a
@@ -106,6 +118,13 @@ and push it; don't stack new work directly on `main`.
   poly/circle/line op sets. Walls mode (`js/walls.js`, `#btn-walls` + `#wall-bar`)
   shows an interactive edge layer (`renderWallEdges`); pick a type, click a seam
   to place, click again / Erase to remove.
+- **Drag a square — DONE.** Press a square and pull (mouse only; touch keeps its
+  scroll meaning, so there is no mobile equivalent yet): it lifts off as a ghost,
+  the cell under it is ringed, and letting go runs `swapCells` — an empty target
+  receives it, an occupied one trades places, so a drag never destroys anything.
+  The whole cell travels, a split square and its pieces included. Lives in
+  `js/interactions.js` (window-level listeners while dragging, so it keeps
+  tracking past the grid's edge). Merged and table-covered squares are skipped.
 - **2-column labels** for the KVM and Dual Monitor icons — a per-row optional 2nd
   column, activating when any row has 2nd-column content. Touches the label data
   model, editor, both renderers, and TSV. (Scoped, not started.)
