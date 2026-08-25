@@ -50,7 +50,10 @@ inputs, chips), `--tap: 44px` (min touch target — buttons/inputs/swatches),
   `.field__input--color`) — keep them square, and the colour fills the whole
   rounded box (padding 0, the browser's inner swatch stripped). The custom picker
   popover is wired by `enhanceColorInput` (`js/colorpicker.js`); hex accepts
-  values with/without `#`. Every swatch also offers **Transparent** — except a
+  values with/without `#`. Its footer is one row of equal icon-only tools —
+  eyedropper, Transparent, save-to-palette — over a 5-slot saved-colour bar
+  (`config.customColors`, newest first, `saveCustomColor`). Every swatch offers
+  **Transparent** — except a
   FILL, which opts out with `data-no-transparent="1"` (an empty square already
   says "nothing"); `swatch()` sets that automatically for any label matching
   /fill/i. Read a swatch with `colorOf(input)` and write one with

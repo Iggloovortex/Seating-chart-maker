@@ -395,20 +395,12 @@ body {
 .field__input--color.is-transparent::-moz-color-swatch,
 .defaults__swatch.is-transparent::-moz-color-swatch { opacity: 0; }
 
-/* The picker's own "Transparent" choice. */
-.cpick__clear {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  margin-top: 8px;
-}
-.cpick__clearswatch {
-  width: 18px;
-  height: 18px;
+/* The checkerboard that stands for "transparent" — as the picker's tool icon. */
+.cpick__checker {
+  width: 16px;
+  height: 16px;
   border: 1px solid var(--line-strong);
-  border-radius: 4px;
+  border-radius: 3px;
   background-image:
     linear-gradient(45deg, var(--line-strong) 25%, transparent 25%),
     linear-gradient(-45deg, var(--line-strong) 25%, transparent 25%),
@@ -1881,24 +1873,44 @@ body {
 .cpick__num { -moz-appearance: textfield; padding: 0 2px; }
 .cpick__num::-webkit-outer-spin-button,
 .cpick__num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.cpick__eye {
+/* The picker's tools: eyedropper, transparent and save, all icon-only and the
+   same size, sharing one row so the footer stays a single control tall. */
+.cpick__tools { display: flex; gap: 6px; margin-top: 8px; }
+.cpick__tool {
   appearance: none;
-  height: 32px;
+  flex: 1;
+  height: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
   color: var(--ink);
   background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: 6px;
   cursor: pointer;
 }
-.cpick__eye:hover { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.cpick__eyeicon { width: 15px; height: 15px; flex: 0 0 auto; }
+.cpick__tool:hover,
+.cpick__tool[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+.cpick__tool:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cpick__toolicon { width: 16px; height: 16px; flex: 0 0 auto; }
+
+/* The saved colours: a short row of slots, filled newest-first. */
+.cpick__saved { display: flex; gap: 6px; margin-top: 6px; }
+.cpick__slot {
+  flex: 1;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  cursor: pointer;
+}
+.cpick__slot:hover { border-color: var(--accent); }
+.cpick__slot:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cpick__slot--empty { background: var(--surface-2); cursor: default; opacity: .6; }
 
 /* Eight facing directions as a compass; the middle cell stays empty. */
 .compass {

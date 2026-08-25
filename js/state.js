@@ -47,7 +47,12 @@ const DEFAULT_CONFIG = {
   // at the foot of the window, or 'custom' to let each bar choose for itself.
   barPosition: 'top',
   barPositions: { select: 'top', walls: 'top' },
+  customColors: [],                   // saved swatches, newest first (see CUSTOM_COLOR_SLOTS)
 };
+
+/** How many colours the picker's saved bar holds. Deliberately small: it is a
+ *  shortlist of the colours this chart is built from, not a library. */
+const CUSTOM_COLOR_SLOTS = 5;
 
 const DEFAULTS = {
   fill: '#dbe7ff',
@@ -1521,6 +1526,17 @@ function removeCustomPaper(id) {
   emitConfig();
 }
 
+/** Keep a colour on the picker's saved bar. Newest first, no duplicates, and the
+ *  oldest falls off the end once the slots are full. */
+function saveCustomColor(hex) {
+  if (!/^#[0-9a-f]{6}$/i.test(String(hex || ''))) return false;
+  const c = String(hex).toLowerCase();
+  state.config.customColors = [c, ...state.config.customColors.filter((x) => x !== c)]
+    .slice(0, CUSTOM_COLOR_SLOTS);
+  emitConfig();
+  return true;
+}
+
 function addCustomIcon(icon) { state.config.customIcons.push(icon); emitConfig(); }
 function removeCustomIcon(id) {
   state.config.customIcons = state.config.customIcons.filter((c) => c.id !== id);
@@ -1540,6 +1556,7 @@ function serializeConfig() {
     customIcons: state.config.customIcons.map((c) => ({ ...c })),
     barPosition: state.config.barPosition,
     barPositions: { ...state.config.barPositions },
+    customColors: [...state.config.customColors],
   };
 }
 
@@ -1591,6 +1608,10 @@ function applyConfig(data) {
     select: spot(data.barPositions?.select, 'top'),
     walls: spot(data.barPositions?.walls, 'top'),
   };
+  cfg.customColors = (Array.isArray(data.customColors) ? data.customColors : [])
+    .filter((c) => /^#[0-9a-f]{6}$/i.test(String(c)))
+    .map((c) => String(c).toLowerCase())
+    .slice(0, CUSTOM_COLOR_SLOTS);
   emitConfig();
   return true;
 }
