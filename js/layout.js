@@ -117,7 +117,10 @@ const RAIL_INK = '#343434';
 // a little heavier than full weight to stay visible over a filled square.
 const RAIL_OUT_SCALE = 1.1;
 function railScale(opts) { return opts && opts.out ? RAIL_OUT_SCALE : 1; }
-const RAIL_STROKE = WALL_STROKE;
+// The railing's outline is finer than a wall's — 0.194 of its own thickness,
+// measured off the reference, which is what keeps the dumbbell reading as an
+// outlined rail rather than a solid bar at this size.
+const RAIL_STROKE = WALL_STROKE * 0.6;
 const RAIL_POST_R = 1.35;    // corner post's ring radius, as a share of half-thickness
 const HINGE_R = 0.0424;      // hinge ring's mid-radius
 
