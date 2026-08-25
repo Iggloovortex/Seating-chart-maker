@@ -353,6 +353,21 @@ body {
   border-bottom: 1px solid var(--line);
 }
 .selectbar__count { font-weight: 700; }
+
+/* A labelled colour field in a bar is a label stacked over a swatch, sitting
+   next to buttons that are --tap tall. Left at full size the pair is taller than
+   a button, so the label hangs above the row. Shrinking the swatch by exactly
+   the label's line and the gap above it makes label + swatch add up to a button:
+   aligned on their bottoms, their TOPS line up too. Swatches stay square. */
+.selectbar .field { --bar-label-h: 14px; }
+.selectbar .field__label { line-height: var(--bar-label-h); }
+.selectbar .field__input--color {
+  --bar-swatch: calc(var(--tap) - var(--bar-label-h) - 3px);   /* 3px = .field gap */
+  width: var(--bar-swatch);
+  height: var(--bar-swatch);
+  min-height: 0;
+  padding: 3px;
+}
 .selectbar__actions {
   display: flex;
   flex-wrap: wrap;
