@@ -177,15 +177,37 @@
               stroke-width="1.8" stroke-linejoin="round"/>
         <path d="M14.4 5.7 18.5 9.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
       </symbol>
-      <symbol id="ui-copy" viewBox="0 0 24 24">
-        <rect x="8.5" y="2.8" width="12.2" height="14.4" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
-        <path d="M15.4 21.2H5.3a2 2 0 0 1-2-2V7.3" fill="none" stroke="currentColor"
-              stroke-width="1.8" stroke-linecap="round"/>
+      <!-- Copy: two stacked sheets, as supplied. -->
+      <symbol id="ui-copy" viewBox="0 0 20 24">
+        <g transform="matrix(1,0,0,1,-0.794685,-2.1)">
+          <path d="M14,3L7,3C5.903,3 5,3.903 5,5L5,19C5,20.097 5.903,21 7,21L17,21C18.097,21 19,20.097 19,19L19,8L14,3Z"
+                fill="none" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M14,3L14,8L19,8" fill="none" stroke="currentColor" stroke-width="1.8"/>
+        </g>
+        <g transform="matrix(1,0,0,1,-4.1,1.205315)">
+          <path d="M7,3C5.903,3 5,3.903 5,5L5,19C5,20.097 5.903,21 7,21L17,21C18.097,21 19,20.097 19,19"
+                fill="none" stroke="currentColor" stroke-width="1.8"/>
+        </g>
       </symbol>
-      <symbol id="ui-paste" viewBox="0 0 24 24">
-        <path d="M9.2 4.6H7a2 2 0 0 0-2 2v12.6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6.6a2 2 0 0 0-2-2h-2.2"
-              fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-        <rect x="9.2" y="2.4" width="5.6" height="4.4" rx="1.3" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <!-- Paste: the clipboard, as supplied. Its artwork is 600x800, so the box is
+           padded out to sit square beside the other 24x24 icons. -->
+      <symbol id="ui-paste" viewBox="-100 -40 800 880">
+        <g transform="matrix(25,0,0,25,-100,0)">
+          <path d="M20,11.865L12,11.865L12,10.865L20,10.865L20,11.865ZM20,15L12,15L12,16L20,16L20,15ZM20,19.153L12,19.153L12,20.153L20,20.153L20,19.153ZM20,23.744L12,23.744L12,24.744L20,24.744L20,23.744ZM26.8,3C27.118,3 27.423,3.126 27.649,3.351C27.874,3.577 28,3.882 28,4.2L28,30.8C28,31.118 27.874,31.423 27.649,31.649C27.423,31.874 27.118,32 26.8,32L5.2,32C4.882,32 4.577,31.874 4.351,31.649C4.126,31.423 4,31.118 4,30.8L4,4.2C4,3.882 4.126,3.577 4.351,3.351C4.577,3.126 4.882,3 5.2,3L10,3C10,2.735 10.105,2.48 10.293,2.293C10.48,2.105 10.735,2 11,2L13.184,2C13.597,0.837 14.696,0 16,0C17.304,0 18.403,0.837 18.816,2L21,2C21.265,2 21.52,2.105 21.707,2.293C21.895,2.48 22,2.735 22,3C22,3 25.049,3 26.8,3ZM11,7C10.448,7 10,6.552 10,6C10,6 9.035,6 8.2,6C7.882,6 7.577,6.126 7.351,6.351C7.126,6.577 7,6.882 7,7.2L7,27.8C7,28.118 7.126,28.423 7.351,28.649C7.577,28.874 7.882,29 8.2,29L23.8,29C24.118,29 24.423,28.874 24.649,28.649C24.874,28.423 25,28.118 25,27.8L25,7.2C25,6.882 24.874,6.577 24.649,6.351C24.423,6.126 24.118,6 23.8,6L22,6C22,6.552 21.552,7 21,7L11,7ZM11,4.8C11,5.118 11.126,5.423 11.351,5.649C11.577,5.874 11.882,6 12.2,6L19.8,6C20.118,6 20.423,5.874 20.649,5.649C20.874,5.423 21,5.118 21,4.8L21,4.2C21,3.882 20.874,3.577 20.649,3.351C20.423,3.126 20.118,3 19.8,3L18.11,3L17.874,2.335C17.59,1.536 16.837,1 16,1C15.163,1 14.41,1.536 14.126,2.335L13.89,3L12.2,3C11.882,3 11.577,3.126 11.351,3.351C11.126,3.577 11,3.882 11,4.2L11,4.8ZM27,5.2C27,4.882 26.874,4.577 26.649,4.351C26.423,4.126 26.118,4 25.8,4L22,4L22,5L24.8,5C25.463,5 26,5.537 26,6.2L26,28.8C26,29.118 25.874,29.423 25.649,29.649C25.423,29.874 25.118,30 24.8,30L7.2,30C6.882,30 6.577,29.874 6.351,29.649C6.126,29.423 6,29.118 6,28.8L6,6.2C6,5.537 6.537,5 7.2,5L10,5L10,4L6.2,4C5.882,4 5.577,4.126 5.351,4.351C5.126,4.577 5,4.882 5,5.2L5,29.8C5,30.118 5.126,30.423 5.351,30.649C5.577,30.874 5.882,31 6.2,31L25.8,31C26.118,31 26.423,30.874 26.649,30.649C26.874,30.423 27,30.118 27,29.8L27,5.2Z"
+                fill="currentColor" fill-rule="nonzero"/>
+        </g>
+      </symbol>
+
+      <!-- Cut: the scissors, as supplied. The whole tool is drawn once in the
+           button's own colour, then drawn again in blue and clipped to the top of
+           the box, which is exactly the two handle rings — so the handles come out
+           blue and the blades stay black. -->
+      <clipPath id="ui-cut-handles"><rect x="0" y="0" width="1408" height="800"/></clipPath>
+      <path id="ui-cut-blades" transform="matrix(0,1,-1,0,1664,0.19802)" fill-rule="nonzero"
+            d="M960,896C977.333,896 992.333,902.333 1005,915C1017.667,927.667 1024,942.667 1024,960C1024,977.333 1017.667,992.333 1005,1005C992.333,1017.667 977.333,1024 960,1024C942.667,1024 927.667,1017.667 915,1005C902.333,992.333 896,977.333 896,960C896,942.667 902.333,927.667 915,915C927.667,902.333 942.667,896 960,896ZM1260,960L1767,1358C1785.667,1371.333 1794,1390 1792,1414C1788.667,1437.333 1777,1454.333 1757,1465L1629,1529C1620.333,1533.667 1610.667,1536 1600,1536C1588.667,1536 1578.333,1533.333 1569,1528L879,1141L769,1207C763.667,1209.667 759.667,1211.333 757,1212C766.333,1244.667 769.667,1277 767,1309C762.333,1360.333 743.667,1409.5 711,1456.5C678.333,1503.5 634.333,1544.667 579,1580C491,1636 398.667,1664 302,1664C211.333,1664 137.333,1638 80,1586C20,1530 -6.333,1461 1,1379C5.667,1328.333 24.333,1279.333 57,1232C89.667,1184.667 133.333,1143.333 188,1108C276,1052 368.667,1024 466,1024C521.333,1024 571.667,1034.333 617,1055C623,1046.333 630.333,1039 639,1033L761,960L639,887C630.333,881 623,873.667 617,865C571.667,885.667 521.333,896 466,896C368.667,896 276,868 188,812C133.333,776.667 89.667,735.333 57,688C24.333,640.667 5.667,591.667 1,541C-2.333,501.667 2.833,464 16.5,428C30.167,392 51.333,361 80,335C136.667,282.333 210.667,256 302,256C398.667,256 491,284 579,340C634.333,374.667 678.333,415.667 711,463C743.667,510.333 762.333,559.667 767,611C769.667,643 766.333,675.333 757,708C759.667,708.667 763.667,710.333 769,713L879,779L1569,392C1578.333,386.667 1588.667,384 1600,384C1610.667,384 1620.333,386.333 1629,391L1757,455C1777,465.667 1788.667,482.667 1792,506C1794,530 1785.667,548.667 1767,562L1260,960ZM579,700C609.667,672 616.667,636 600,592C583.333,548 548,509 494,475C432.667,435.667 368.667,416 302,416C252.667,416 215,428 189,452C158.333,480 151.333,516 168,560C184.667,604 220,643 274,677C335.333,716.333 399.333,736 466,736C515.333,736 553,724 579,700ZM494,1445C548,1411 583.333,1372 600,1328C616.667,1284 609.667,1248 579,1220C553,1196 515.333,1184 466,1184C399.333,1184 335.333,1203.667 274,1243C220,1277 184.667,1316 168,1360C151.333,1404 158.333,1440 189,1468C215,1492 252.667,1504 302,1504C368.667,1504 432.667,1484.333 494,1445ZM672,832L768,890L768,879C768,855 779,836.333 801,823L815,815L736,768L710,794C708,796 704.667,799.667 700,805C695.333,810.333 691.333,814.333 688,817C686.667,818.333 685.333,819.5 684,820.5C682.667,821.5 681.667,822.333 681,823L672,832ZM896,1056L992,1088L1728,512L1600,448L832,879L832,992L672,1088L681,1096C682.333,1097.333 684.667,1099.333 688,1102C690.667,1104.667 694.333,1108.667 699,1114C703.667,1119.333 707.333,1123.333 710,1126L736,1152L896,1056ZM1600,1472L1728,1408L1208,1000L1031,1138C1029.667,1140 1025.333,1142.333 1018,1145L1600,1472Z"/>
+      <symbol id="ui-cut" viewBox="-90 -60 1588 1913">
+        <use href="#ui-cut-blades" fill="currentColor"/>
+        <use href="#ui-cut-blades" fill="#1565c0" clip-path="url(#ui-cut-handles)"/>
       </symbol>
       <symbol id="ui-trash" viewBox="0 0 24 24">
         <path d="M4.5 6.5h15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
@@ -308,7 +330,10 @@
           <button id="btn-copy-format" class="iconbtn" type="button" title="Copy the selected square, labels and all" aria-label="Copy square">
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-copy"/></svg>
           </button>
-          <button id="btn-paste-format" class="iconbtn" type="button" title="Clone the copied square onto every selected square" aria-label="Paste square">
+          <button id="btn-cut-format" class="iconbtn iconbtn--cut" type="button" title="Cut the selected square — copy it, then clear it" aria-label="Cut square">
+            <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-cut"/></svg>
+          </button>
+          <button id="btn-paste-format" class="iconbtn iconbtn--paste" type="button" title="Clone the copied square onto every selected square" aria-label="Paste square">
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-paste"/></svg>
           </button>
           <span class="iconbar__sep" aria-hidden="true"></span>
@@ -320,7 +345,7 @@
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-redo"/></svg>
           </button>
           <span class="iconbar__sep" aria-hidden="true"></span>
-          <button id="btn-settings" class="iconbtn" type="button" title="Settings" aria-label="Settings">
+          <button id="btn-settings" class="iconbtn iconbtn--settings" type="button" title="Settings" aria-label="Settings">
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-settings"/></svg>
           </button>
         </div>
@@ -353,7 +378,6 @@
 
        <div class="toolbar__row toolbar__row--actions">
       <div class="toolbar__group toolbar__group--actions">
-        <button id="btn-empty-all" class="btn btn--empty" type="button" title="Empty every square on the grid — labels and colors are kept">Clear Grid</button>
         <button id="btn-preview" class="btn btn--primary" type="button" title="Preview and export">Export</button>
         <button id="btn-reset-sizes" class="btn" type="button" title="Reset every row and column to the default size">Reset sizes</button>
         <button id="btn-true-size" class="btn btn--toggle" type="button" aria-pressed="false" title="Show weighted row/column sizes in the grid">True size</button>

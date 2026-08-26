@@ -379,13 +379,21 @@ function openColorPopover(anchor, value, onPick) {
       slot.className = hex ? 'cpick__slot' : 'cpick__slot cpick__slot--empty';
       if (hex) {
         slot.style.background = hex;
-        slot.title = hex;
+        slot.title = hex + ' — right-click to remove';
         slot.setAttribute('aria-label', 'Use ' + hex);
         slot.addEventListener('click', () => {
           const c = hexToRgb(hex);
           if (!c) return;
           Object.assign(hsv, rgbToHsv(c.r, c.g, c.b));
           render(); emit(true);
+        });
+        // Right-click takes a colour back off the bar. There are only five slots,
+        // so getting rid of one has to be as quick as putting it there.
+        slot.addEventListener('contextmenu', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          removeCustomColor(hex);
+          renderSaved();
         });
       } else {
         slot.disabled = true;

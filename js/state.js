@@ -516,6 +516,14 @@ let squareClipboard = null;
 
 function hasSquareClipboard() { return !!squareClipboard; }
 
+/** Cut a square: copy it, then strip it back to nothing. The copy happens first,
+ *  so a failed cut can never lose the square. */
+function cutSquareFrom(r, c) {
+  if (!copySquareFrom(r, c)) return false;
+  resetSquares([keyOf(r, c)]);
+  return true;
+}
+
 /** Copy one PIECE of a split square onto the square clipboard, so its content can
  *  be pasted into another piece or onto a whole square. */
 function copySubcell(r, c, i) {
@@ -1535,6 +1543,13 @@ function saveCustomColor(hex) {
     .slice(0, CUSTOM_COLOR_SLOTS);
   emitConfig();
   return true;
+}
+
+/** Forget one saved colour — how a swatch is taken off the picker's bar. */
+function removeCustomColor(hex) {
+  const before = state.config.customColors.length;
+  state.config.customColors = state.config.customColors.filter((c) => c !== hex);
+  if (state.config.customColors.length !== before) emitConfig();
 }
 
 function addCustomIcon(icon) { state.config.customIcons.push(icon); emitConfig(); }

@@ -93,11 +93,6 @@ trueSizeBtn.addEventListener('click', () => toggleTrueSizes());
 subscribe(() => trueSizeBtn.setAttribute('aria-pressed', String(state.showTrueSizes)));
 document.getElementById('btn-reset-sizes').addEventListener('click', () => resetLineSizes());
 
-// Clear Grid empties every square. Non-destructive — labels and colors stay put
-// — but it is a big sweep, so confirm first.
-document.getElementById('btn-empty-all').addEventListener('click', () => {
-  if (confirm('Empty every square on the grid? Labels and colors are kept.')) clearGrid();
-});
 
 // ---- Toolbar actions -------------------------------------------------------
 document.getElementById('btn-preview').addEventListener('click', showPreview);

@@ -41,7 +41,9 @@ function initTables() {
     // Copying formatting needs exactly one source square; pasting needs a copy.
     const copyBtn = document.getElementById('btn-copy-format');
     const pasteBtn = document.getElementById('btn-paste-format');
+    const cutBtn = document.getElementById('btn-cut-format');
     if (copyBtn) copyBtn.disabled = squares !== 1;
+    if (cutBtn) cutBtn.disabled = squares !== 1;   // cut takes one square, like copy
     if (pasteBtn) pasteBtn.disabled = squares === 0 || !hasSquareClipboard();
     // Save preset captures ONE square, like copy.
     const savePresetBtn = document.getElementById('btn-save-preset');
@@ -106,6 +108,12 @@ function initTables() {
     if (state.selection.size !== 1) return;
     const [r, c] = parseKey([...state.selection][0]);
     copySquareFrom(r, c);
+  });
+  // Cut is copy, then clear — the square goes to the clipboard and leaves.
+  document.getElementById('btn-cut-format').addEventListener('click', () => {
+    if (state.selection.size !== 1) return;
+    const [r, c] = parseKey([...state.selection][0]);
+    cutSquareFrom(r, c);
   });
   document.getElementById('btn-paste-format').addEventListener('click', () => {
     if (state.selection.size) pasteSquareTo([...state.selection]);
