@@ -506,7 +506,7 @@ body {
      answers for, whatever it is drawn at, because the ground between two squares
      belongs to the seam and not to either of them. So this is free to be set by
      eye without moving the boundary the pointer actually crosses. */
-  --wall-bar: 4px;
+  --wall-bar: 6px;
   gap: var(--seam);
   background: var(--line);
   padding: var(--seam);
@@ -851,14 +851,14 @@ body {
   left: 0;
   right: 0;
   top: 50%;
-  height: var(--wall-bar, 4px);
+  height: var(--wall-bar, 6px);
   transform: translateY(-50%);
 }
 .wall-hint--v::before {
   top: 0;
   bottom: 0;
   left: 50%;
-  width: var(--wall-bar, 4px);
+  width: var(--wall-bar, 6px);
   transform: translateX(-50%);
 }
 .wall-hint--onwall::before { display: none; }
