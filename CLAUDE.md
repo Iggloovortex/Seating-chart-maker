@@ -136,7 +136,18 @@ and push it; don't stack new work directly on `main`.
   New clears them). `wallSegment` takes the grid's `gap` (0 in the gapless export)
   so both renderers sit on the true seam. The grid overlay `renderWalls` (SVG) and
   the export `drawWalls` (canvas) share all painting via matching
-  poly/circle/line op sets. Walls mode lives in `js/walls.js` (`#btn-walls` +
+  poly/circle/line op sets. **Crossings are their own piece on export**
+  (`wallJunctions` / `junctionType` / `junctionRect`, js/export.js): at every grid
+  point where two or more edges meet, a wall-thick square is drawn with the bars,
+  outline pass then fill pass, and filled LAST so the joint owns itself rather
+  than depending on which bar reached across it. Hollow-to-hollow stays hollow and
+  glass-to-glass stays glass; every other meeting — a wall with anything, glass
+  into hollow, anything involving a door — has no piece of its own and takes a
+  plain WALL intersection. All-railing meetings get none: those are posts
+  (`paintRailingPost`). Glass is ruled in ONE pass clipped to every pane at once
+  (junction panes included) — ruling pane by pane double-rules the overlap at a
+  joint, and two 30% rules that don't line up land as a dark slash across it.
+  Walls mode lives in `js/walls.js` (`#btn-walls` +
   `#wall-bar`): pick a type, click a seam to place, click the wall again / Erase
   to remove.
   **Placing is a hover gesture, not a hit layer** (`updateWallHint`, js/grid.js):
