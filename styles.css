@@ -879,16 +879,10 @@ body {
   transform: translate(-50%, -50%);
   overflow: visible;                 /* sized in seams by showWallHint */
 }
-/* The outer stroke, in the bar's colour, and the + itself over it. */
-/* The outer stroke, in the bar's colour, and the + itself laid over it. Both are
-   drawn as rounded outlines (roundedPolyPath), so neither needs a stroke.
-
-   The stroke is the bar's colour and the bar's blend exactly (see .wall-hint,
-   which fades the two together), so the two read as one piece: the bar running
-   through the seam and swelling around the +. It is thinner than the bar, because
-   the + splits it down the middle and each half has to read. */
-.wall-hint__plus-out { fill: var(--accent); }
-.wall-hint__plus-in { fill: var(--plus-ink); }
+/* The + itself, straight onto the bar — a rounded outline (roundedPolyPath), so
+   it needs no stroke of its own. It carries the theme's ink, and the bar it sits
+   on carries the fade (see .wall-hint), so the two go down as one piece. */
+.wall-hint__plus { fill: var(--plus-ink); }
 
 /* Wall-type picker in the walls bar. Each section groups the types that belong
    together with the colours that drive them; a toolbar rule divides them. */

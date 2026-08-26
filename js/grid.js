@@ -1362,28 +1362,23 @@ function roundedPolyPath(pts, radius) {
 //
 // The + scales as a whole: its thickness and its reach move together, so the one
 // number below is how big the mark is, and the shape of it does not change with
-// the size. The stroke is NOT scaled — it is the band the + is set into, and it
-// holds its own weight whatever size the + is.
+// the size.
 //
-// Below about 0.5 the + is no wider than the bar it sits on, so its arms stop
-// clearing the bar's edges and it reads as a bulge in the line rather than a
-// cross. To go smaller than that, the bar (--wall-bar) has to come down with it.
+// At half, the + is about as wide as the bar it sits on, so its arms along the
+// bar only just clear the bar's edges. To go smaller, the bar (--wall-bar) has to
+// come down with it, or those arms disappear into the bar.
 const WALL_PLUS_SCALE = 0.5;
 const WALL_PLUS_ARM = 5 * WALL_PLUS_SCALE;    // half the + 's own thickness
 const WALL_PLUS_REACH = 40 * WALL_PLUS_SCALE; // how far the + reaches from the middle
-const WALL_PLUS_BAND = 5;     // the outer stroke, which the + splits down its middle
 // One radius for every corner, held back from what the shape would allow. Rounded
 // as hard as it goes, the arms lose the straight run down their sides and the
 // mark reads as a star rather than a +; this keeps enough of that run to stay a
 // +, with every corner still fully curved.
 const WALL_PLUS_ROUND = 12;
-const WALL_PLUS_OUTER = roundedPolyPath(
-  wallPlusCross(WALL_PLUS_ARM + WALL_PLUS_BAND, WALL_PLUS_REACH + WALL_PLUS_BAND),
-  WALL_PLUS_ROUND);
 const WALL_PLUS_INNER = roundedPolyPath(
   wallPlusCross(WALL_PLUS_ARM, WALL_PLUS_REACH), WALL_PLUS_ROUND);
-// The box holds the outer cross exactly, so the mark's drawn size follows.
-const WALL_PLUS_HALF = WALL_PLUS_REACH + WALL_PLUS_BAND;
+// The box holds the + exactly, so the mark's drawn size follows.
+const WALL_PLUS_HALF = WALL_PLUS_REACH;
 const WALL_PLUS_BOX = (WALL_PLUS_HALF * 2) / 20;  // the mark's size, in seams
 // What a junction keeps for itself, at the corners where two seams cross. The
 // point's own footprint (one wall thickness) plus a little air; the rest of a
@@ -1411,13 +1406,10 @@ function buildWallHint() {
   const half = WALL_PLUS_HALF;
   add.setAttribute('viewBox', `${-half} ${-half} ${half * 2} ${half * 2}`);
   add.setAttribute('aria-hidden', 'true');
-  for (const [cls, d] of [['wall-hint__plus-out', WALL_PLUS_OUTER],
-                          ['wall-hint__plus-in', WALL_PLUS_INNER]]) {
-    const p = document.createElementNS(MERGE_SVGNS, 'path');
-    p.setAttribute('class', cls);
-    p.setAttribute('d', d);
-    add.appendChild(p);
-  }
+  const plus = document.createElementNS(MERGE_SVGNS, 'path');
+  plus.setAttribute('class', 'wall-hint__plus');
+  plus.setAttribute('d', WALL_PLUS_INNER);
+  add.appendChild(plus);
   wallHint.appendChild(add);
   // Acted on at pointerDOWN, not click: the bar is a hover affordance that moves
   // and hides as the pointer travels, so a hair of drift between press and
