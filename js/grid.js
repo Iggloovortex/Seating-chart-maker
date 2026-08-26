@@ -1334,15 +1334,10 @@ const wallPlusCross = (arm, reach) =>
 
 /** A closed outline with every corner rounded off — the concave ones as well as
  *  the convex — as an SVG path. Each corner is cut back along both of its edges
- *  and the point itself becomes the control of a curve through the gap.
- *
- *  Both edges of a corner are cut by the same amount, which is what keeps a tip
- *  domed rather than drawn out to a point. `over` is how much of an edge a corner
- *  may take: half is the most it can take without the two corners of a short edge
- *  reaching past each other, but a curve bending around its own corner reads
- *  flatter than the cut it was given, so it is worth overrunning that to get the
- *  roundness the cut promises. The overlap is small and closes into the curve. */
-function roundedPolyPath(pts, radius, over = 0.5) {
+ *  and the point itself becomes the control of a curve through the gap. The cut
+ *  can never take more than half an edge, so neighbouring corners cannot eat into
+ *  each other however hard the rounding is pushed. */
+function roundedPolyPath(pts, radius) {
   const n = pts.length;
   const towards = (from, to) => {
     const dx = to[0] - from[0], dy = to[1] - from[1];
@@ -1353,7 +1348,7 @@ function roundedPolyPath(pts, radius, over = 0.5) {
   for (let i = 0; i < n; i++) {
     const cur = pts[i], prev = pts[(i - 1 + n) % n], next = pts[(i + 1) % n];
     const a = towards(cur, prev), b = towards(cur, next);
-    const r = Math.min(radius, a.len * over, b.len * over);
+    const r = Math.min(radius, a.len / 2, b.len / 2);
     const p1 = [cur[0] + a.x * r, cur[1] + a.y * r];
     const p2 = [cur[0] + b.x * r, cur[1] + b.y * r];
     const f = (v) => Math.round(v * 100) / 100;
@@ -1367,19 +1362,16 @@ function roundedPolyPath(pts, radius, over = 0.5) {
 const WALL_PLUS_ARM = 5;      // half the + 's own thickness: half a seam across
 const WALL_PLUS_BAND = 10;    // the outer stroke: half the bar's thickness
 const WALL_PLUS_REACH = 40;   // how far the + reaches from the middle
-// Rounded as hard as the shape allows: the radius asked for is far more than any
-// corner can take, so every one of them rounds to its own limit and no flat edge
-// survives that could have been curved away.
-const WALL_PLUS_ROUND = 999;
-// How much of an edge a corner may take. Past about this the two corners of the
-// short tip edge reach far enough past each other to show as a nick in the
-// outline; below it a flat run survives in the middle of the long edges.
-const WALL_PLUS_OVER = 0.65;
+// One radius for every corner, held back from what the shape would allow. Rounded
+// as hard as it goes, the arms lose the straight run down their sides and the
+// mark reads as a star rather than a +; this keeps enough of that run to stay a
+// +, with every corner still fully curved.
+const WALL_PLUS_ROUND = 12;
 const WALL_PLUS_OUTER = roundedPolyPath(
   wallPlusCross(WALL_PLUS_ARM + WALL_PLUS_BAND, WALL_PLUS_REACH + WALL_PLUS_BAND),
-  WALL_PLUS_ROUND, WALL_PLUS_OVER);
+  WALL_PLUS_ROUND);
 const WALL_PLUS_INNER = roundedPolyPath(
-  wallPlusCross(WALL_PLUS_ARM, WALL_PLUS_REACH), WALL_PLUS_ROUND, WALL_PLUS_OVER);
+  wallPlusCross(WALL_PLUS_ARM, WALL_PLUS_REACH), WALL_PLUS_ROUND);
 // The box holds the outer cross exactly, so the mark's drawn size follows.
 const WALL_PLUS_HALF = WALL_PLUS_REACH + WALL_PLUS_BAND;
 const WALL_PLUS_BOX = (WALL_PLUS_HALF * 2) / 20;  // the mark's size, in seams
