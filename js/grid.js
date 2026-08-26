@@ -1360,7 +1360,7 @@ function roundedPolyPath(pts, radius) {
 
 // All in box units, where one seam is 20.
 const WALL_PLUS_ARM = 5;      // half the + 's own thickness: half a seam across
-const WALL_PLUS_BAND = 10;    // the outer stroke: half the bar's thickness
+const WALL_PLUS_BAND = 20;    // the outer stroke: the bar's own thickness
 const WALL_PLUS_REACH = 40;   // how far the + reaches from the middle
 // One radius for every corner, held back from what the shape would allow. Rounded
 // as hard as it goes, the arms lose the straight run down their sides and the

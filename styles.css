@@ -835,7 +835,6 @@ body {
   inset: 0;
   border-radius: 999px;      /* a pill: the bar is as round as it is thick */
   background: var(--accent);
-  opacity: .75;
 }
 .wall-hint--onwall::before { display: none; }
 .wall-hint--onwall .wall-hint__add { display: none; }
@@ -857,7 +856,12 @@ body {
 }
 /* The outer stroke, in the bar's colour, and the + itself over it. */
 /* The outer stroke, in the bar's colour, and the + itself laid over it. Both are
-   drawn as rounded outlines (roundedPolyPath), so neither needs a stroke. */
+   drawn as rounded outlines (roundedPolyPath), so neither needs a stroke.
+
+   The stroke is the bar exactly — same colour, same thickness (WALL_PLUS_BAND is
+   one seam) — so the two read as one piece: the bar running through, swelling
+   around the +. That is also why the bar is drawn flat rather than faded: a
+   translucent bar under a solid stroke would show every place they overlap. */
 .wall-hint__plus-out { fill: var(--accent); }
 .wall-hint__plus-in { fill: var(--plus-ink); }
 
