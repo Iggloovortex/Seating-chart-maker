@@ -1359,9 +1359,19 @@ function roundedPolyPath(pts, radius) {
 }
 
 // All in box units, where one seam is 20.
-const WALL_PLUS_ARM = 3.75;   // half the + 's own thickness
+//
+// The + scales as a whole: its thickness and its reach move together, so the one
+// number below is how big the mark is, and the shape of it does not change with
+// the size. The stroke is NOT scaled — it is the band the + is set into, and it
+// holds its own weight whatever size the + is.
+//
+// Below about 0.5 the + is no wider than the bar it sits on, so its arms stop
+// clearing the bar's edges and it reads as a bulge in the line rather than a
+// cross. To go smaller than that, the bar (--wall-bar) has to come down with it.
+const WALL_PLUS_SCALE = 0.65;
+const WALL_PLUS_ARM = 5 * WALL_PLUS_SCALE;    // half the + 's own thickness
+const WALL_PLUS_REACH = 40 * WALL_PLUS_SCALE; // how far the + reaches from the middle
 const WALL_PLUS_BAND = 5;     // the outer stroke, which the + splits down its middle
-const WALL_PLUS_REACH = 30;   // how far the + reaches from the middle
 // One radius for every corner, held back from what the shape would allow. Rounded
 // as hard as it goes, the arms lose the straight run down their sides and the
 // mark reads as a star rather than a +; this keeps enough of that run to stay a
