@@ -1,8 +1,8 @@
 // walls.js — walls mode: draw walls, railings, doors and windows on the seams
-// between squares (and the grid's outer border). The grid renders an interactive
-// edge layer while this mode is on (renderWallEdges); clicking an edge places the
-// active wall type here. The walls themselves are drawn always (renderWalls /
-// drawWalls) and live in state.walls (see js/state.js).
+// between squares (and the grid's outer border). Running the pointer near a seam
+// reveals the grid's hover bar (updateWallHint in js/grid.js); clicking it places
+// the active wall type through here. The walls themselves are drawn always
+// (renderWalls / drawWalls) and live in state.walls (see js/state.js).
 
 let wallsMode = false;
 let activeWallType = 'wall';
@@ -41,6 +41,16 @@ function placeWall(o, r, c) {
     return;
   }
   setWall(o, r, c, (cur && wallTypeOf(cur) === activeWallType) ? null : activeWallType);
+}
+
+/** A click on the grid's hover bar (see updateWallHint in js/grid.js). In walls
+ *  mode it places the active type, exactly as the bar says it will. From OUTSIDE
+ *  walls mode the bar is also the way in: it lays a plain wall and turns the mode
+ *  on, so the next seam can be clicked straight away. */
+function placeWallFromHint(o, r, c) {
+  if (wallsMode) { placeWall(o, r, c); return; }
+  setWall(o, r, c, 'wall');
+  setWallsMode(true);
 }
 
 function initWalls() {
@@ -85,19 +95,37 @@ function initWalls() {
   swatch('door-fill', 'doorFill');
   swatch('door-border', 'doorBorder');
 
+  // A click on a wall that is already there acts on it — the toggle (and the
+  // door's rotate) that the old edge layer carried. Bare seams are reached
+  // through the grid's hover bar instead. The walls are painted in a
+  // pointer-events:none layer, so the hit is tested geometrically.
+  const chartEl = document.getElementById('chart');
+  if (chartEl) {
+    chartEl.addEventListener('click', (e) => {
+      if (!wallsMode || e.target.closest?.('.wall-hint')) return;
+      const hit = wallAtPoint(e.clientX, e.clientY);
+      if (!hit) return;
+      e.stopPropagation();
+      placeWall(hit.o, hit.r, hit.c);
+    });
+  }
+
   document.getElementById('wall-clear').addEventListener('click', () => {
     if (hasWalls() && confirm('Remove every wall, railing, door and window?')) clearWalls();
   });
 
   setWallsMode = (on) => {
     wallsMode = on;
+    // The squares are not clickable while walls mode is on, so they stop
+    // answering the pointer — the seams and the walls are what respond.
+    if (chartEl) chartEl.classList.toggle('chart--walls', on);
     btn.setAttribute('aria-pressed', String(on));
     btn.title = on ? 'Walls — on (Esc to exit)' : 'Walls — draw walls, doors and windows on the seams';
     bar.hidden = !on;
     // Walls and Select are separate modes; don't show both bars at once.
     const selBtn = document.getElementById('btn-select');
     if (on && selBtn && selBtn.getAttribute('aria-pressed') === 'true') selBtn.click();
-    emit(); // re-render so the interactive edge layer appears / disappears
+    emit(); // re-render, so the insert guides stand down / come back with the mode
   };
   btn.addEventListener('click', () => setWallsMode(!wallsMode));
   // Entering select mode leaves walls mode, the mirror of the above.

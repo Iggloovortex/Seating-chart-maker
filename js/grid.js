@@ -73,9 +73,9 @@ function renderGrid() {
   renderTables();
   renderMerges();
   renderWalls();
-  if (typeof isWallsMode === 'function' && isWallsMode()) renderWallEdges();
   renderMoveHandle();
   buildInsertGuides();
+  buildWallHint();
 }
 
 /** Natural width of label text at the base font — measured on a canvas, so a
@@ -275,6 +275,9 @@ function chartZoom() {
 /** Reveal whichever insert the pointer is reaching for, or nothing. */
 function updateInsertGuides(e) {
   if (!rowGuide || !colGuide || movingSelection || cornerMenuOpen) return;
+  // Walls mode owns the seams — including the outer border, which is where the
+  // guides live — so the row/column offers stand down while it is on.
+  if (typeof isWallsMode === 'function' && isWallsMode()) { hideInsertGuides(); return; }
   const chartRect = chart.getBoundingClientRect();
   const zoom = chartZoom();
   const x = (e.clientX - chartRect.left) / zoom;
@@ -489,8 +492,15 @@ function initInsertGuides(stageEl) {
     if (e.target.closest &&
         e.target.closest('.insert-guide, .insert-corner, .insert-menu, .line-remove')) return;
     updateInsertGuides(e);
+    // The wall bar is deliberately NOT in the guard above: it sits on the seam it
+    // offers, so the pointer is over it for most of the gesture and it still has
+    // to hand over to the next seam along.
+    updateWallHint(e);
   });
-  stageEl.addEventListener('pointerleave', () => { if (!cornerMenuOpen) hideInsertGuides(); });
+  stageEl.addEventListener('pointerleave', () => {
+    if (!cornerMenuOpen) hideInsertGuides();
+    clearWallHover();
+  });
   // The menu is modal-ish: anything else you click dismisses it.
   document.addEventListener('pointerdown', (e) => {
     if (!cornerMenuOpen) return;
@@ -1156,8 +1166,8 @@ function placeMergeContent(data, fill, box, which) {
 //
 // Walls, railings, doors and windows live on the seams between squares. They are
 // drawn (renderWalls) as an SVG overlay of axis-aligned bars — the export twin is
-// drawWalls. In walls mode an interactive edge layer (renderWallEdges) sits on top
-// so every seam and border can be clicked to place the active wall type.
+// drawWalls. Placing one is a hover gesture rather than a layer of hit boxes —
+// see the wall hover affordance further down (updateWallHint).
 
 /** A {x,y,w,h} for cell (r,c) in the chart's own layout px — the shape wallSegment
  *  expects — or null if the cell isn't in the DOM. */
@@ -1179,10 +1189,13 @@ function makeWallsSvg(cls) {
 /** SVG drawing primitives for a walls overlay — the shapes paintWall / paintDoor
  *  hand geometry to. */
 function svgWallOps(svg) {
+  // Everything one wall paints goes into that wall's own <g> (see `into`), so the
+  // whole piece can be picked out later — that group is what a hover brightens.
+  let host = svg;
   const el = (name, attrs) => {
     const e = document.createElementNS(MERGE_SVGNS, name);
     for (const k in attrs) e.setAttribute(k, attrs[k]);
-    svg.appendChild(e);
+    host.appendChild(e);
     return e;
   };
   return {
@@ -1192,10 +1205,13 @@ function svgWallOps(svg) {
     },
     circle(cx, cy, r, fill, stroke, sw) { el('circle', { cx, cy, r, fill, stroke, 'stroke-width': sw }); },
     line(x1, y1, x2, y2, stroke, sw) { el('line', { x1, y1, x2, y2, stroke, 'stroke-width': sw, 'stroke-linecap': 'round' }); },
+    /** Send the next shapes into `g`, or back to the layer itself with null. */
+    into(g) { host = g || svg; },
   };
 }
 
 function renderWalls() {
+  hotWallKey = null;         // the layer is rebuilt; nothing is lit on it yet
   if (!hasWalls()) return;
   const svg = makeWallsSvg('walls-layer');
   const ops = svgWallOps(svg);
@@ -1210,6 +1226,12 @@ function renderWalls() {
     const type = wallTypeOf(value);
     const o = m[1], r = Number(m[2]), c = Number(m[3]);
     const opts = { bevel: true };
+    // One group per wall, named by its edge key, so hovering can light it up.
+    const g = document.createElementNS(MERGE_SVGNS, 'g');
+    g.setAttribute('class', 'wall-piece');
+    g.setAttribute('data-wall', key);
+    svg.appendChild(g);
+    ops.into(g);
     if (type === 'railing') {
       const jA = railingJoin(o, r, c, 'A'), jB = railingJoin(o, r, c, 'B');
       const wallHalf = (WALL_THICK * seg.u) / 2;
@@ -1238,6 +1260,9 @@ function renderWalls() {
     }
   }
   // One octagonal post per railing junction, over the shafts that meet there.
+  // A post belongs to the junction rather than to either rail, so it goes back
+  // on the layer itself.
+  ops.into(null);
   for (const { p, u } of posts.values()) paintRailingPost(p.x, p.y, u, ops);
   chart.appendChild(svg);
 }
@@ -1268,28 +1293,162 @@ function wallAtPoint(clientX, clientY) {
   return null;
 }
 
-/** The interactive edge layer for walls mode: a clickable strip on every seam and
- *  border. Clicking places the active wall type (see placeWall in walls.js). */
-function renderWallEdges() {
-  const { rows, cols } = state.grid;
-  const svg = makeWallsSvg('wall-edges');
-  const rectOf = (r, c) => cellXYWH(r, c);
-  const HIT = 14; // px hit thickness across the seam
+// ------------------------------------------------------- wall hover affordance
+//
+// Offering a wall is a hover gesture, not a layer of hit boxes: running the
+// pointer near a seam reveals a slim bar sitting exactly where the wall would be
+// drawn, with a + through its middle. It is the insert guides' gesture (see
+// updateInsertGuides) applied to the seams themselves — a wall goes on the same
+// line a new row or column is offered from.
+//
+// Near a CROSSING nothing is offered, with generous padding: that spot belongs to
+// the junction point rather than to either seam running through it.
+//
+// The bar never covers an existing wall. Hovering one of those brightens the wall
+// itself instead — the same "this is what you are pointing at" feedback an empty
+// square gives (.cell:not(.cell--on):hover).
 
-  const edge = (o, r, c) => {
-    const seg = wallSegment(o, r, c, rectOf);
-    if (!seg || !Number.isFinite(seg.cross)) return;
-    const rect = document.createElementNS(MERGE_SVGNS, 'rect');
-    if (o === 'h') { rect.setAttribute('x', seg.a0); rect.setAttribute('y', seg.cross - HIT / 2); rect.setAttribute('width', seg.a1 - seg.a0); rect.setAttribute('height', HIT); }
-    else { rect.setAttribute('x', seg.cross - HIT / 2); rect.setAttribute('y', seg.a0); rect.setAttribute('width', HIT); rect.setAttribute('height', seg.a1 - seg.a0); }
-    rect.setAttribute('class', wallAt(o, r, c) ? 'wall-edge wall-edge--set' : 'wall-edge');
-    rect.addEventListener('click', (e) => { e.stopPropagation(); if (typeof placeWall === 'function') placeWall(o, r, c); });
-    svg.appendChild(rect);
-  };
+const WALL_REACH = 11;       // px from a seam that reveals the bar
+const WALL_CORNER_PAD = 20;  // px along the other axis that suppresses it
+const WALL_HINT_THICK = 5;   // the bar's own thickness
 
-  for (let r = 0; r <= rows; r++) for (let c = 0; c < cols; c++) edge('h', r, c);
-  for (let r = 0; r < rows; r++) for (let c = 0; c <= cols; c++) edge('v', r, c);
-  chart.appendChild(svg);
+let wallHint = null;
+let hotWallKey = null;       // the wall currently lit by a hover, if any
+
+/** The hover bar. Built with the grid (a re-render throws the old one away) and
+ *  moved into place by updateWallHint; clicking anywhere on it — bar or + —
+ *  places a wall on the seam it is sitting on. */
+function buildWallHint() {
+  wallHint = document.createElement('div');
+  wallHint.className = 'wall-hint';
+  wallHint.hidden = true;
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.className = 'wall-hint__add';
+  add.textContent = '+';
+  add.tabIndex = -1;                       // the bar takes the click; this is art
+  add.setAttribute('aria-hidden', 'true');
+  wallHint.appendChild(add);
+  wallHint.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const { o, r, c } = wallHint.dataset;
+    if (!o) return;
+    hideWallHint();
+    placeWallFromHint(o, Number(r), Number(c));
+  });
+  chart.appendChild(wallHint);
+  return wallHint;
+}
+
+/** Which seam the pointer is reaching for, or null. Resolved from the square
+ *  under the pointer and its own box, so it stays exact under "true sizes",
+ *  where a column's offset differs from row to row. */
+function wallEdgeNear(clientX, clientY) {
+  const stack = document.elementsFromPoint(clientX, clientY) || [];
+  const cellEl = stack.find((n) => n.classList && n.classList.contains('cell'));
+  if (!cellEl || !cellEl.dataset.key) return null;
+  const [r, c] = parseKey(cellEl.dataset.key);
+  const box = cellLocalRect(r, c);
+  if (!box) return null;
+
+  const chartRect = chart.getBoundingClientRect();
+  const zoom = chartZoom();
+  const px = (clientX - chartRect.left) / zoom;
+  const py = (clientY - chartRect.top) / zoom;
+
+  // The seams themselves — centred in the gap, which is where the walls are
+  // drawn (wallSegment with CELL_GAP), not on the square's own border.
+  const g = CELL_GAP / 2;
+  const top = box.top - g, bottom = box.top + box.height + g;
+  const left = box.left - g, right = box.left + box.width + g;
+
+  // The nearer seam on each axis, and how far off it the pointer is.
+  const dTop = Math.abs(py - top), dBottom = Math.abs(py - bottom);
+  const dLeft = Math.abs(px - left), dRight = Math.abs(px - right);
+  const across = dTop <= dBottom
+    ? { d: dTop, edge: { o: 'h', r, c } }
+    : { d: dBottom, edge: { o: 'h', r: r + 1, c } };
+  const down = dLeft <= dRight
+    ? { d: dLeft, edge: { o: 'v', r, c } }
+    : { d: dRight, edge: { o: 'v', r, c: c + 1 } };
+
+  if (across.d <= WALL_REACH && down.d > WALL_CORNER_PAD) return across.edge;
+  if (down.d <= WALL_REACH && across.d > WALL_CORNER_PAD) return down.edge;
+  return null;
+}
+
+/** Follow the pointer: light an existing wall, or offer a bar on a bare seam. */
+function updateWallHint(e) {
+  // A drag, an open menu, or the insert guides claiming the border all own the
+  // pointer for the moment. Walls mode suppresses the guides instead, so its
+  // perimeter seams stay reachable.
+  const guidesUp = rowGuide && (!rowGuide.hidden || !colGuide.hidden ||
+                                (cornerBtn && !cornerBtn.hidden));
+  if (movingSelection || cornerMenuOpen || guidesUp) { clearWallHover(); return; }
+
+  const edge = wallEdgeNear(e.clientX, e.clientY);
+  if (!edge) { clearWallHover(); return; }
+  if (wallAt(edge.o, edge.r, edge.c)) {
+    // Already a wall here: the wall itself answers the hover.
+    hideWallHint();
+    highlightWall(wallKey(edge.o, edge.r, edge.c));
+    return;
+  }
+  highlightWall(null);
+  showWallHint(edge);
+}
+
+function showWallHint({ o, r, c }) {
+  if (!wallHint) return;
+  const seg = wallSegment(o, r, c, (rr, cc) => cellXYWH(rr, cc), CELL_GAP);
+  if (!seg || !Number.isFinite(seg.cross)) { hideWallHint(); return; }
+  const t = WALL_HINT_THICK;
+  if (o === 'h') {
+    wallHint.style.left = `${seg.a0}px`;
+    wallHint.style.top = `${seg.cross - t / 2}px`;
+    wallHint.style.width = `${seg.a1 - seg.a0}px`;
+    wallHint.style.height = `${t}px`;
+  } else {
+    wallHint.style.left = `${seg.cross - t / 2}px`;
+    wallHint.style.top = `${seg.a0}px`;
+    wallHint.style.width = `${t}px`;
+    wallHint.style.height = `${seg.a1 - seg.a0}px`;
+  }
+  wallHint.dataset.o = o;
+  wallHint.dataset.r = String(r);
+  wallHint.dataset.c = String(c);
+  wallHint.title = wallHintTitle();
+  wallHint.hidden = false;
+}
+
+/** What the bar says it will do, which depends on whether walls mode is on. */
+function wallHintTitle() {
+  if (typeof isWallsMode === 'function' && isWallsMode()) {
+    const t = typeof activeWall === 'function' ? activeWall() : 'wall';
+    return t === 'erase' ? 'Erase' : `Place a ${(WALL_LABELS[t] || 'wall').toLowerCase()} here`;
+  }
+  return 'Place a wall here (starts walls mode)';
+}
+
+function hideWallHint() {
+  if (wallHint) { wallHint.hidden = true; delete wallHint.dataset.o; }
+}
+
+function clearWallHover() {
+  hideWallHint();
+  highlightWall(null);
+}
+
+/** Light one wall (by edge key), or none. */
+function highlightWall(key) {
+  if (key === hotWallKey) return;
+  hotWallKey = key;
+  const layer = chart.querySelector('.walls-layer');
+  if (!layer) return;
+  layer.querySelectorAll('.wall-piece--hot').forEach((g) => g.classList.remove('wall-piece--hot'));
+  if (!key) return;
+  layer.querySelector(`[data-wall="${CSS.escape(key)}"]`)?.classList.add('wall-piece--hot');
 }
 
 // ------------------------------------------------------------ table resizing
@@ -1406,12 +1565,12 @@ function showResizePreview({ preview, next }) {
 
 /** Re-measure table overlays after layout changes (zoom, resize). */
 function refreshTables() {
-  chart.querySelectorAll('.table-shape, .table-remove, .table-handle, .move-handle, .merge-shape, .merge-content, .merge-unit, .walls-layer, .wall-edges')
+  chart.querySelectorAll('.table-shape, .table-remove, .table-handle, .move-handle, .merge-shape, .merge-content, .merge-unit, .walls-layer')
     .forEach((n) => n.remove());
   renderTables();
   renderMerges();
   renderWalls();
-  if (typeof isWallsMode === 'function' && isWallsMode()) renderWallEdges();
+  hideWallHint();       // its position was measured against the old layout
   renderMoveHandle();
 }
 

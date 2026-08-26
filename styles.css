@@ -521,6 +521,10 @@ body {
   .cell { min-width: 40px; min-height: 40px; }
 }
 .cell:not(.cell--on):hover { background: var(--surface-2); }
+/* Walls mode addresses the seams, not the squares, so a square stops offering
+   itself to the pointer while it is on. */
+.chart--walls .cell { cursor: default; }
+.chart--walls .cell:not(.cell--on):hover { background: var(--surface); }
 
 .cell--on {
   background: var(--seat);
@@ -781,21 +785,56 @@ body {
   overflow: visible;
   z-index: 3;
 }
-/* The interactive edge layer, only shown in walls mode (renderWallEdges). The
-   layer itself is transparent to the pointer — only the seam strips take clicks
-   — so a click that misses a seam still reaches the square underneath (the same
-   pattern the table overlays use). */
-.wall-edges {
-  position: absolute;
-  left: 0;
-  top: 0;
-  overflow: visible;
-  z-index: 6;
-  pointer-events: none;
+/* Hovering an existing wall does not offer the bar below — the wall itself
+   answers, the way an empty square does on hover. Light theme darkens it, dark
+   theme lifts it; the halo carries the same message for the outline-only types
+   (hollow, window), which have no fill for a brightness change to act on. */
+.wall-piece--hot { filter: brightness(.82) drop-shadow(0 0 2px rgba(0, 0, 0, .45)); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .wall-piece--hot {
+    filter: brightness(1.35) drop-shadow(0 0 2px rgba(255, 255, 255, .5));
+  }
 }
-.wall-edge { fill: transparent; cursor: pointer; pointer-events: all; }
-.wall-edge:hover { fill: rgba(47, 111, 235, .35); }
-.wall-edge--set { fill: rgba(47, 111, 235, .14); }
+:root[data-theme="dark"] .wall-piece--hot {
+  filter: brightness(1.35) drop-shadow(0 0 2px rgba(255, 255, 255, .5));
+}
+
+/* The hover bar that offers a wall on the seam under the pointer
+   (updateWallHint in js/grid.js). It lies exactly where the wall would be drawn
+   — a slim bar the length of one seam, with a + through its middle. The tint is
+   on a pseudo-element so the + keeps its own full-strength colour. */
+.wall-hint {
+  position: absolute;
+  z-index: 6;
+  cursor: pointer;
+}
+.wall-hint::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+  background: var(--accent);
+  opacity: .5;
+}
+.wall-hint:hover::before { opacity: .85; }
+.wall-hint__add {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font: 700 17px/1 var(--font);
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
 
 /* Wall-type picker in the walls bar. Each section groups the types that belong
    together with the colours that drive them; a toolbar rule divides them. */

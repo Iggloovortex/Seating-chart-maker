@@ -136,9 +136,23 @@ and push it; don't stack new work directly on `main`.
   New clears them). `wallSegment` takes the grid's `gap` (0 in the gapless export)
   so both renderers sit on the true seam. The grid overlay `renderWalls` (SVG) and
   the export `drawWalls` (canvas) share all painting via matching
-  poly/circle/line op sets. Walls mode (`js/walls.js`, `#btn-walls` + `#wall-bar`)
-  shows an interactive edge layer (`renderWallEdges`); pick a type, click a seam
-  to place, click again / Erase to remove.
+  poly/circle/line op sets. Walls mode lives in `js/walls.js` (`#btn-walls` +
+  `#wall-bar`): pick a type, click a seam to place, click the wall again / Erase
+  to remove.
+  **Placing is a hover gesture, not a hit layer** (`updateWallHint`, js/grid.js):
+  running the pointer near a seam reveals a slim bar (`.wall-hint`) lying exactly
+  where the wall would be drawn, with a + through its middle — the insert guides'
+  gesture applied to the seams. `wallEdgeNear` resolves the seam from the square
+  under the pointer and its own box (exact under "true sizes"), within
+  `WALL_REACH`, and offers NOTHING within `WALL_CORNER_PAD` of a crossing — that
+  spot is the junction point's, not either seam's. The bar shows outside walls
+  mode too, where clicking it lays a plain wall and steps into the mode. It never
+  covers an existing wall: hovering one of those brightens the wall itself
+  instead (`renderWalls` wraps each wall in a `.wall-piece` `<g>` keyed by its
+  edge; `highlightWall` lights it, `.wall-piece--hot` darkens in light theme and
+  lifts in dark). Walls mode also stands the insert guides down, so the outer
+  border is reachable as a seam, and squares stop answering the pointer
+  (`.chart--walls`).
 - **Drag a square — DONE.** Press a square and pull (mouse only; touch keeps its
   scroll meaning, so there is no mobile equivalent yet): it lifts off as a ghost,
   the cell under it is ringed, and letting go runs `swapCells` — an empty target
