@@ -237,23 +237,6 @@ function wallBarRect(it, sign) {
     : { x: seg.cross - t, y: a0, w: t * 2, h: a1 - a0 };
 }
 
-/** What kind of piece sits where these edges meet, or null for no piece at all.
- *
- *  A crossing is a piece of wall in its own right rather than whatever the bars
- *  running into it happen to leave behind. What it is made of follows what meets
- *  there: hollow into hollow stays hollow, glass into glass stays glass. Every
- *  other meeting — a wall with anything, glass into hollow, and any meeting
- *  involving a door — has no piece of its own, and a plain wall intersection is
- *  what stands in. Railings are the one exception: their junctions are posts,
- *  which paintRailingPost draws, so a meeting of nothing but railings gets none. */
-function junctionType(types) {
-  if (types.length < 2) return null;                       // a free end, not a joint
-  if (types.every((t) => t === 'railing')) return null;     // a post's job
-  if (types.every((t) => t === 'hollow')) return 'hollow';
-  if (types.every((t) => t === 'window')) return 'window';
-  return 'wall';
-}
-
 /** Every point on the grid where two or more edges meet, with the piece that
  *  belongs there and where it sits. */
 function wallJunctions(rectOf) {
@@ -261,10 +244,7 @@ function wallJunctions(rectOf) {
   const out = [];
   for (let R = 0; R <= rows; R++) {
     for (let C = 0; C <= cols; C++) {
-      const arms = [['h', R, C - 1], ['h', R, C], ['v', R - 1, C], ['v', R, C]]
-        .map(([o, r, c]) => ({ o, r, c, type: wallTypeOf(wallAt(o, r, c)) }))
-        .filter((a) => a.type);
-      const type = junctionType(arms.map((a) => a.type));
+      const { arms, type } = junctionAt(R, C);
       if (!type) continue;
       const a = arms[0];
       const seg = wallSegment(a.o, a.r, a.c, rectOf);

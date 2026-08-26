@@ -1267,6 +1267,36 @@ function wallOrient(v) { return v && typeof v === 'object' ? (((v.o | 0) % 4) + 
  *  is a fitting: it sits IN a wall and is drawn on its own. */
 function isWallBar(t) { return t === 'wall' || t === 'hollow' || t === 'window'; }
 
+/** What kind of piece sits where these edges meet, or null for no piece at all.
+ *
+ *  A crossing is a piece of wall in its own right rather than whatever the bars
+ *  running into it happen to leave behind, and what it is made of follows what
+ *  meets there.
+ *    hollow — nothing but hollow, which keeps a run of frame hollow throughout.
+ *    window — nothing but glass, and only TWO arms: a run carrying straight on or
+ *             turning a corner. A tee or a cross is more than a pane carries, so
+ *             the panes stop there and the point is a plain wall instead.
+ *    wall   — everything else. A wall with anything, glass into hollow, any
+ *             meeting involving a door: none of those has a piece of its own, and
+ *             a plain wall intersection is what stands in.
+ *    null   — nothing but railings, whose junctions are posts (paintRailingPost),
+ *             or a lone edge, which is a free end and not a junction at all. */
+function junctionType(types) {
+  if (types.length < 2) return null;
+  if (types.every((t) => t === 'railing')) return null;
+  if (types.every((t) => t === 'hollow')) return 'hollow';
+  if (types.length === 2 && types.every((t) => t === 'window')) return 'window';
+  return 'wall';
+}
+
+/** The edges meeting at grid point (R,C) and the piece that belongs there. */
+function junctionAt(R, C) {
+  const arms = [['h', R, C - 1], ['h', R, C], ['v', R - 1, C], ['v', R, C]]
+    .map(([o, r, c]) => ({ o, r, c, type: wallTypeOf(wallAt(o, r, c)) }))
+    .filter((a) => a.type);
+  return { arms, type: junctionType(arms.map((a) => a.type)) };
+}
+
 /** How one end of a wall meets whatever else is at that junction:
  *    'extend' — reach half a thickness past the seam, into the junction. Bars do
  *               this at every joint: they are drawn as one union (see drawWalls),
@@ -1275,10 +1305,12 @@ function isWallBar(t) { return t === 'wall' || t === 'hollow' || t === 'window';
  *    'trim'   — stop half a thickness short, against the face of whatever owns
  *               the junction.
  *    'plain'  — a free end, capped on the seam.
- *  An OPENING (a door, or a window closing a run) keeps its full width, because a
- *  shortened opening reads as a mistake; the walls running into it give way
- *  instead. The one thing an opening yields to is a wall passing straight through
- *  the junction, which cannot be broken. */
+ *  GLASS and a DOOR stop at the junction rather than running into it, because
+ *  neither is seamless with anything but itself: the junction's own outline is
+ *  then what the path terminates against. Glass keeps its seam only where the
+ *  point is glass too — a run carrying on, or a corner turning — which junctionAt
+ *  decides; at a tee or a cross the point is a plain wall and the panes stop.
+ *  Everything else reaches in, so walls and hollow frames still fuse. */
 function wallEndJoin(o, r, c, end) {
   const type = wallTypeOf(wallAt(o, r, c));
   // The grid point this end sits on.
@@ -1292,15 +1324,20 @@ function wallEndJoin(o, r, c, end) {
     ? [wallAt('v', R - 1, C), wallAt('v', R, C)]
     : [wallAt('h', R, C - 1), wallAt('h', R, C)]).map(wallTypeOf);
   const anyPerp = perp.some(Boolean);
-  // A perpendicular run passing straight through this junction owns it outright.
-  const perpThrough = perp.every((t) => isWallBar(t));
+  const joint = junctionAt(R, C).type;
 
   if (isWallBar(type)) {
     // A door across the junction is an opening: it keeps its width, we give way.
     if (perp.some((t) => t === 'door')) return 'trim';
+    // Glass is seamless only with glass. Where the point is anything else — a tee,
+    // a cross, or a meeting with another type — the pane stops at its face and the
+    // point's outline terminates it.
+    if (type === 'window') return joint === 'window' ? 'extend' : (joint ? 'trim' : 'plain');
     return (collinear || anyPerp) ? 'extend' : 'plain';
   }
-  if (type === 'door') return perpThrough ? 'trim' : 'plain';
+  // A door is never seamless: it stops at whatever point it runs into, which is
+  // also what shortens it to fit BETWEEN the points either side of it.
+  if (type === 'door') return joint ? 'trim' : 'plain';
   return (collinear || anyPerp) ? 'trim' : 'plain';   // a railing always gives way
 }
 

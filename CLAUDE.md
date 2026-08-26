@@ -141,9 +141,15 @@ and push it; don't stack new work directly on `main`.
   point where two or more edges meet, a wall-thick square is drawn with the bars,
   outline pass then fill pass, and filled LAST so the joint owns itself rather
   than depending on which bar reached across it. Hollow-to-hollow stays hollow and
-  glass-to-glass stays glass; every other meeting — a wall with anything, glass
-  into hollow, anything involving a door — has no piece of its own and takes a
-  plain WALL intersection. All-railing meetings get none: those are posts
+  glass-to-glass stays glass — but glass only where the point has just TWO arms,
+  a run carrying on or a corner turning; a tee or a cross is more than a pane
+  carries. Every other meeting — a wall with anything, glass into hollow, glass at
+  a tee or cross, anything involving a door — has no piece of its own and takes a
+  plain WALL intersection. Glass and doors are not seamless with anything but
+  themselves, so `wallEndJoin` stops them at the point's face ('trim') and the
+  point's own outline is what the path terminates against; that trim is also what
+  shortens a door to fit BETWEEN the points either side of it. `junctionType` /
+  `junctionAt` (js/state.js) is the one decision both the ends and the piece read. All-railing meetings get none: those are posts
   (`paintRailingPost`). Glass is ruled in ONE pass clipped to every pane at once
   (junction panes included) — ruling pane by pane double-rules the overlap at a
   joint, and two 30% rules that don't line up land as a dark slash across it.
