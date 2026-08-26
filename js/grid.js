@@ -1330,25 +1330,47 @@ function wallGapReach() { return CELL_GAP + CHART_PAD; }
 // proportions hold at any seam width.
 const wallPlusCross = (arm, reach) =>
   [[-arm, -reach], [arm, -reach], [arm, -arm], [reach, -arm], [reach, arm], [arm, arm],
-   [arm, reach], [-arm, reach], [-arm, arm], [-reach, arm], [-reach, -arm], [-arm, -arm]]
-    .map(([x, y]) => `${x},${y}`).join(' ');
+   [arm, reach], [-arm, reach], [-arm, arm], [-reach, arm], [-reach, -arm], [-arm, -arm]];
+
+/** A closed outline with every corner rounded off — the concave ones as well as
+ *  the convex — as an SVG path. Each corner is cut back along both of its edges
+ *  and the point itself becomes the control of a curve through the gap. The cut
+ *  can never take more than half an edge, so neighbouring corners cannot eat into
+ *  each other however hard the rounding is pushed. */
+function roundedPolyPath(pts, radius) {
+  const n = pts.length;
+  const towards = (from, to) => {
+    const dx = to[0] - from[0], dy = to[1] - from[1];
+    const len = Math.hypot(dx, dy) || 1;
+    return { x: dx / len, y: dy / len, len };
+  };
+  const d = [];
+  for (let i = 0; i < n; i++) {
+    const cur = pts[i], prev = pts[(i - 1 + n) % n], next = pts[(i + 1) % n];
+    const a = towards(cur, prev), b = towards(cur, next);
+    const r = Math.min(radius, a.len / 2, b.len / 2);
+    const p1 = [cur[0] + a.x * r, cur[1] + a.y * r];
+    const p2 = [cur[0] + b.x * r, cur[1] + b.y * r];
+    const f = (v) => Math.round(v * 100) / 100;
+    d.push(`${i === 0 ? 'M' : 'L'}${f(p1[0])},${f(p1[1])}`);
+    d.push(`Q${f(cur[0])},${f(cur[1])} ${f(p2[0])},${f(p2[1])}`);
+  }
+  return d.join(' ') + ' Z';
+}
+
 // All in box units, where one seam is 20.
 const WALL_PLUS_ARM = 5;      // half the + 's own thickness: half a seam across
-const WALL_PLUS_BAND = 20;    // the outer stroke: one seam, the bar's thickness
+const WALL_PLUS_BAND = 10;    // the outer stroke: half the bar's thickness
 const WALL_PLUS_REACH = 40;   // how far the + reaches from the middle
-// The corners are rounded by drawing each cross a little small and growing it
-// back with a round-joined stroke of its own colour — the radius IS that stroke's
-// half-width. Since each cross ends up its base size plus its own radius, the two
-// can round by different amounts and the colour still shows exactly one seam all
-// round the +: the thin + takes a small radius because it has little to round,
-// the band a bigger one.
-const WALL_PLUS_ROUND_OUT = 8;
-const WALL_PLUS_ROUND_IN = 4;
-const WALL_PLUS_OUTER = wallPlusCross(
-  WALL_PLUS_ARM + WALL_PLUS_BAND - WALL_PLUS_ROUND_OUT,
-  WALL_PLUS_REACH + WALL_PLUS_BAND - WALL_PLUS_ROUND_OUT);
-const WALL_PLUS_INNER = wallPlusCross(
-  WALL_PLUS_ARM - WALL_PLUS_ROUND_IN, WALL_PLUS_REACH - WALL_PLUS_ROUND_IN);
+// Rounded as hard as the shape allows: the radius asked for is far more than any
+// corner can take, so every one of them rounds to its own limit and no flat edge
+// survives that could have been curved away.
+const WALL_PLUS_ROUND = 999;
+const WALL_PLUS_OUTER = roundedPolyPath(
+  wallPlusCross(WALL_PLUS_ARM + WALL_PLUS_BAND, WALL_PLUS_REACH + WALL_PLUS_BAND),
+  WALL_PLUS_ROUND);
+const WALL_PLUS_INNER = roundedPolyPath(
+  wallPlusCross(WALL_PLUS_ARM, WALL_PLUS_REACH), WALL_PLUS_ROUND);
 // The box holds the outer cross exactly, so the mark's drawn size follows.
 const WALL_PLUS_HALF = WALL_PLUS_REACH + WALL_PLUS_BAND;
 const WALL_PLUS_BOX = (WALL_PLUS_HALF * 2) / 20;  // the mark's size, in seams
@@ -1378,12 +1400,11 @@ function buildWallHint() {
   const half = WALL_PLUS_HALF;
   add.setAttribute('viewBox', `${-half} ${-half} ${half * 2} ${half * 2}`);
   add.setAttribute('aria-hidden', 'true');
-  for (const [cls, pts, round] of [['wall-hint__plus-out', WALL_PLUS_OUTER, WALL_PLUS_ROUND_OUT],
-                                   ['wall-hint__plus-in', WALL_PLUS_INNER, WALL_PLUS_ROUND_IN]]) {
-    const p = document.createElementNS(MERGE_SVGNS, 'polygon');
+  for (const [cls, d] of [['wall-hint__plus-out', WALL_PLUS_OUTER],
+                          ['wall-hint__plus-in', WALL_PLUS_INNER]]) {
+    const p = document.createElementNS(MERGE_SVGNS, 'path');
     p.setAttribute('class', cls);
-    p.setAttribute('points', pts);
-    p.setAttribute('stroke-width', String(round * 2));
+    p.setAttribute('d', d);
     add.appendChild(p);
   }
   wallHint.appendChild(add);

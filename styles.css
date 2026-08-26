@@ -856,11 +856,10 @@ body {
   overflow: visible;                 /* sized in seams by showWallHint */
 }
 /* The outer stroke, in the bar's colour, and the + itself over it. */
-/* Each cross carries a round-joined stroke of its OWN colour, which is what
-   rounds its corners (see WALL_PLUS_ROUND) — not a second colour. */
-.wall-hint__add polygon { stroke-linejoin: round; }
-.wall-hint__plus-out { fill: var(--accent); stroke: var(--accent); }
-.wall-hint__plus-in { fill: var(--plus-ink); stroke: var(--plus-ink); }
+/* The outer stroke, in the bar's colour, and the + itself laid over it. Both are
+   drawn as rounded outlines (roundedPolyPath), so neither needs a stroke. */
+.wall-hint__plus-out { fill: var(--accent); }
+.wall-hint__plus-in { fill: var(--plus-ink); }
 
 /* Wall-type picker in the walls bar. Each section groups the types that belong
    together with the colours that drive them; a toolbar rule divides them. */
