@@ -1420,14 +1420,18 @@ body {
 .iconbtn--open  { color: #ef6c00; }
 .iconbtn--share { color: #6a1b9a; }
 .iconbtn--print { color: #1565c0; }
-.iconbtn--paste { color: #a1887f; }   /* the clipboard's own light brown */
+/* Paste is the one icon drawn in COLOUR rather than tinted: the clipboard body
+   carries its own brown, and only the lines of text on it take currentColor — so
+   they follow the theme like the rest of the second row (black on light, white on
+   dark, from .iconbar--grid .iconbtn). This is the body colour's one home; the
+   symbol reads it. */
+.iconbtn--paste { --paste-body: #2f1e00; }
 .iconbtn--settings { color: #78909c; } /* metal grey */
 .iconbtn--ok    { color: #fff; background: #2e7d32; border-color: #2e7d32; }
 
 /* The second row acts on the grid rather than the file, so it takes no per-
    action colour — plain black on light, plain white on dark. */
 .iconbar--grid .iconbtn { color: #000; }
-.iconbar--grid .iconbtn--paste { color: #a1887f; }
 .iconbar--grid .iconbtn--settings { color: #78909c; }
 
 /* Toolbar icon tints for dark — gated the same way as the palette so an explicit
@@ -1438,10 +1442,8 @@ body {
   :root:not([data-theme="light"]) .iconbtn--open  { color: #ffb74d; }
   :root:not([data-theme="light"]) .iconbtn--share { color: #ce93d8; }
   :root:not([data-theme="light"]) .iconbtn--print { color: #90caf9; }
-  :root:not([data-theme="light"]) .iconbtn--paste { color: #d7ccc8; }
   :root:not([data-theme="light"]) .iconbtn--settings { color: #b0bec5; }
   :root:not([data-theme="light"]) .iconbar--grid .iconbtn { color: #fff; }
-  :root:not([data-theme="light"]) .iconbar--grid .iconbtn--paste { color: #d7ccc8; }
   :root:not([data-theme="light"]) .iconbar--grid .iconbtn--settings { color: #b0bec5; }
 }
 :root[data-theme="dark"] .iconbtn--new   { color: #e57373; }
@@ -1449,10 +1451,8 @@ body {
 :root[data-theme="dark"] .iconbtn--open  { color: #ffb74d; }
 :root[data-theme="dark"] .iconbtn--share { color: #ce93d8; }
 :root[data-theme="dark"] .iconbtn--print { color: #90caf9; }
-:root[data-theme="dark"] .iconbtn--paste { color: #d7ccc8; }
 :root[data-theme="dark"] .iconbtn--settings { color: #b0bec5; }
 :root[data-theme="dark"] .iconbar--grid .iconbtn { color: #fff; }
-:root[data-theme="dark"] .iconbar--grid .iconbtn--paste { color: #d7ccc8; }
 :root[data-theme="dark"] .iconbar--grid .iconbtn--settings { color: #b0bec5; }
 
 /* Rotate-orientation button: a broken ring with the orientation's initial in

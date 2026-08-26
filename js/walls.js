@@ -101,8 +101,8 @@ function initWalls() {
   // pointer-events:none layer, so the hit is tested geometrically.
   const chartEl = document.getElementById('chart');
   if (chartEl) {
-    chartEl.addEventListener('click', (e) => {
-      if (!wallsMode || e.target.closest?.('.wall-hint')) return;
+    chartEl.addEventListener('pointerdown', (e) => {
+      if (!wallsMode || e.button === 2 || e.target.closest?.('.wall-hint')) return;
       const hit = wallAtPoint(e.clientX, e.clientY);
       if (!hit) return;
       e.stopPropagation();

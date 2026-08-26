@@ -1329,7 +1329,11 @@ function buildWallHint() {
   add.tabIndex = -1;                       // the bar takes the click; this is art
   add.setAttribute('aria-hidden', 'true');
   wallHint.appendChild(add);
-  wallHint.addEventListener('click', (e) => {
+  // Acted on at pointerDOWN, not click: the bar is a hover affordance that moves
+  // and hides as the pointer travels, so a hair of drift between press and
+  // release would retarget the click onto the chart and the press would be lost.
+  wallHint.addEventListener('pointerdown', (e) => {
+    if (e.button === 2) return;              // right-click has its own meaning
     e.preventDefault();
     e.stopPropagation();
     const { o, r, c } = wallHint.dataset;
