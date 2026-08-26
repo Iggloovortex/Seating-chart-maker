@@ -1341,13 +1341,27 @@ function buildWallHint() {
   return wallHint;
 }
 
-/** Which seam the pointer is reaching for, or null. Resolved from the square
- *  under the pointer and its own box, so it stays exact under "true sizes",
- *  where a column's offset differs from row to row. */
+/** The square at a point, or the nearest one just across a seam. The seams — and
+ *  the chart's own padding around the outer border — are GAPS in the DOM, so a
+ *  pointer sitting exactly on a seam is over no square at all. Probe a step
+ *  either way to find the square the seam belongs to, or the bar would vanish at
+ *  the very spot it is offering. */
+function cellNearPoint(clientX, clientY) {
+  const probe = Math.max(6, (CELL_GAP + CHART_PAD) * chartZoom());
+  for (const [dx, dy] of [[0, 0], [-probe, 0], [probe, 0], [0, -probe], [0, probe]]) {
+    const stack = document.elementsFromPoint(clientX + dx, clientY + dy) || [];
+    const el = stack.find((n) => n.classList && n.classList.contains('cell'));
+    if (el && el.dataset.key) return el;
+  }
+  return null;
+}
+
+/** Which seam the pointer is reaching for, or null. Resolved from the square the
+ *  pointer is on or beside and that square's own box, so it stays exact under
+ *  "true sizes", where a column's offset differs from row to row. */
 function wallEdgeNear(clientX, clientY) {
-  const stack = document.elementsFromPoint(clientX, clientY) || [];
-  const cellEl = stack.find((n) => n.classList && n.classList.contains('cell'));
-  if (!cellEl || !cellEl.dataset.key) return null;
+  const cellEl = cellNearPoint(clientX, clientY);
+  if (!cellEl) return null;
   const [r, c] = parseKey(cellEl.dataset.key);
   const box = cellLocalRect(r, c);
   if (!box) return null;
