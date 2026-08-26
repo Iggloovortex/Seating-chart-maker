@@ -1368,7 +1368,7 @@ function roundedPolyPath(pts, radius) {
 // Below about 0.5 the + is no wider than the bar it sits on, so its arms stop
 // clearing the bar's edges and it reads as a bulge in the line rather than a
 // cross. To go smaller than that, the bar (--wall-bar) has to come down with it.
-const WALL_PLUS_SCALE = 0.65;
+const WALL_PLUS_SCALE = 0.5;
 const WALL_PLUS_ARM = 5 * WALL_PLUS_SCALE;    // half the + 's own thickness
 const WALL_PLUS_REACH = 40 * WALL_PLUS_SCALE; // how far the + reaches from the middle
 const WALL_PLUS_BAND = 5;     // the outer stroke, which the + splits down its middle
