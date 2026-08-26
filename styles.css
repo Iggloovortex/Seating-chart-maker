@@ -505,8 +505,12 @@ body {
   /* How wide the wall hover's bar is DRAWN. Only that: the seam is what the bar
      answers for, whatever it is drawn at, because the ground between two squares
      belongs to the seam and not to either of them. So this is free to be set by
-     eye without moving the boundary the pointer actually crosses. */
-  --wall-bar: 6px;
+     eye without moving the boundary the pointer actually crosses.
+
+     Kept as a fraction of the seam rather than a flat width, since that is the
+     thing it is a bar for — widen the seams and the bar keeps its proportion
+     instead of turning into a thread down the middle of them. */
+  --wall-bar: calc(var(--seam) * 2 / 3);
   gap: var(--seam);
   background: var(--line);
   padding: var(--seam);
