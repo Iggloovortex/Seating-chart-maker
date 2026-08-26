@@ -33,8 +33,8 @@ function uniformCellSize() {
 // `--seam`, and are read back here each render so there is ONE place to change
 // how wide the seams are. (Widening --seam widens the ground a wall sits on, and
 // with it the ground the wall hover owns.)
-let CHART_PAD = 4;
-let CELL_GAP = 4;
+let CHART_PAD = 8;
+let CELL_GAP = 8;
 function refreshSeamMetrics() {
   const cs = getComputedStyle(chart);
   const gap = parseFloat(cs.gap);
@@ -1315,6 +1315,43 @@ function wallAtPoint(clientX, clientY) {
 // Reaching PAST the gap only matters at the outer border, where there is no
 // second square to stop at: the chart's padding is the seam's there.
 function wallGapReach() { return CELL_GAP + CHART_PAD; }
+// The + at the middle of the bar: the mark in the theme's ink with an OUTER
+// stroke in the bar's colour, one seam thick — the stroke sits entirely outside
+// the +, adding to it rather than eating into it.
+//
+// Two crossing shapes rather than a stroked one, because an SVG stroke straddles
+// its own outline: half of it falls inside, so a stroke as thick as the bar
+// swallows the mark it is meant to be edging. The larger cross IS the outer
+// stroke; the smaller one is the + laid over it.
+//
+// Measured in seams, in a box 5 seams across: the ink + is one seam thick (the
+// bar's own thickness, carried through the mark) and the colour shows one seam
+// all round it. The points are fixed and only the drawn SIZE scales, so the
+// proportions hold at any seam width.
+const wallPlusCross = (arm, reach) =>
+  [[-arm, -reach], [arm, -reach], [arm, -arm], [reach, -arm], [reach, arm], [arm, arm],
+   [arm, reach], [-arm, reach], [-arm, arm], [-reach, arm], [-reach, -arm], [-arm, -arm]]
+    .map(([x, y]) => `${x},${y}`).join(' ');
+// All in box units, where one seam is 20.
+const WALL_PLUS_ARM = 5;      // half the + 's own thickness: half a seam across
+const WALL_PLUS_BAND = 20;    // the outer stroke: one seam, the bar's thickness
+const WALL_PLUS_REACH = 40;   // how far the + reaches from the middle
+// The corners are rounded by drawing each cross a little small and growing it
+// back with a round-joined stroke of its own colour — the radius IS that stroke's
+// half-width. Since each cross ends up its base size plus its own radius, the two
+// can round by different amounts and the colour still shows exactly one seam all
+// round the +: the thin + takes a small radius because it has little to round,
+// the band a bigger one.
+const WALL_PLUS_ROUND_OUT = 8;
+const WALL_PLUS_ROUND_IN = 4;
+const WALL_PLUS_OUTER = wallPlusCross(
+  WALL_PLUS_ARM + WALL_PLUS_BAND - WALL_PLUS_ROUND_OUT,
+  WALL_PLUS_REACH + WALL_PLUS_BAND - WALL_PLUS_ROUND_OUT);
+const WALL_PLUS_INNER = wallPlusCross(
+  WALL_PLUS_ARM - WALL_PLUS_ROUND_IN, WALL_PLUS_REACH - WALL_PLUS_ROUND_IN);
+// The box holds the outer cross exactly, so the mark's drawn size follows.
+const WALL_PLUS_HALF = WALL_PLUS_REACH + WALL_PLUS_BAND;
+const WALL_PLUS_BOX = (WALL_PLUS_HALF * 2) / 20;  // the mark's size, in seams
 // What a junction keeps for itself, at the corners where two seams cross. The
 // point's own footprint (one wall thickness) plus a little air; the rest of a
 // seam's length is the wall's.
@@ -1336,11 +1373,19 @@ function buildWallHint() {
   wallHint = document.createElement('div');
   wallHint.className = 'wall-hint';
   wallHint.hidden = true;
-  const add = document.createElement('button');
-  add.type = 'button';
-  add.className = 'wall-hint__add';        // drawn as two crossing strokes in CSS
-  add.tabIndex = -1;                       // the bar takes the press; this is art
+  const add = document.createElementNS(MERGE_SVGNS, 'svg');
+  add.setAttribute('class', 'wall-hint__add');
+  const half = WALL_PLUS_HALF;
+  add.setAttribute('viewBox', `${-half} ${-half} ${half * 2} ${half * 2}`);
   add.setAttribute('aria-hidden', 'true');
+  for (const [cls, pts, round] of [['wall-hint__plus-out', WALL_PLUS_OUTER, WALL_PLUS_ROUND_OUT],
+                                   ['wall-hint__plus-in', WALL_PLUS_INNER, WALL_PLUS_ROUND_IN]]) {
+    const p = document.createElementNS(MERGE_SVGNS, 'polygon');
+    p.setAttribute('class', cls);
+    p.setAttribute('points', pts);
+    p.setAttribute('stroke-width', String(round * 2));
+    add.appendChild(p);
+  }
   wallHint.appendChild(add);
   // Acted on at pointerDOWN, not click: the bar is a hover affordance that moves
   // and hides as the pointer travels, so a hair of drift between press and
@@ -1462,6 +1507,13 @@ function showWallHint({ o, r, c }, onWall) {
     wallHint.style.height = `${a1 - a0}px`;
   }
   wallHint.classList.toggle('wall-hint--onwall', !!onWall);
+  // The mark is measured in seams, so it is sized here rather than in the sheet.
+  const mark = wallHint.querySelector('.wall-hint__add');
+  if (mark) {
+    const size = WALL_PLUS_BOX * CELL_GAP;
+    mark.style.width = `${size}px`;
+    mark.style.height = `${size}px`;
+  }
   wallHint.dataset.o = o;
   wallHint.dataset.r = String(r);
   wallHint.dataset.c = String(c);

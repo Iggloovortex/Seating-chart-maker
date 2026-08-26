@@ -16,6 +16,9 @@
   --danger: #c0392b;
   --seat: #dbe7ff;
   --seat-border: #2f6feb;
+  /* Plain black/white ink, for marks that sit ON the grid and must read against
+     it rather than against a panel — the wall hover's +. */
+  --plus-ink: #000000;
   --radius: 10px;
   --radius-sm: 7px;
   --toolbar-h: auto;
@@ -40,6 +43,7 @@
     --line: #3e4c59;
     --line-strong: #616e7c;
     --seat: #23405f;
+    --plus-ink: #ffffff;
     --shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
   }
 }
@@ -52,6 +56,7 @@
   --line: #3e4c59;
   --line-strong: #616e7c;
   --seat: #23405f;
+  --plus-ink: #ffffff;
   --shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
 }
 
@@ -488,10 +493,15 @@ body {
 .chart {
   position: relative;
   display: grid;
-  /* The space between squares. It is the seam — what a wall sits on, and the only
-     ground the wall hover owns — so it is named once and read by the bar and the
-     + as well (js/grid.js keeps CELL_GAP in step). */
-  --seam: 4px;
+  /* The space between squares. It is the seam — what a wall sits on, and the ONLY
+     ground the wall hover owns, since a square owns its own area — so it is also
+     exactly how big a target a wall is. Named once and read by the bar and the +
+     as well (js/grid.js keeps CELL_GAP in step); widen it and the seams, the
+     walls' ground and the hover target all widen together.
+
+     8px is about what a wall is drawn at on a default square, so a wall very
+     nearly fills its own seam rather than lapping onto the squares either side. */
+  --seam: 8px;
   gap: var(--seam);
   background: var(--line);
   padding: var(--seam);
@@ -823,16 +833,16 @@ body {
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 2px;
+  border-radius: 999px;      /* a pill: the bar is as round as it is thick */
   background: var(--accent);
   opacity: .75;
 }
 .wall-hint--onwall::before { display: none; }
 .wall-hint--onwall .wall-hint__add { display: none; }
 
-/* The + at the middle: two strokes of the bar's own colour and thickness,
-   crossing, and only a little longer than the bar is thick — so it reads as the
-   bar growing a crosspiece, not as a badge sitting on top of it.
+/* The + at the middle: a cross the theme's own black/white, outlined in the bar's
+   colour at the bar's thickness — so it reads as the bar swelling into a mark you
+   can aim at, in the same ink as everything else on the grid.
 
    It BLEEDS over the squares either side, and that is only ever visual: the
    squares own their own area, so the + takes no pointer of its own. Entering a
@@ -843,34 +853,14 @@ body {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 15px;
-  height: 15px;
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: pointer;
+  overflow: visible;                 /* sized in seams by showWallHint */
 }
-.wall-hint__add::before,
-.wall-hint__add::after {
-  content: '';
-  position: absolute;
-  background: var(--accent);
-  border-radius: 2px;
-}
-.wall-hint__add::before {
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: var(--seam, 4px);
-  transform: translateY(-50%);
-}
-.wall-hint__add::after {
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  width: var(--seam, 4px);
-  transform: translateX(-50%);
-}
+/* The outer stroke, in the bar's colour, and the + itself over it. */
+/* Each cross carries a round-joined stroke of its OWN colour, which is what
+   rounds its corners (see WALL_PLUS_ROUND) — not a second colour. */
+.wall-hint__add polygon { stroke-linejoin: round; }
+.wall-hint__plus-out { fill: var(--accent); stroke: var(--accent); }
+.wall-hint__plus-in { fill: var(--plus-ink); stroke: var(--plus-ink); }
 
 /* Wall-type picker in the walls bar. Each section groups the types that belong
    together with the colours that drive them; a toolbar rule divides them. */
