@@ -1386,6 +1386,35 @@ const WALL_PLUS_HALF = WALL_PLUS_REACH;
 // seam's length is the wall's.
 const WALL_POINT_PAD = 4;
 
+// WHICH + the wall hover shows. `true` is the same character the insert guides
+// carry, so the two marks are literally the same glyph; `false` is the drawn one
+// below (wallPlusCross / roundedPolyPath), a rounded cross of its own. Both are
+// live — flip this to change back, nothing else needs touching.
+const WALL_PLUS_TYPED = true;
+
+/** The + as the insert guides draw it: the character itself. */
+function typedWallPlus() {
+  const el = document.createElement('span');
+  el.className = 'wall-hint__add wall-hint__add--typed';
+  el.textContent = '+';
+  el.setAttribute('aria-hidden', 'true');
+  return el;
+}
+
+/** The + drawn as a rounded cross, sized to fill the mark's box. */
+function drawnWallPlus() {
+  const svg = document.createElementNS(MERGE_SVGNS, 'svg');
+  svg.setAttribute('class', 'wall-hint__add');
+  const half = WALL_PLUS_HALF;
+  svg.setAttribute('viewBox', `${-half} ${-half} ${half * 2} ${half * 2}`);
+  svg.setAttribute('aria-hidden', 'true');
+  const plus = document.createElementNS(MERGE_SVGNS, 'path');
+  plus.setAttribute('class', 'wall-hint__plus');
+  plus.setAttribute('d', WALL_PLUS_INNER);
+  svg.appendChild(plus);
+  return svg;
+}
+
 let wallHint = null;
 let hotWallKey = null;       // the wall currently lit by a hover, if any
 
@@ -1402,16 +1431,7 @@ function buildWallHint() {
   wallHint = document.createElement('div');
   wallHint.className = 'wall-hint';
   wallHint.hidden = true;
-  const add = document.createElementNS(MERGE_SVGNS, 'svg');
-  add.setAttribute('class', 'wall-hint__add');
-  const half = WALL_PLUS_HALF;
-  add.setAttribute('viewBox', `${-half} ${-half} ${half * 2} ${half * 2}`);
-  add.setAttribute('aria-hidden', 'true');
-  const plus = document.createElementNS(MERGE_SVGNS, 'path');
-  plus.setAttribute('class', 'wall-hint__plus');
-  plus.setAttribute('d', WALL_PLUS_INNER);
-  add.appendChild(plus);
-  wallHint.appendChild(add);
+  wallHint.appendChild(WALL_PLUS_TYPED ? typedWallPlus() : drawnWallPlus());
   // Acted on at pointerDOWN, not click: the bar is a hover affordance that moves
   // and hides as the pointer travels, so a hair of drift between press and
   // release would retarget the click onto the chart and the press would be lost.

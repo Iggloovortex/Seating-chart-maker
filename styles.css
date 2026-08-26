@@ -518,6 +518,10 @@ body {
      + , which has no button around it. */
   --grid-ctl: 24px;
   --grid-icon: 10px;
+  /* The rule an insert guide draws. The guide is a zero-height box wearing this
+     as a border, so it is also how far the guide's padding box — which its +
+     is positioned against — sits inside the line the + has to centre on. */
+  --guide-line: 3px;
   gap: var(--seam);
   background: var(--line);
   padding: var(--seam);
@@ -893,6 +897,16 @@ body {
   width: var(--grid-icon);
   height: var(--grid-icon);
 }
+/* The + taken from the insert guides — the same character at the same weight, so
+   the two marks are the same mark. It carries no button, so it takes the ink
+   colour rather than the guides' surface/border treatment. (See WALL_PLUS_TYPED
+   in js/grid.js for the drawn alternative.) */
+.wall-hint__add--typed {
+  display: grid;
+  place-items: center;
+  font: 700 15px/1 var(--font);
+  color: var(--plus-ink);
+}
 /* The + itself, straight onto the bar — a rounded outline (roundedPolyPath), so
    it needs no stroke of its own. It carries the theme's ink, and the bar it sits
    on carries the fade (see .wall-hint), so the two go down as one piece. */
@@ -1057,7 +1071,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;           /* ✕ runs small; this lands it on --grid-icon */
+  /* A ✕ is a square on its diagonals, so a box of --grid-icon would draw strokes
+     half again as long as the + 's. Sized by the STROKE instead: the box is the
+     icon over root two, which puts its diagonals on --grid-icon. */
+  font-size: 10px;
   line-height: 1;
   color: #fff;
   background: var(--danger);
@@ -1071,7 +1088,7 @@ body {
 /* Every one of them grows together for a coarse pointer, from the one token. */
 @media (pointer: coarse) {
   .chart { --grid-ctl: 30px; --grid-icon: 13px; }
-  .table-remove, .line-remove { font-size: 19px; }
+  .table-remove, .line-remove { font-size: 13px; }   /* diagonals, as above */
   .insert-add { font-size: 18px; }
   .move-handle { font-size: 16px; }
 }
@@ -1585,15 +1602,15 @@ body {
   left: 0;
   right: 0;
   height: 0;
-  border-top: 3px solid var(--line-strong);
-  transform: translateY(-1.5px);
+  border-top: var(--guide-line) solid var(--line-strong);
+  transform: translateY(calc(var(--guide-line) / -2));
 }
 .insert-guide--col {
   top: 0;
   bottom: 0;
   width: 0;
-  border-left: 3px solid var(--line-strong);
-  transform: translateX(-1.5px);
+  border-left: var(--guide-line) solid var(--line-strong);
+  transform: translateX(calc(var(--guide-line) / -2));
 }
 
 .insert-add {
@@ -1620,10 +1637,10 @@ body {
 /* A guide spans the grid's edges, so pushing each + out by --line-out puts its
    centre exactly as far off the grid as the delete x on the opposite side. The
    extra half-button turns an edge offset into a centre one. */
-.insert-guide--row .insert-add { top: calc(var(--grid-ctl) / -2); }
+.insert-guide--row .insert-add { top: calc(var(--grid-ctl) / -2 - var(--guide-line) / 2); }
 .insert-guide--row .insert-add--start { left: calc(-1 * var(--line-out, 16px) - var(--grid-ctl) / 2); }
 .insert-guide--row .insert-add--end { right: calc(-1 * var(--line-out, 16px) - var(--grid-ctl) / 2); }
-.insert-guide--col .insert-add { left: calc(var(--grid-ctl) / -2); }
+.insert-guide--col .insert-add { left: calc(var(--grid-ctl) / -2 - var(--guide-line) / 2); }
 .insert-guide--col .insert-add--start { top: calc(-1 * var(--line-out, 16px) - var(--grid-ctl) / 2); }
 .insert-guide--col .insert-add--end { bottom: calc(-1 * var(--line-out, 16px) - var(--grid-ctl) / 2); }
 
