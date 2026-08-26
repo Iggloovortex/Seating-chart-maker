@@ -1377,9 +1377,10 @@ const WALL_PLUS_REACH = 40 * WALL_PLUS_SCALE; // how far the + reaches from the 
 const WALL_PLUS_ROUND = 12;
 const WALL_PLUS_INNER = roundedPolyPath(
   wallPlusCross(WALL_PLUS_ARM, WALL_PLUS_REACH), WALL_PLUS_ROUND);
-// The box holds the + exactly, so the mark's drawn size follows.
+// The box holds the + exactly, so the shape fills whatever size it is drawn at —
+// and that size is --grid-icon, the one the grid's other controls carry inside
+// their buttons (see .wall-hint__add). Only the SHAPE is settled here.
 const WALL_PLUS_HALF = WALL_PLUS_REACH;
-const WALL_PLUS_BOX = (WALL_PLUS_HALF * 2) / 20;  // the mark's size, in seams
 // What a junction keeps for itself, at the corners where two seams cross. The
 // point's own footprint (one wall thickness) plus a little air; the rest of a
 // seam's length is the wall's.
@@ -1534,13 +1535,6 @@ function showWallHint({ o, r, c }, onWall) {
   wallHint.classList.toggle('wall-hint--h', o === 'h');
   wallHint.classList.toggle('wall-hint--v', o === 'v');
   wallHint.classList.toggle('wall-hint--onwall', !!onWall);
-  // The mark is measured in seams, so it is sized here rather than in the sheet.
-  const mark = wallHint.querySelector('.wall-hint__add');
-  if (mark) {
-    const size = WALL_PLUS_BOX * CELL_GAP;
-    mark.style.width = `${size}px`;
-    mark.style.height = `${size}px`;
-  }
   wallHint.dataset.o = o;
   wallHint.dataset.r = String(r);
   wallHint.dataset.c = String(c);

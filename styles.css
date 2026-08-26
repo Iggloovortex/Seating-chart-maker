@@ -511,6 +511,13 @@ body {
      thing it is a bar for — widen the seams and the bar keeps its proportion
      instead of turning into a thread down the middle of them. */
   --wall-bar: calc(var(--seam) * 2 / 3);
+  /* The controls that sit ON the grid — the row/column + and x, the selection's
+     grab handle, and the wall hover's + — are one family and share one size, so
+     they read as the same kind of thing wherever they turn up. --grid-ctl is the
+     round button; --grid-icon is the mark inside it, and is the whole of the wall
+     + , which has no button around it. */
+  --grid-ctl: 24px;
+  --grid-icon: 10px;
   gap: var(--seam);
   background: var(--line);
   padding: var(--seam);
@@ -881,7 +888,10 @@ body {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  overflow: visible;                 /* sized in seams by showWallHint */
+  overflow: visible;
+  /* The one control here with no button around it, so the mark IS the icon. */
+  width: var(--grid-icon);
+  height: var(--grid-icon);
 }
 /* The + itself, straight onto the bar — a rounded outline (roundedPolyPath), so
    it needs no stroke of its own. It carries the theme's ink, and the bar it sits
@@ -1002,14 +1012,15 @@ body {
 .move-handle {
   position: absolute;
   z-index: 8;
-  width: 26px;
-  height: 26px;
-  margin: -13px 0 0 -13px;   /* centred on the selection's top-left corner */
+  width: var(--grid-ctl);
+  height: var(--grid-ctl);
+  /* centred on the selection's top-left corner */
+  margin: calc(var(--grid-ctl) / -2) 0 0 calc(var(--grid-ctl) / -2);
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 12px;           /* ✥ runs large; this lands it on --grid-icon */
   line-height: 1;
   color: var(--accent-ink);
   background: var(--accent);
@@ -1020,7 +1031,6 @@ body {
   box-shadow: 0 1px 4px rgba(0,0,0,.35);
 }
 .move-handle:active { cursor: grabbing; }
-@media (pointer: coarse) { .move-handle { width: 32px; height: 32px; margin: -16px 0 0 -16px; } }
 
 /* Dashed landing box shown while dragging the handle */
 .move-preview {
@@ -1041,13 +1051,13 @@ body {
 .line-remove {
   position: absolute;
   z-index: 3;
-  width: 24px;
-  height: 24px;
+  width: var(--grid-ctl);
+  height: var(--grid-ctl);
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 15px;           /* ✕ runs small; this lands it on --grid-icon */
   line-height: 1;
   color: #fff;
   background: var(--danger);
@@ -1058,8 +1068,12 @@ body {
 }
 .table-remove:hover,
 .line-remove:hover { filter: brightness(1.1); }
+/* Every one of them grows together for a coarse pointer, from the one token. */
 @media (pointer: coarse) {
-  .table-remove, .line-remove { width: 30px; height: 30px; font-size: 15px; }
+  .chart { --grid-ctl: 30px; --grid-icon: 13px; }
+  .table-remove, .line-remove { font-size: 19px; }
+  .insert-add { font-size: 18px; }
+  .move-handle { font-size: 16px; }
 }
 
 /* Arrow buttons in the Facing segmented control */
@@ -1584,13 +1598,13 @@ body {
 
 .insert-add {
   position: absolute;
-  width: 22px;
-  height: 22px;
+  width: var(--grid-ctl);
+  height: var(--grid-ctl);
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-size: 15px;           /* lands the + on --grid-icon */
   font-weight: 700;
   line-height: 1;
   color: var(--ink);
@@ -1604,14 +1618,14 @@ body {
 .insert-add:hover { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
 
 /* A guide spans the grid's edges, so pushing each + out by --line-out puts its
-   centre exactly as far off the grid as the delete x on the opposite side.
-   The extra 11px is half the button, turning an edge offset into a centre one. */
-.insert-guide--row .insert-add { top: -11px; }
-.insert-guide--row .insert-add--start { left: calc(-1 * var(--line-out, 16px) - 11px); }
-.insert-guide--row .insert-add--end { right: calc(-1 * var(--line-out, 16px) - 11px); }
-.insert-guide--col .insert-add { left: -11px; }
-.insert-guide--col .insert-add--start { top: calc(-1 * var(--line-out, 16px) - 11px); }
-.insert-guide--col .insert-add--end { bottom: calc(-1 * var(--line-out, 16px) - 11px); }
+   centre exactly as far off the grid as the delete x on the opposite side. The
+   extra half-button turns an edge offset into a centre one. */
+.insert-guide--row .insert-add { top: calc(var(--grid-ctl) / -2); }
+.insert-guide--row .insert-add--start { left: calc(-1 * var(--line-out, 16px) - var(--grid-ctl) / 2); }
+.insert-guide--row .insert-add--end { right: calc(-1 * var(--line-out, 16px) - var(--grid-ctl) / 2); }
+.insert-guide--col .insert-add { left: calc(var(--grid-ctl) / -2); }
+.insert-guide--col .insert-add--start { top: calc(-1 * var(--line-out, 16px) - var(--grid-ctl) / 2); }
+.insert-guide--col .insert-add--end { bottom: calc(-1 * var(--line-out, 16px) - var(--grid-ctl) / 2); }
 
 /* A line shown purely as context while its menu item is hovered carries no +,
    and takes the accent colour so it reads through the open menu beside it. */
