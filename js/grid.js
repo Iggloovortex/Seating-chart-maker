@@ -1359,9 +1359,9 @@ function roundedPolyPath(pts, radius) {
 }
 
 // All in box units, where one seam is 20.
-const WALL_PLUS_ARM = 5;      // half the + 's own thickness: half a seam across
+const WALL_PLUS_ARM = 3.75;   // half the + 's own thickness
 const WALL_PLUS_BAND = 10;    // the outer stroke, which the + splits down its middle
-const WALL_PLUS_REACH = 40;   // how far the + reaches from the middle
+const WALL_PLUS_REACH = 30;   // how far the + reaches from the middle
 // One radius for every corner, held back from what the shape would allow. Rounded
 // as hard as it goes, the arms lose the straight run down their sides and the
 // mark reads as a star rather than a +; this keeps enough of that run to stay a
