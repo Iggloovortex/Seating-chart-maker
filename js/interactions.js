@@ -202,7 +202,11 @@ function initInteractions(chartEl) {
   // Desktop right-click => edit. Shift+right-click => the delete menu instead,
   // acting on the whole selection when there is one.
   chartEl.addEventListener('contextmenu', (e) => {
-    const cell = cellFrom(e.target);
+    // The seam's strip covers the band either side of every seam, so a
+    // right-click there is not on a square element at all — fall back to the
+    // square beside it, or there would be a dead ring around every square.
+    const cell = cellFrom(e.target) ||
+      (typeof cellNearPoint === 'function' ? cellNearPoint(e.clientX, e.clientY) : null);
     // In walls mode a right-click steps back OUT of it and edits whatever is
     // under the pointer, so there is always a way back to the squares.
     if (typeof isWallsMode === 'function' && isWallsMode()) {
@@ -211,14 +215,16 @@ function initInteractions(chartEl) {
       if (cell) fireEdit(cell, subFrom(e.target));
       return;
     }
-    if (!cell) return;
-    e.preventDefault();
     // Right-clicking a WALL from outside walls mode steps into it — the wall is
-    // what you are pointing at, so that is what the click should reach.
+    // what you are pointing at, so that is what the click should reach. Tested
+    // before the square, since the wall is what is in front.
     if (!e.shiftKey && typeof wallAtPoint === 'function' && wallAtPoint(e.clientX, e.clientY)) {
+      e.preventDefault();
       setWallsMode(true);
       return;
     }
+    if (!cell) return;
+    e.preventDefault();
     if (e.shiftKey) {
       const [r, c] = parseKey(cell.dataset.key);
       const keys = state.selection.size ? [...state.selection] : [keyOf(r, c)];

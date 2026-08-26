@@ -43,13 +43,15 @@ function placeWall(o, r, c) {
   setWall(o, r, c, (cur && wallTypeOf(cur) === activeWallType) ? null : activeWallType);
 }
 
-/** A click on the grid's hover bar (see updateWallHint in js/grid.js). In walls
- *  mode it places the active type, exactly as the bar says it will. From OUTSIDE
- *  walls mode the bar is also the way in: it lays a plain wall and turns the mode
- *  on, so the next seam can be clicked straight away. */
+/** A press on the seam's strip (see updateWallHint in js/grid.js), which covers
+ *  the whole band a seam owns — bare seams and walls alike. In walls mode it
+ *  places the active type, exactly as the strip says it will. From OUTSIDE walls
+ *  mode the strip is the way IN: a bare seam takes a plain wall and the mode
+ *  turns on, and a seam that already carries a wall just turns the mode on, so
+ *  pressing a wall reaches it without changing it by surprise. */
 function placeWallFromHint(o, r, c) {
   if (wallsMode) { placeWall(o, r, c); return; }
-  setWall(o, r, c, 'wall');
+  if (!wallAt(o, r, c)) setWall(o, r, c, 'wall');
   setWallsMode(true);
 }
 
@@ -95,20 +97,7 @@ function initWalls() {
   swatch('door-fill', 'doorFill');
   swatch('door-border', 'doorBorder');
 
-  // A click on a wall that is already there acts on it — the toggle (and the
-  // door's rotate) that the old edge layer carried. Bare seams are reached
-  // through the grid's hover bar instead. The walls are painted in a
-  // pointer-events:none layer, so the hit is tested geometrically.
   const chartEl = document.getElementById('chart');
-  if (chartEl) {
-    chartEl.addEventListener('pointerdown', (e) => {
-      if (!wallsMode || e.button === 2 || e.target.closest?.('.wall-hint')) return;
-      const hit = wallAtPoint(e.clientX, e.clientY);
-      if (!hit) return;
-      e.stopPropagation();
-      placeWall(hit.o, hit.r, hit.c);
-    });
-  }
 
   document.getElementById('wall-clear').addEventListener('click', () => {
     if (hasWalls() && confirm('Remove every wall, railing, door and window?')) clearWalls();

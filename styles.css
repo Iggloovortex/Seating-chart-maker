@@ -799,10 +799,15 @@ body {
   filter: brightness(1.35) drop-shadow(0 0 2px rgba(255, 255, 255, .5));
 }
 
-/* The hover bar that offers a wall on the seam under the pointer
-   (updateWallHint in js/grid.js). It lies exactly where the wall would be drawn
-   — a slim bar the length of one seam, with a + through its middle. The tint is
-   on a pseudo-element so the + keeps its own full-strength colour. */
+/* The strip a seam owns (updateWallHint in js/grid.js). The ELEMENT is the whole
+   band — the seam's reach either side of it — so hovering and pressing are the
+   same area and the square underneath is never lit at the same time. What is
+   DRAWN inside it is the slim bar, lying exactly where the wall would go, with a
+   + through its middle.
+
+   Over a seam that already carries a wall the strip is still there and still
+   takes the press, but draws nothing: the wall itself lights (.wall-piece--hot),
+   so exactly one of the two ever answers. */
 .wall-hint {
   position: absolute;
   z-index: 6;
@@ -811,12 +816,14 @@ body {
 .wall-hint::before {
   content: '';
   position: absolute;
-  inset: 0;
   border-radius: 3px;
   background: var(--accent);
-  opacity: .5;
+  opacity: .7;
 }
-.wall-hint:hover::before { opacity: .85; }
+.wall-hint--h::before { left: 0; right: 0; top: 50%; height: 5px; transform: translateY(-50%); }
+.wall-hint--v::before { top: 0; bottom: 0; left: 50%; width: 5px; transform: translateX(-50%); }
+.wall-hint--onwall::before { display: none; }
+.wall-hint--onwall .wall-hint__add { display: none; }
 .wall-hint__add {
   position: absolute;
   left: 50%;

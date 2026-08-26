@@ -1267,30 +1267,14 @@ function renderWalls() {
   chart.appendChild(svg);
 }
 
-/** Which wall a page point lands on, or null. Walls are painted in a
- *  pointer-events:none layer, so this tests the geometry instead — the same
- *  segments renderWalls draws, with a little slack for the pointer. Lets a
- *  right-click on a wall reach the wall rather than the square under it. */
+/** Which wall a page point lands on, or null. The walls are painted in a
+ *  pointer-events:none layer, so the seam is resolved geometrically — through the
+ *  SAME band the hover uses, so what a point reaches and what it lights can never
+ *  disagree. Lets a right-click on a wall reach the wall rather than the square. */
 function wallAtPoint(clientX, clientY) {
   if (!hasWalls()) return null;
-  const chartRect = chart.getBoundingClientRect();
-  const zoom = chartZoom();
-  const x = (clientX - chartRect.left) / zoom;
-  const y = (clientY - chartRect.top) / zoom;
-  const rectOf = (r, c) => cellXYWH(r, c);
-  for (const key of Object.keys(state.walls)) {
-    const m = /^([hv]):(\d+),(\d+)$/.exec(key);
-    if (!m) continue;
-    const seg = wallSegment(m[1], Number(m[2]), Number(m[3]), rectOf, CELL_GAP);
-    if (!seg || !Number.isFinite(seg.cross)) continue;
-    const reach = (WALL_THICK * seg.u) / 2 + 4;
-    const along = seg.o === 'h' ? x : y;
-    const across = seg.o === 'h' ? y : x;
-    if (along >= seg.a0 && along <= seg.a1 && Math.abs(across - seg.cross) <= reach) {
-      return { o: m[1], r: Number(m[2]), c: Number(m[3]) };
-    }
-  }
-  return null;
+  const edge = wallEdgeNear(clientX, clientY);
+  return edge && wallAt(edge.o, edge.r, edge.c) ? edge : null;
 }
 
 // ------------------------------------------------------- wall hover affordance
@@ -1308,16 +1292,29 @@ function wallAtPoint(clientX, clientY) {
 // itself instead — the same "this is what you are pointing at" feedback an empty
 // square gives (.cell:not(.cell--on):hover).
 
-const WALL_REACH = 11;       // px from a seam that reveals the bar
-const WALL_CORNER_PAD = 20;  // px along the other axis that suppresses it
-const WALL_HINT_THICK = 5;   // the bar's own thickness
+// The reach is the HALF-WIDTH of the band the seam owns, and the hint element is
+// laid out to exactly that band — so the strip that reveals the bar and the strip
+// that takes the click are the same strip. Inside it the seam answers the
+// pointer; outside it the square does; there is one line between them and no
+// overlap, so the two are never both lit and a click never lands on the one the
+// hover did not name.
+const WALL_REACH = 11;       // px either side of a seam that the seam owns
+// What the junction keeps for itself: the point's own footprint (a wall thick)
+// plus a little air. Everything else along a seam is the wall's.
+const WALL_POINT_PAD = 4;
 
 let wallHint = null;
 let hotWallKey = null;       // the wall currently lit by a hover, if any
 
-/** The hover bar. Built with the grid (a re-render throws the old one away) and
- *  moved into place by updateWallHint; clicking anywhere on it — bar or + —
- *  places a wall on the seam it is sitting on. */
+/** The seam's own strip of the grid. Built with the grid (a re-render throws the
+ *  old one away) and moved onto whichever seam the pointer is in by
+ *  updateWallHint. It covers the WHOLE band, not just the bar drawn inside it, so
+ *  it is what the pointer is over for every part of the seam the seam owns: the
+ *  square underneath never lights at the same time, and a press anywhere the bar
+ *  was offered reaches the seam rather than the square.
+ *
+ *  It stays in place over a seam that ALREADY has a wall — invisible there, since
+ *  the wall itself lights instead — so that boundary is the same one line. */
 function buildWallHint() {
   wallHint = document.createElement('div');
   wallHint.className = 'wall-hint';
@@ -1391,9 +1388,19 @@ function wallEdgeNear(clientX, clientY) {
     ? { d: dLeft, edge: { o: 'v', r, c } }
     : { d: dRight, edge: { o: 'v', r, c: c + 1 } };
 
-  if (across.d <= WALL_REACH && down.d > WALL_CORNER_PAD) return across.edge;
-  if (down.d <= WALL_REACH && across.d > WALL_CORNER_PAD) return down.edge;
-  return null;
+  // Whichever seam is nearer is the one being reached for; the other one only
+  // matters for saying "that is the junction, not either seam".
+  const [near, far] = across.d <= down.d ? [across, down] : [down, across];
+  if (near.d > WALL_REACH) return null;
+  if (far.d <= wallPointReserve(box)) return null;
+  return near.edge;
+}
+
+/** How much of a seam each end gives up to its junction: the point's own
+ *  footprint (one wall thickness) and a few px of air. Everything between the two
+ *  reserves belongs to the wall. */
+function wallPointReserve(box) {
+  return (WALL_THICK * Math.min(box.width, box.height)) / 2 + WALL_POINT_PAD;
 }
 
 /** Follow the pointer: light an existing wall, or offer a bar on a bare seam. */
@@ -1407,37 +1414,52 @@ function updateWallHint(e) {
 
   const edge = wallEdgeNear(e.clientX, e.clientY);
   if (!edge) { clearWallHover(); return; }
-  if (wallAt(edge.o, edge.r, edge.c)) {
-    // Already a wall here: the wall itself answers the hover.
-    hideWallHint();
-    highlightWall(wallKey(edge.o, edge.r, edge.c));
-    return;
-  }
-  highlightWall(null);
-  showWallHint(edge);
+  // Exactly one of the two is ever lit: a seam that already carries a wall
+  // brightens the wall and draws no bar, a bare one draws the bar. Either way the
+  // strip itself stays over the square, so the square never lights as well.
+  const set = !!wallAt(edge.o, edge.r, edge.c);
+  highlightWall(set ? wallKey(edge.o, edge.r, edge.c) : null);
+  showWallHint(edge, set);
 }
 
-function showWallHint({ o, r, c }) {
+/** Lay the strip along a seam. `onWall` makes it invisible — the wall under it is
+ *  what lights — while it still covers the band and takes the press. */
+function showWallHint({ o, r, c }, onWall) {
   if (!wallHint) return;
   const seg = wallSegment(o, r, c, (rr, cc) => cellXYWH(rr, cc), CELL_GAP);
   if (!seg || !Number.isFinite(seg.cross)) { hideWallHint(); return; }
-  const t = WALL_HINT_THICK;
+  // The band is the seam's own reach either side of it, and runs the seam's whole
+  // length bar the two junction reserves.
+  const box = cellLocalRect(Math.min(r, state.grid.rows - 1), Math.min(c, state.grid.cols - 1));
+  const keep = box ? wallPointReserve(box) : WALL_POINT_PAD;
+  const a0 = seg.a0 + keep, a1 = seg.a1 - keep;
+  if (a1 <= a0) { hideWallHint(); return; }
   if (o === 'h') {
-    wallHint.style.left = `${seg.a0}px`;
-    wallHint.style.top = `${seg.cross - t / 2}px`;
-    wallHint.style.width = `${seg.a1 - seg.a0}px`;
-    wallHint.style.height = `${t}px`;
+    wallHint.style.left = `${a0}px`;
+    wallHint.style.top = `${seg.cross - WALL_REACH}px`;
+    wallHint.style.width = `${a1 - a0}px`;
+    wallHint.style.height = `${WALL_REACH * 2}px`;
   } else {
-    wallHint.style.left = `${seg.cross - t / 2}px`;
-    wallHint.style.top = `${seg.a0}px`;
-    wallHint.style.width = `${t}px`;
-    wallHint.style.height = `${seg.a1 - seg.a0}px`;
+    wallHint.style.left = `${seg.cross - WALL_REACH}px`;
+    wallHint.style.top = `${a0}px`;
+    wallHint.style.width = `${WALL_REACH * 2}px`;
+    wallHint.style.height = `${a1 - a0}px`;
   }
+  wallHint.classList.toggle('wall-hint--h', o === 'h');
+  wallHint.classList.toggle('wall-hint--v', o === 'v');
+  wallHint.classList.toggle('wall-hint--onwall', !!onWall);
   wallHint.dataset.o = o;
   wallHint.dataset.r = String(r);
   wallHint.dataset.c = String(c);
-  wallHint.title = wallHintTitle();
+  wallHint.title = onWall ? wallOnTitle() : wallHintTitle();
   wallHint.hidden = false;
+}
+
+/** What pressing a seam that already carries a wall will do. */
+function wallOnTitle() {
+  if (typeof isWallsMode !== 'function' || !isWallsMode()) return 'Edit this wall';
+  const t = typeof activeWall === 'function' ? activeWall() : 'wall';
+  return t === 'erase' ? 'Erase this wall' : `Replace with ${(WALL_LABELS[t] || 'wall').toLowerCase()}`;
 }
 
 /** What the bar says it will do, which depends on whether walls mode is on. */
