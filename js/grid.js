@@ -1528,6 +1528,9 @@ function showWallHint({ o, r, c }, onWall) {
     wallHint.style.width = `${t}px`;
     wallHint.style.height = `${a1 - a0}px`;
   }
+  // Which way the bar inside the strip runs (the strip itself is the whole seam).
+  wallHint.classList.toggle('wall-hint--h', o === 'h');
+  wallHint.classList.toggle('wall-hint--v', o === 'v');
   wallHint.classList.toggle('wall-hint--onwall', !!onWall);
   // The mark is measured in seams, so it is sized here rather than in the sheet.
   const mark = wallHint.querySelector('.wall-hint__add');
