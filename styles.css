@@ -488,9 +488,13 @@ body {
 .chart {
   position: relative;
   display: grid;
-  gap: 4px;
+  /* The space between squares. It is the seam — what a wall sits on, and the only
+     ground the wall hover owns — so it is named once and read by the bar and the
+     + as well (js/grid.js keeps CELL_GAP in step). */
+  --seam: 4px;
+  gap: var(--seam);
   background: var(--line);
-  padding: 4px;
+  padding: var(--seam);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   transform: scale(var(--zoom, 1));
@@ -813,34 +817,59 @@ body {
   z-index: 6;
   cursor: pointer;
 }
+/* The bar fills the strip, which IS the gap — so it reads as the seam lighting
+   up rather than as something laid over the squares. */
 .wall-hint::before {
   content: '';
   position: absolute;
-  border-radius: 3px;
+  inset: 0;
+  border-radius: 2px;
   background: var(--accent);
-  opacity: .7;
+  opacity: .75;
 }
-.wall-hint--h::before { left: 0; right: 0; top: 50%; height: 5px; transform: translateY(-50%); }
-.wall-hint--v::before { top: 0; bottom: 0; left: 50%; width: 5px; transform: translateX(-50%); }
 .wall-hint--onwall::before { display: none; }
 .wall-hint--onwall .wall-hint__add { display: none; }
+
+/* The + at the middle: two strokes of the bar's own colour and thickness,
+   crossing, and only a little longer than the bar is thick — so it reads as the
+   bar growing a crosspiece, not as a badge sitting on top of it.
+
+   It BLEEDS over the squares either side, and that is only ever visual: the
+   squares own their own area, so the + takes no pointer of its own. Entering a
+   square drops the bar, + and all. */
 .wall-hint__add {
+  pointer-events: none;
   position: absolute;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 24px;
-  height: 24px;
+  width: 15px;
+  height: 15px;
   padding: 0;
-  display: grid;
-  place-items: center;
-  font: 700 17px/1 var(--font);
-  color: var(--accent-ink);
-  background: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: 50%;
-  box-shadow: var(--shadow);
+  border: 0;
+  background: none;
   cursor: pointer;
+}
+.wall-hint__add::before,
+.wall-hint__add::after {
+  content: '';
+  position: absolute;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.wall-hint__add::before {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--seam, 4px);
+  transform: translateY(-50%);
+}
+.wall-hint__add::after {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: var(--seam, 4px);
+  transform: translateX(-50%);
 }
 
 /* Wall-type picker in the walls bar. Each section groups the types that belong

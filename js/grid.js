@@ -28,8 +28,20 @@ function uniformCellSize() {
   return Math.round(Math.max(CELL_BASE, neededW, neededH));
 }
 
-const CHART_PAD = 4;   // .chart padding, in px
-const CELL_GAP = 4;    // .chart gap, in px
+// The gap between squares — the seam — and the chart's padding around the
+// outside, which is the same measure. Both live in the stylesheet as .chart's
+// `--seam`, and are read back here each render so there is ONE place to change
+// how wide the seams are. (Widening --seam widens the ground a wall sits on, and
+// with it the ground the wall hover owns.)
+let CHART_PAD = 4;
+let CELL_GAP = 4;
+function refreshSeamMetrics() {
+  const cs = getComputedStyle(chart);
+  const gap = parseFloat(cs.gap);
+  const pad = parseFloat(cs.paddingTop);
+  if (Number.isFinite(gap)) CELL_GAP = gap;
+  if (Number.isFinite(pad)) CHART_PAD = pad;
+}
 const BADGE_PAD = 5;   // inset for a badge inside a shape (matches .cell__check)
 const TABLE_BADGE = 24; // .table-remove size, in px
 
@@ -37,6 +49,7 @@ const TABLE_BADGE = 24; // .table-remove size, in px
 function renderGrid() {
   const { cols, rows } = state.grid;
   refreshGridSurface();
+  refreshSeamMetrics();
 
   // All cells share one square size, so the grid stays uniform as content grows.
   const size = uniformCellSize();
@@ -1292,15 +1305,19 @@ function wallAtPoint(clientX, clientY) {
 // itself instead — the same "this is what you are pointing at" feedback an empty
 // square gives (.cell:not(.cell--on):hover).
 
-// The reach is the HALF-WIDTH of the band the seam owns, and the hint element is
-// laid out to exactly that band — so the strip that reveals the bar and the strip
-// that takes the click are the same strip. Inside it the seam answers the
-// pointer; outside it the square does; there is one line between them and no
-// overlap, so the two are never both lit and a click never lands on the one the
-// hover did not name.
-const WALL_REACH = 11;       // px either side of a seam that the seam owns
-// What the junction keeps for itself: the point's own footprint (a wall thick)
-// plus a little air. Everything else along a seam is the wall's.
+// What the seam owns is the SPACE BETWEEN the squares — the grid's gap, and the
+// chart's padding around the outside — and nothing more. The moment the pointer
+// is over a square itself, the square owns it. That one rule makes the two
+// mutually exclusive with a single boundary between them (the square's own edge),
+// and the hint element is laid out to exactly that space, so what reveals the bar
+// and what takes the press are the same ground.
+//
+// Reaching PAST the gap only matters at the outer border, where there is no
+// second square to stop at: the chart's padding is the seam's there.
+function wallGapReach() { return CELL_GAP + CHART_PAD; }
+// What a junction keeps for itself, at the corners where two seams cross. The
+// point's own footprint (one wall thickness) plus a little air; the rest of a
+// seam's length is the wall's.
 const WALL_POINT_PAD = 4;
 
 let wallHint = null;
@@ -1321,9 +1338,8 @@ function buildWallHint() {
   wallHint.hidden = true;
   const add = document.createElement('button');
   add.type = 'button';
-  add.className = 'wall-hint__add';
-  add.textContent = '+';
-  add.tabIndex = -1;                       // the bar takes the click; this is art
+  add.className = 'wall-hint__add';        // drawn as two crossing strokes in CSS
+  add.tabIndex = -1;                       // the bar takes the press; this is art
   add.setAttribute('aria-hidden', 'true');
   wallHint.appendChild(add);
   // Acted on at pointerDOWN, not click: the bar is a hover affordance that moves
@@ -1372,28 +1388,25 @@ function wallEdgeNear(clientX, clientY) {
   const px = (clientX - chartRect.left) / zoom;
   const py = (clientY - chartRect.top) / zoom;
 
-  // The seams themselves — centred in the gap, which is where the walls are
-  // drawn (wallSegment with CELL_GAP), not on the square's own border.
-  const g = CELL_GAP / 2;
-  const top = box.top - g, bottom = box.top + box.height + g;
-  const left = box.left - g, right = box.left + box.width + g;
+  const x0 = box.left, x1 = box.left + box.width;
+  const y0 = box.top, y1 = box.top + box.height;
 
-  // The nearer seam on each axis, and how far off it the pointer is.
-  const dTop = Math.abs(py - top), dBottom = Math.abs(py - bottom);
-  const dLeft = Math.abs(px - left), dRight = Math.abs(px - right);
-  const across = dTop <= dBottom
-    ? { d: dTop, edge: { o: 'h', r, c } }
-    : { d: dBottom, edge: { o: 'h', r: r + 1, c } };
-  const down = dLeft <= dRight
-    ? { d: dLeft, edge: { o: 'v', r, c } }
-    : { d: dRight, edge: { o: 'v', r, c: c + 1 } };
+  // Over the square itself: it is the square's, full stop.
+  if (px >= x0 && px <= x1 && py >= y0 && py <= y1) return null;
 
-  // Whichever seam is nearer is the one being reached for; the other one only
-  // matters for saying "that is the junction, not either seam".
-  const [near, far] = across.d <= down.d ? [across, down] : [down, across];
-  if (near.d > WALL_REACH) return null;
-  if (far.d <= wallPointReserve(box)) return null;
-  return near.edge;
+  // Otherwise the pointer is in the space beside it. How far out, on each axis —
+  // zero on the axis it still lines up with.
+  const dx = px < x0 ? x0 - px : px > x1 ? px - x1 : 0;
+  const dy = py < y0 ? y0 - py : py > y1 ? py - y1 : 0;
+  const reach = wallGapReach();
+  if (dx > reach || dy > reach) return null;
+
+  // Out on BOTH axes means the diagonal space off a corner — the junction's, not
+  // either seam's.
+  if (dx > 0 && dy > 0) return null;
+  if (dy > 0) return { o: 'h', r: py < y0 ? r : r + 1, c };
+  if (dx > 0) return { o: 'v', r, c: px < x0 ? c : c + 1 };
+  return null;
 }
 
 /** How much of a seam each end gives up to its junction: the point's own
@@ -1434,19 +1447,20 @@ function showWallHint({ o, r, c }, onWall) {
   const keep = box ? wallPointReserve(box) : WALL_POINT_PAD;
   const a0 = seg.a0 + keep, a1 = seg.a1 - keep;
   if (a1 <= a0) { hideWallHint(); return; }
+  // Across the seam the strip is the gap itself — square edge to square edge — so
+  // it stops exactly where the square starts.
+  const t = CELL_GAP;
   if (o === 'h') {
     wallHint.style.left = `${a0}px`;
-    wallHint.style.top = `${seg.cross - WALL_REACH}px`;
+    wallHint.style.top = `${seg.cross - t / 2}px`;
     wallHint.style.width = `${a1 - a0}px`;
-    wallHint.style.height = `${WALL_REACH * 2}px`;
+    wallHint.style.height = `${t}px`;
   } else {
-    wallHint.style.left = `${seg.cross - WALL_REACH}px`;
+    wallHint.style.left = `${seg.cross - t / 2}px`;
     wallHint.style.top = `${a0}px`;
-    wallHint.style.width = `${WALL_REACH * 2}px`;
+    wallHint.style.width = `${t}px`;
     wallHint.style.height = `${a1 - a0}px`;
   }
-  wallHint.classList.toggle('wall-hint--h', o === 'h');
-  wallHint.classList.toggle('wall-hint--v', o === 'v');
   wallHint.classList.toggle('wall-hint--onwall', !!onWall);
   wallHint.dataset.o = o;
   wallHint.dataset.r = String(r);
