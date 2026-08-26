@@ -136,25 +136,32 @@ function enhanceColorInput(input) {
 }
 
 // Icon glyphs for the picker's tool row (Bootstrap Icons style, MIT).
-// Drawn as an OUTLINE, not a solid: it sits beside the palette, and every other
-// icon in the app is a stroked shape rather than a filled silhouette.
+// The dropper, as supplied. Drawn on a 24-unit grid, unlike the palette beside
+// it, so each glyph carries its own viewBox.
+const CPICK_EYE_BOX = '0 0 24 24';
 const CPICK_EYE =
-  '<path d="M13.354.646a1.207 1.207 0 0 0-1.708 0L8.5 3.793l-.646-.647a.5.5 0 1 0-.708.708' +
-  'L8.293 5l-7.147 7.146A.5.5 0 0 0 1 12.5v1.793l-.854.853a.5.5 0 1 0 .708.707L1.707 15H3.5' +
-  'a.5.5 0 0 0 .354-.146L11 7.707l1.146 1.147a.5.5 0 0 0 .708-.708l-.647-.646 3.147-3.146' +
-  'a1.207 1.207 0 0 0 0-1.708z" fill="none" stroke="currentColor" stroke-width="1.1" ' +
-  'stroke-linejoin="round"/>';
+  '<path d="M20.3847 2.87868C19.2132 1.70711 17.3137 1.70711 16.1421 2.87868L14.0202 5.00052' +
+  'L13.313 4.29332C12.9225 3.9028 12.2894 3.9028 11.8988 4.29332C11.5083 4.68385 11.5083 5.31701' +
+  ' 11.8988 5.70754L17.5557 11.3644C17.9462 11.7549 18.5794 11.7549 18.9699 11.3644C19.3604' +
+  ' 10.9739 19.3604 10.3407 18.9699 9.95018L18.2629 9.24316L20.3847 7.12132C21.5563 5.94975' +
+  ' 21.5563 4.05025 20.3847 2.87868Z" fill="currentColor"/>' +
+  '<path fill-rule="evenodd" clip-rule="evenodd" d="M11.9297 7.09116L4.1515 14.8693C3.22786' +
+  ' 15.793 3.03239 17.169 3.5651 18.2842L1.99994 19.8493L3.41415 21.2635L4.97931 19.6984C6.09444' +
+  ' 20.2311 7.4705 20.0356 8.39414 19.112L16.1723 11.3338L11.9297 7.09116ZM13.3439 11.3338' +
+  'L11.9297 9.91959L5.56571 16.2835C5.17518 16.6741 5.17518 17.3072 5.56571 17.6978C5.95623' +
+  ' 18.0883 6.5894 18.0883 6.97992 17.6978L13.3439 11.3338Z" fill="currentColor"/>';
+
 const CPICK_PALETTE =
   '<path d="M8 1a7 7 0 1 0 0 14h1.5a1.5 1.5 0 0 0 0-3H9a1 1 0 0 1 0-2h2a4 4 0 0 0 4-4' +
   'c0-3.3-3.1-5-7-5z" fill="none" stroke="currentColor" stroke-width="1.3"/>' +
   '<circle cx="5" cy="7.6" r="1"/><circle cx="6.9" cy="4.8" r="1"/>' +
   '<circle cx="10.1" cy="4.8" r="1"/><circle cx="12" cy="7.6" r="1"/>';
 
-/** A 16x16 icon for a picker tool button. */
-function cpickIcon(inner) {
+/** An icon for a picker tool button, on whatever grid the glyph was drawn. */
+function cpickIcon(inner, viewBox = '0 0 16 16') {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('class', 'cpick__toolicon');
-  svg.setAttribute('viewBox', '0 0 16 16');
+  svg.setAttribute('viewBox', viewBox);
   svg.setAttribute('fill', 'currentColor');
   svg.setAttribute('aria-hidden', 'true');
   svg.innerHTML = inner;
@@ -322,7 +329,7 @@ function openColorPopover(anchor, value, onPick) {
   };
 
   if (window.EyeDropper) {
-    tool('Pick a colour from the screen', (b) => b.appendChild(cpickIcon(CPICK_EYE)), async () => {
+    tool('Pick a colour from the screen', (b) => b.appendChild(cpickIcon(CPICK_EYE, CPICK_EYE_BOX)), async () => {
       try {
         const res = await new window.EyeDropper().open();
         const c = hexToRgb(res.sRGBHex);

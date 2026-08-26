@@ -397,8 +397,8 @@ body {
 
 /* The checkerboard that stands for "transparent" — as the picker's tool icon. */
 .cpick__checker {
-  width: 16px;
-  height: 16px;
+  width: var(--cpick-icon, 22px);
+  height: var(--cpick-icon, 22px);
   border: 1px solid var(--line-strong);
   border-radius: 3px;
   background-image:
@@ -1875,7 +1875,9 @@ body {
 .cpick__num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 /* The picker's tools: eyedropper, transparent and save, all icon-only and the
    same size, sharing one row so the footer stays a single control tall. */
-.cpick__tools { display: flex; gap: 6px; margin-top: 8px; }
+/* One icon size for the row, so the dropper, the checkerboard and the palette
+   all read at the same weight rather than floating in their buttons. */
+.cpick__tools { display: flex; gap: 6px; margin-top: 8px; --cpick-icon: 22px; }
 .cpick__tool {
   appearance: none;
   flex: 1;
@@ -1896,7 +1898,7 @@ body {
   border-color: var(--accent);
 }
 .cpick__tool:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.cpick__toolicon { width: 16px; height: 16px; flex: 0 0 auto; }
+.cpick__toolicon { width: var(--cpick-icon); height: var(--cpick-icon); flex: 0 0 auto; }
 
 /* The saved colours: a short row of slots, filled newest-first. */
 .cpick__saved { display: flex; gap: 6px; margin-top: 6px; }
