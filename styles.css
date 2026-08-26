@@ -826,6 +826,11 @@ body {
   position: absolute;
   z-index: 6;
   cursor: pointer;
+  /* Faded as ONE piece rather than piece by piece. The bar runs under the + 's
+     stroke, so fading them separately would darken every place they overlap —
+     exactly the join that has to be invisible. Composited together, they blend
+     identically and the overlap cannot show. */
+  opacity: .75;
 }
 /* The bar fills the strip, which IS the gap — so it reads as the seam lighting
    up rather than as something laid over the squares. */
@@ -858,10 +863,10 @@ body {
 /* The outer stroke, in the bar's colour, and the + itself laid over it. Both are
    drawn as rounded outlines (roundedPolyPath), so neither needs a stroke.
 
-   The stroke is the bar exactly — same colour, same thickness (WALL_PLUS_BAND is
-   one seam) — so the two read as one piece: the bar running through, swelling
-   around the +. That is also why the bar is drawn flat rather than faded: a
-   translucent bar under a solid stroke would show every place they overlap. */
+   The stroke is the bar's colour and the bar's blend exactly (see .wall-hint,
+   which fades the two together), so the two read as one piece: the bar running
+   through the seam and swelling around the +. It is thinner than the bar, because
+   the + splits it down the middle and each half has to read. */
 .wall-hint__plus-out { fill: var(--accent); }
 .wall-hint__plus-in { fill: var(--plus-ink); }
 
