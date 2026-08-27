@@ -302,6 +302,7 @@ function drawWalls(ctx, rectOf) {
     ctx.fillRect(b.x, b.y, b.w, b.h);
   }
   for (const j of juncs) {
+    if (j.type === 'doorseam') continue;   // covered after the doors, not drawn
     const b = junctionRect(j, 1);
     ctx.fillRect(b.x, b.y, b.w, b.h);
   }
@@ -321,6 +322,7 @@ function drawWalls(ctx, rectOf) {
   // The crossings go in last, so the piece AT a joint owns it rather than
   // whichever bar happened to reach across it.
   for (const j of juncs) {
+    if (j.type === 'doorseam') continue;
     const b = junctionRect(j, -1);
     if (b.w <= 0 || b.h <= 0) continue;
     fillInterior(b, j.type);
@@ -388,6 +390,19 @@ function drawWalls(ctx, rectOf) {
     const opts = { bevel: false, out: true, endA: wallEndJoin(it.o, it.r, it.c, 'A'),
                    endB: wallEndJoin(it.o, it.r, it.c, 'B') };
     paintDoor(it.seg, wallOrient(it.value), ops, opts);
+  }
+
+  // A double door's point is covered, not drawn. The two leaves run right up to
+  // it, so what would show there is the stroke along each of their abutting ends
+  // — one line straight through the middle of an opening that is meant to read as
+  // one. This patch goes over it in the door's own fill, and only over the
+  // INTERIOR of the point, so the frame's own long edges are left alone.
+  for (const j of juncs) {
+    if (j.type !== 'doorseam') continue;
+    const b = junctionRect(j, -1);
+    if (b.w <= 0 || b.h <= 0) continue;
+    ctx.fillStyle = doorFillColor();
+    ctx.fillRect(b.x, b.y, b.w, b.h);
   }
 }
 

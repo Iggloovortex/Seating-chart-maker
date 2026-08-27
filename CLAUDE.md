@@ -153,7 +153,12 @@ and push it; don't stack new work directly on `main`.
   is still an end. The one door end that is seamless is an OPENING meeting another
   door's opening in a straight line (a double door): `doorOpenEnd` reads the same
   hinge bit paintDoor does, so turning a door turns which side can be seamless,
-  and `doorsMeetOpening` is what drops the piece between the pair.
+  and `doorsMeetOpening` is what drops the piece between the pair. That point is
+  COVERED rather than skipped: `junctionType` returns `'doorseam'`, which the
+  export leaves out of the outline and fill passes and patches over AFTER the
+  doors, in the door's own fill and only across the point's interior. Otherwise
+  the two leaves' abutting end strokes draw one line through the middle of an
+  opening meant to read as one. Every other meeting keeps the point's stroke.
   A window's glass is `defaults.windowFill` laid at a fixed half opacity
   (`windowFillColor`, `WINDOW_ALPHA`) — the colour is the user's, the translucency
   is not. Being translucent, the export lays the page under a pane before tinting

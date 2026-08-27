@@ -1291,11 +1291,13 @@ function junctionType(arms) {
   // that meets nothing is still an end that has to be closed off.
   if (types.length === 1) return (types[0] === 'door' || types[0] === 'window') ? 'wall' : null;
   if (types.every((t) => t === 'railing')) return null;
-  // Two doors meeting OPENING to OPENING are one opening — a double door — so
-  // nothing stands between them. Every other door meeting takes a wall point,
-  // hinge-first meetings included: a door is only ever seamless on the side it
-  // opens, and turning the door turns which side that is.
-  if (types.length === 2 && types.every((t) => t === 'door') && doorsMeetOpening(arms)) return null;
+  // Two doors meeting OPENING to OPENING are one opening — a double door. The
+  // point is still there, but it is COVERED rather than drawn: the pair run
+  // together over it, and 'doorseam' is what tells the renderer to patch out the
+  // stroke that would otherwise show where their two ends abut. Every other door
+  // meeting keeps that stroke, hinge-first meetings included: a door is only ever
+  // seamless on the side it opens, and turning the door turns which side.
+  if (types.length === 2 && types.every((t) => t === 'door') && doorsMeetOpening(arms)) return 'doorseam';
   if (types.every((t) => t === 'hollow')) return 'hollow';
   if (types.length === 2 && types.every((t) => t === 'window')) return 'window';
   return 'wall';
@@ -1370,7 +1372,7 @@ function wallEndJoin(o, r, c, end) {
   // fit BETWEEN the points either side of it. The one end that does not is the
   // opening meeting another door's opening: those two are one door, so they run
   // together with no cap and nothing between them.
-  if (type === 'door') return joint ? 'trim' : 'through';
+  if (type === 'door') return joint === 'doorseam' ? 'through' : 'trim';
   return (collinear || anyPerp) ? 'trim' : 'plain';   // a railing always gives way
 }
 
