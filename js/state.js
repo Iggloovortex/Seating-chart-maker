@@ -65,6 +65,7 @@ const DEFAULTS = {
   tableBorder: '#5d4037',
   wallFill: '#909090',      // a solid wall's body
   wallBorder: '#000000',    // the outline every wall bar is drawn with
+  windowFill: '#d8feff',    // glass, laid at half opacity so the floor shows
   railFill: '#909090',      // a railing's body
   railBorder: '#000000',    // a railing's outline
   doorFill: '#6c4c00',      // a door's leaf and frame
@@ -145,6 +146,7 @@ const state = {
     tableBorder: DEFAULTS.tableBorder,
     wallFill: DEFAULTS.wallFill,
     wallBorder: DEFAULTS.wallBorder,
+    windowFill: DEFAULTS.windowFill,
     railFill: DEFAULTS.railFill,
     railBorder: DEFAULTS.railBorder,
     doorFill: DEFAULTS.doorFill,
@@ -1281,20 +1283,49 @@ function isWallBar(t) { return t === 'wall' || t === 'hollow' || t === 'window';
  *             a plain wall intersection is what stands in.
  *    null   — nothing but railings, whose junctions are posts (paintRailingPost),
  *             or a lone edge, which is a free end and not a junction at all. */
-function junctionType(types) {
-  if (types.length < 2) return null;
+function junctionType(arms) {
+  const types = arms.map((a) => a.type);
+  if (!types.length) return null;
+  // A door or a pane standing ALONE still ends on a wall point at each side.
+  // Neither is seamless with open air any more than with another type, so an end
+  // that meets nothing is still an end that has to be closed off.
+  if (types.length === 1) return (types[0] === 'door' || types[0] === 'window') ? 'wall' : null;
   if (types.every((t) => t === 'railing')) return null;
+  // Two doors meeting OPENING to OPENING are one opening — a double door — so
+  // nothing stands between them. Every other door meeting takes a wall point,
+  // hinge-first meetings included: a door is only ever seamless on the side it
+  // opens, and turning the door turns which side that is.
+  if (types.length === 2 && types.every((t) => t === 'door') && doorsMeetOpening(arms)) return null;
   if (types.every((t) => t === 'hollow')) return 'hollow';
   if (types.length === 2 && types.every((t) => t === 'window')) return 'window';
   return 'wall';
 }
 
-/** The edges meeting at grid point (R,C) and the piece that belongs there. */
+/** Which end of a door is its OPENING — the free edge the leaf sweeps toward,
+ *  opposite the hinge (see paintDoor, which reads the same bit). */
+function doorOpenEnd(value) { return (wallOrient(value) & 2) ? 'A' : 'B'; }
+
+/** True when two doors meet on the side each of them opens, and in a straight
+ *  line — a pair of leaves parting in the middle. A corner is never one opening. */
+function doorsMeetOpening(arms) {
+  const [a, b] = arms;
+  return a.o === b.o && doorOpenEnd(a.value) === a.end && doorOpenEnd(b.value) === b.end;
+}
+
+/** The edges meeting at grid point (R,C) and the piece that belongs there. Each
+ *  arm carries WHICH of its ends lands on the point, since a door's two ends are
+ *  not alike. */
 function junctionAt(R, C) {
-  const arms = [['h', R, C - 1], ['h', R, C], ['v', R - 1, C], ['v', R, C]]
-    .map(([o, r, c]) => ({ o, r, c, type: wallTypeOf(wallAt(o, r, c)) }))
-    .filter((a) => a.type);
-  return { arms, type: junctionType(arms.map((a) => a.type)) };
+  const arms = [
+    { o: 'h', r: R, c: C - 1, end: 'B' },
+    { o: 'h', r: R, c: C, end: 'A' },
+    { o: 'v', r: R - 1, c: C, end: 'B' },
+    { o: 'v', r: R, c: C, end: 'A' },
+  ].map((a) => {
+    const value = wallAt(a.o, a.r, a.c);
+    return { ...a, value, type: wallTypeOf(value) };
+  }).filter((a) => a.type);
+  return { arms, type: junctionType(arms) };
 }
 
 /** How one end of a wall meets whatever else is at that junction:
@@ -1335,9 +1366,11 @@ function wallEndJoin(o, r, c, end) {
     if (type === 'window') return joint === 'window' ? 'extend' : (joint ? 'trim' : 'plain');
     return (collinear || anyPerp) ? 'extend' : 'plain';
   }
-  // A door is never seamless: it stops at whatever point it runs into, which is
-  // also what shortens it to fit BETWEEN the points either side of it.
-  if (type === 'door') return joint ? 'trim' : 'plain';
+  // A door stops at whatever point it runs into, which is also what shortens it to
+  // fit BETWEEN the points either side of it. The one end that does not is the
+  // opening meeting another door's opening: those two are one door, so they run
+  // together with no cap and nothing between them.
+  if (type === 'door') return joint ? 'trim' : 'through';
   return (collinear || anyPerp) ? 'trim' : 'plain';   // a railing always gives way
 }
 
@@ -1490,6 +1523,7 @@ function deserialize(data) {
       tableBorder: data.defaults?.tableBorder || DEFAULTS.tableBorder,
       wallFill: data.defaults?.wallFill || DEFAULTS.wallFill,
       wallBorder: data.defaults?.wallBorder || DEFAULTS.wallBorder,
+      windowFill: data.defaults?.windowFill || DEFAULTS.windowFill,
       railFill: data.defaults?.railFill || DEFAULTS.railFill,
       railBorder: data.defaults?.railBorder || DEFAULTS.railBorder,
       doorFill: data.defaults?.doorFill || DEFAULTS.doorFill,

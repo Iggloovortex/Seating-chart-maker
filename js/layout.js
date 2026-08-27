@@ -143,6 +143,12 @@ function doorLeafInk() { return fadeInk(doorInkColor(), 0.46); }
 function wallFillColor() { return (state.defaults && state.defaults.wallFill) || '#909090'; }
 function wallInkColor() { return (state.defaults && state.defaults.wallBorder) || WALL_INK; }
 function railFillColor() { return (state.defaults && state.defaults.railFill) || '#909090'; }
+/** Glass. The COLOUR is the user's; the half opacity is not — that is what makes
+ *  it read as something you can see through rather than a tinted wall. */
+const WINDOW_ALPHA = 0.5;
+function windowFillColor() {
+  return fadeInk((state.defaults && state.defaults.windowFill) || '#d8feff', WINDOW_ALPHA);
+}
 function railInkColor() { return (state.defaults && state.defaults.railBorder) || RAIL_INK; }
 function doorFillColor() { return (state.defaults && state.defaults.doorFill) || DOOR_FILL; }
 function doorInkColor() { return (state.defaults && state.defaults.doorBorder) || DOOR_INK; }
@@ -243,7 +249,7 @@ function paintWall(seg, type, ops, opts = {}) {
   const sw = WALL_STROKE * seg.u * wallScale(opts);
   const bar = wallBar(seg, opts);
   const ink = wallInkColor();
-  const fill = type === 'wall' ? wallFillColor() : type === 'window' ? '#d8feff' : 'none';
+  const fill = type === 'wall' ? wallFillColor() : type === 'window' ? windowFillColor() : 'none';
   if (fill !== 'none') ops.poly(bar.pts, fill, 'none', 0);
   ops.line(bar.topA.x, bar.topA.y, bar.topB.x, bar.topB.y, ink, sw);
   ops.line(bar.botA.x, bar.botA.y, bar.botB.x, bar.botB.y, ink, sw);

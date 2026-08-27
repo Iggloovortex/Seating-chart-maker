@@ -290,7 +290,9 @@ function drawWalls(ctx, rectOf) {
   const rank = { hollow: 0, window: 1, wall: 2 };
   const bars = items.filter((it) => isWallBar(it.type))
                     .sort((a, b) => rank[a.type] - rank[b.type]);
-  const fill = (t) => (t === 'wall' ? wallFillColor() : t === 'window' ? '#d8feff' : bg);
+  // Glass is translucent, so the page has to be laid under it first — a canvas
+  // fill does not blend with what a previous pass put there unless it is there.
+  const fill = (t) => (t === 'wall' ? wallFillColor() : t === 'window' ? windowFillColor() : bg);
 
   const juncs = wallJunctions(rectOf);
 
@@ -303,19 +305,25 @@ function drawWalls(ctx, rectOf) {
     const b = junctionRect(j, 1);
     ctx.fillRect(b.x, b.y, b.w, b.h);
   }
+  const fillInterior = (b, type) => {
+    // Glass is see-through, and a canvas fill blends with whatever is already
+    // under it — which here is the ink of the outline pass. Lay the page down
+    // first so the glass tints the PAGE and not its own outline.
+    if (type === 'window') { ctx.fillStyle = bg; ctx.fillRect(b.x, b.y, b.w, b.h); }
+    ctx.fillStyle = fill(type);
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+  };
   for (const it of bars) {
     const b = wallBarRect(it, -1);
     if (b.w <= 0 || b.h <= 0) continue;
-    ctx.fillStyle = fill(it.type);
-    ctx.fillRect(b.x, b.y, b.w, b.h);
+    fillInterior(b, it.type);
   }
   // The crossings go in last, so the piece AT a joint owns it rather than
   // whichever bar happened to reach across it.
   for (const j of juncs) {
     const b = junctionRect(j, -1);
     if (b.w <= 0 || b.h <= 0) continue;
-    ctx.fillStyle = fill(j.type);
-    ctx.fillRect(b.x, b.y, b.w, b.h);
+    fillInterior(b, j.type);
   }
 
   const ops = canvasWallOps(ctx);

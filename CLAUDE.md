@@ -148,7 +148,16 @@ and push it; don't stack new work directly on `main`.
   plain WALL intersection. Glass and doors are not seamless with anything but
   themselves, so `wallEndJoin` stops them at the point's face ('trim') and the
   point's own outline is what the path terminates against; that trim is also what
-  shortens a door to fit BETWEEN the points either side of it. `junctionType` /
+  shortens a door to fit BETWEEN the points either side of it. A door or a pane
+  standing ALONE still ends on a wall point at each side — an end meeting nothing
+  is still an end. The one door end that is seamless is an OPENING meeting another
+  door's opening in a straight line (a double door): `doorOpenEnd` reads the same
+  hinge bit paintDoor does, so turning a door turns which side can be seamless,
+  and `doorsMeetOpening` is what drops the piece between the pair.
+  A window's glass is `defaults.windowFill` laid at a fixed half opacity
+  (`windowFillColor`, `WINDOW_ALPHA`) — the colour is the user's, the translucency
+  is not. Being translucent, the export lays the page under a pane before tinting
+  it, or the glass would tint the ink of its own outline pass. `junctionType` /
   `junctionAt` (js/state.js) is the one decision both the ends and the piece read. All-railing meetings get none: those are posts
   (`paintRailingPost`). Glass is ruled in ONE pass clipped to every pane at once
   (junction panes included) — ruling pane by pane double-rules the overlap at a

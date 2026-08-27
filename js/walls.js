@@ -92,6 +92,7 @@ function initWalls() {
     bindColorInput(el, () => setDefault(key, colorOf(el)));
     subscribe(() => { if (document.activeElement !== el) setColorInput(el, state.defaults[key]); });
   };
+  swatch('window-fill', 'windowFill');
   swatch('rail-fill', 'railFill');
   swatch('rail-border', 'railBorder');
   swatch('door-fill', 'doorFill');
