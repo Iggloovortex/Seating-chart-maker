@@ -178,6 +178,9 @@
         <path d="M14.4 5.7 18.5 9.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
       </symbol>
       <!-- Copy: two stacked sheets, as supplied. -->
+      <!-- Copy: two sheets. The dog-eared one is in FRONT and its fold belongs to
+           it; the plain outline behind is the back sheet, and it is the piece that
+           takes --copy-back so the front stays plain black/white. -->
       <symbol id="ui-copy" viewBox="0 0 20 24">
         <g transform="matrix(1,0,0,1,-0.794685,-2.1)">
           <path d="M14,3L7,3C5.903,3 5,3.903 5,5L5,19C5,20.097 5.903,21 7,21L17,21C18.097,21 19,20.097 19,19L19,8L14,3Z"
@@ -186,7 +189,7 @@
         </g>
         <g transform="matrix(1,0,0,1,-4.1,1.205315)">
           <path d="M7,3C5.903,3 5,3.903 5,5L5,19C5,20.097 5.903,21 7,21L17,21C18.097,21 19,20.097 19,19"
-                fill="none" stroke="currentColor" stroke-width="1.8"/>
+                fill="none" stroke="var(--copy-back, currentColor)" stroke-width="1.8"/>
         </g>
       </symbol>
       <!-- Paste: a clipboard, drawn in the app's own hand — a 24x24 box stroked
@@ -277,23 +280,36 @@
       <!-- Settings. Blocky teeth that meet the ring, not detached rays — a thin
            radial burst reads as brightness, which would be badly wrong next to a
            dark-mode toggle. -->
+      <!-- Settings: the same outlined idiom as the rest, but filled grey so it
+           still stands out. The rim is drawn twice — once UNDER the gear, grown
+           by the 1.8 line width to edge the whole silhouette, and once as a ring
+           hugging the centre hole. Outside alone is invisible in light (ink on a
+           near-ink ground); inside alone misses the teeth. Both gives an outline
+           that reads either way. --gear-rim follows the theme. -->
       <symbol id="ui-settings" viewBox="0 0 24 24">
-        <path d="M12 3.1v3.4M12 17.5v3.4M20.9 12h-3.4M6.5 12H3.1M18.29 5.71 15.88 8.12M8.12 15.88l-2.41 2.41M18.29 18.29l-2.41-2.41M8.12 8.12 5.71 5.71"
-              fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"/>
+        <g fill="none" stroke="var(--gear-rim, #fff)" stroke-linecap="round">
+          <path d="M12 3.1v3.4M12 17.5v3.4M20.9 12h-3.4M6.5 12H3.1M18.29 5.71 15.88 8.12M8.12 15.88l-2.41 2.41M18.29 18.29l-2.41-2.41M8.12 8.12 5.71 5.71" stroke-width="7.2"/>
+          <circle cx="12" cy="12" r="6.4" stroke-width="3.6"/>
+        </g>
+        <path d="M12 3.1v3.4M12 17.5v3.4M20.9 12h-3.4M6.5 12H3.1M18.29 5.71 15.88 8.12M8.12 15.88l-2.41 2.41M18.29 18.29l-2.41-2.41M8.12 8.12 5.71 5.71" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"/>
         <circle cx="12" cy="12" r="6.4" fill="currentColor"/>
         <circle cx="12" cy="12" r="2.9" fill="var(--surface, #fff)"/>
+        <circle cx="12" cy="12" r="3.8" fill="none" stroke="var(--gear-rim, #fff)" stroke-width="1.8"/>
       </symbol>
       <symbol id="ui-search" viewBox="0 0 24 24">
         <circle cx="10.6" cy="10.6" r="6.6" fill="none" stroke="currentColor" stroke-width="1.8"/>
         <path d="M15.4 15.4 20.6 20.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
       </symbol>
+      <!-- Sun / moon: outlines at 1.8 like the rest of the toolbar, not the solid
+           shapes they were. The sun's disc carries a filled centre so it does not
+           read as an empty ring beside its neighbours. -->
       <symbol id="ui-sun" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="4.4" fill="currentColor"/>
-        <path d="M12 1.8v3M12 19.2v3M1.8 12h3M19.2 12h3M4.9 4.9l2.1 2.1M16.97 16.97l2.12 2.12M19.1 4.9l-2.13 2.13M7.03 16.97l-2.12 2.12"
-              fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        <circle cx="12" cy="12" r="5.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M12 2.4v2.4M12 19.2v2.4M2.4 12h2.4M19.2 12h2.4M5.3 5.3l1.7 1.7M17 17l1.7 1.7M18.7 5.3L17 7M7 17l-1.7 1.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="12" cy="12" r="1.8" fill="currentColor"/>
       </symbol>
       <symbol id="ui-moon" viewBox="0 0 24 24">
-        <path d="M20.5 14.6A8.2 8.2 0 1 1 9.4 3.5a6.5 6.5 0 0 0 11.1 11.1z" fill="currentColor"/>
+        <path d="M21 14.2A9 9 0 1 1 9.8 3a7 7 0 0 0 11.2 11.2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
       </symbol>
     </defs>
   </svg>
@@ -334,7 +350,7 @@
         <!-- Second row: actions that change the grid rather than the file.
              Undo/redo will join this row. -->
         <div class="iconbar iconbar--grid" role="group" aria-label="Grid actions">
-          <button id="btn-copy-format" class="iconbtn" type="button" title="Copy the selected square, labels and all" aria-label="Copy square">
+          <button id="btn-copy-format" class="iconbtn iconbtn--copy" type="button" title="Copy the selected square, labels and all" aria-label="Copy square">
             <svg class="iconbtn__svg" viewBox="0 0 24 24" aria-hidden="true"><use href="#ui-copy"/></svg>
           </button>
           <button id="btn-cut-format" class="iconbtn iconbtn--cut" type="button" title="Cut the selected square — copy it, then clear it" aria-label="Cut square">

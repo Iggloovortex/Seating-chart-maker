@@ -19,6 +19,7 @@
   /* Plain black/white ink, for marks that sit ON the grid and must read against
      it rather than against a panel — the wall hover's +. */
   --plus-ink: #000000;
+  --gear-rim: #000000;   /* the settings gear's outline — theme ink, like an outlined icon */
   --radius: 10px;
   --radius-sm: 7px;
   --toolbar-h: auto;
@@ -44,6 +45,7 @@
     --line-strong: #616e7c;
     --seat: #23405f;
     --plus-ink: #ffffff;
+    --gear-rim: #ffffff;
     --shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
   }
 }
@@ -57,6 +59,7 @@
   --line-strong: #616e7c;
   --seat: #23405f;
   --plus-ink: #ffffff;
+  --gear-rim: #ffffff;
   --shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
 }
 
@@ -1499,7 +1502,7 @@ body {
   border-color: var(--danger);
   color: #fff;
 }
-.iconbtn--save  { color: #2e7d32; }
+.iconbtn--save  { color: #546e7a; }   /* slate; print keeps the blue */
 .iconbtn--open  { color: #ef6c00; }
 .iconbtn--share { color: #6a1b9a; }
 .iconbtn--print { color: #1565c0; }
@@ -1515,7 +1518,10 @@ body {
    one is NOT the light one lightened: raising the lightness of that hue turns it
    yellow, so it is shifted toward red and desaturated to stay a brown. */
 .iconbtn--paste { --paste-body: #6c4c00; }
-.iconbtn--settings { color: #78909c; } /* metal grey */
+.iconbtn--settings { color: #78909c; } /* metal grey, rimmed in the theme's ink */
+/* Copy's BACK sheet takes a colour; the front stays plain, so one of the two is
+   always the theme's own black/white. */
+.iconbtn--copy { --copy-back: #00796b; }
 .iconbtn--ok    { color: #fff; background: #2e7d32; border-color: #2e7d32; }
 
 /* The second row acts on the grid rather than the file, so it takes no per-
@@ -1527,22 +1533,28 @@ body {
    Light/Dark choice from Settings overrides the media query in both directions. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .iconbtn--new   { color: #e57373; }
-  :root:not([data-theme="light"]) .iconbtn--save  { color: #81c784; }
+  :root:not([data-theme="light"]) .iconbtn--save  { color: #9fb3bd; }
   :root:not([data-theme="light"]) .iconbtn--open  { color: #ffb74d; }
   :root:not([data-theme="light"]) .iconbtn--share { color: #ce93d8; }
   :root:not([data-theme="light"]) .iconbtn--print { color: #90caf9; }
   :root:not([data-theme="light"]) .iconbtn--paste { --paste-body: #b8895f; }
   :root:not([data-theme="light"]) .iconbtn--settings { color: #b0bec5; }
+  :root:not([data-theme="light"]) .iconbtn--copy { --copy-back: #5ab4a8; }
+  /* A hover colour must outrank the theme colour, or the icon keeps its resting
+     tint on top of the filled button. */
+  :root:not([data-theme="light"]) .iconbtn--new:hover { color: #fff; }
   :root:not([data-theme="light"]) .iconbar--grid .iconbtn { color: #fff; }
   :root:not([data-theme="light"]) .iconbar--grid .iconbtn--settings { color: #b0bec5; }
 }
 :root[data-theme="dark"] .iconbtn--new   { color: #e57373; }
-:root[data-theme="dark"] .iconbtn--save  { color: #81c784; }
+:root[data-theme="dark"] .iconbtn--save  { color: #9fb3bd; }
 :root[data-theme="dark"] .iconbtn--open  { color: #ffb74d; }
 :root[data-theme="dark"] .iconbtn--share { color: #ce93d8; }
 :root[data-theme="dark"] .iconbtn--print { color: #90caf9; }
 :root[data-theme="dark"] .iconbtn--paste { --paste-body: #b8895f; }
 :root[data-theme="dark"] .iconbtn--settings { color: #b0bec5; }
+:root[data-theme="dark"] .iconbtn--copy { --copy-back: #5ab4a8; }
+:root[data-theme="dark"] .iconbtn--new:hover { color: #fff; }
 :root[data-theme="dark"] .iconbar--grid .iconbtn { color: #fff; }
 :root[data-theme="dark"] .iconbar--grid .iconbtn--settings { color: #b0bec5; }
 
