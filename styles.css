@@ -1511,7 +1511,9 @@ body {
 
    It is a STROKE now rather than a filled body, so it needs a value that reads as
    a line on each ground — the near-black brown that worked as a solid shape all
-   but disappears on dark. Hence the pair below, gated like the palette. */
+   but disappears on dark. Hence the pair below, gated like the palette. The dark
+   one is NOT the light one lightened: raising the lightness of that hue turns it
+   yellow, so it is shifted toward red and desaturated to stay a brown. */
 .iconbtn--paste { --paste-body: #6c4c00; }
 .iconbtn--settings { color: #78909c; } /* metal grey */
 .iconbtn--ok    { color: #fff; background: #2e7d32; border-color: #2e7d32; }
@@ -1529,7 +1531,7 @@ body {
   :root:not([data-theme="light"]) .iconbtn--open  { color: #ffb74d; }
   :root:not([data-theme="light"]) .iconbtn--share { color: #ce93d8; }
   :root:not([data-theme="light"]) .iconbtn--print { color: #90caf9; }
-  :root:not([data-theme="light"]) .iconbtn--paste { --paste-body: #d6a94a; }
+  :root:not([data-theme="light"]) .iconbtn--paste { --paste-body: #b8895f; }
   :root:not([data-theme="light"]) .iconbtn--settings { color: #b0bec5; }
   :root:not([data-theme="light"]) .iconbar--grid .iconbtn { color: #fff; }
   :root:not([data-theme="light"]) .iconbar--grid .iconbtn--settings { color: #b0bec5; }
@@ -1539,7 +1541,7 @@ body {
 :root[data-theme="dark"] .iconbtn--open  { color: #ffb74d; }
 :root[data-theme="dark"] .iconbtn--share { color: #ce93d8; }
 :root[data-theme="dark"] .iconbtn--print { color: #90caf9; }
-:root[data-theme="dark"] .iconbtn--paste { --paste-body: #d6a94a; }
+:root[data-theme="dark"] .iconbtn--paste { --paste-body: #b8895f; }
 :root[data-theme="dark"] .iconbtn--settings { color: #b0bec5; }
 :root[data-theme="dark"] .iconbar--grid .iconbtn { color: #fff; }
 :root[data-theme="dark"] .iconbar--grid .iconbtn--settings { color: #b0bec5; }
