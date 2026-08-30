@@ -1390,7 +1390,7 @@ const WALL_POINT_PAD = 4;
 // carry, so the two marks are literally the same glyph; `false` is the drawn one
 // below (wallPlusCross / roundedPolyPath), a rounded cross of its own. Both are
 // live — flip this to change back, nothing else needs touching.
-const WALL_PLUS_TYPED = true;
+const WALL_PLUS_TYPED = false;
 
 /** The + as the insert guides draw it: the character itself. */
 function typedWallPlus() {

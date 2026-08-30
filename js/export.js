@@ -392,14 +392,10 @@ function drawWalls(ctx, rectOf) {
     paintDoor(it.seg, wallOrient(it.value), ops, opts);
   }
 
-  // A double door's point is covered, not drawn. The two leaves run right up to
-  // it, so what would show there is the stroke along each of their abutting ends
-  // — one line straight through the middle of an opening that is meant to read as
-  // one. This patch goes over it in the door's own fill, and only over the
-  // INTERIOR of the point, so the frame's own long edges are left alone.
+  // A double door's point is a seam. this is a hacky way to get the seam to show up in the export, but it works.
   for (const j of juncs) {
     if (j.type !== 'doorseam') continue;
-    const b = junctionRect(j, -1);
+    const b = junctionRect(j, -5);
     if (b.w <= 0 || b.h <= 0) continue;
     ctx.fillStyle = doorFillColor();
     ctx.fillRect(b.x, b.y, b.w, b.h);

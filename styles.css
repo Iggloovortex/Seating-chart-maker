@@ -1518,45 +1518,50 @@ body {
    one is NOT the light one lightened: raising the lightness of that hue turns it
    yellow, so it is shifted toward red and desaturated to stay a brown. */
 .iconbtn--paste { --paste-body: #6c4c00; }
-.iconbtn--settings { color: #78909c; } /* metal grey, rimmed in the theme's ink */
-/* Copy's BACK sheet takes a colour; the front stays plain, so one of the two is
-   always the theme's own black/white. */
 .iconbtn--copy { --copy-back: #00796b; }
-.iconbtn--ok    { color: #fff; background: #2e7d32; border-color: #2e7d32; }
+.iconbtn--ok   { color: #fff; background: #2e7d32; border-color: #2e7d32; }
 
 /* The second row acts on the grid rather than the file, so it takes no per-
    action colour — plain black on light, plain white on dark. */
 .iconbar--grid .iconbtn { color: #000; }
 .iconbar--grid .iconbtn--settings { color: #78909c; }
+.iconbar--grid .iconbtn--cut { --grip: #1565c0; }
+
 
 /* Toolbar icon tints for dark — gated the same way as the palette so an explicit
    Light/Dark choice from Settings overrides the media query in both directions. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .iconbtn--new   { color: #e57373; }
   :root:not([data-theme="light"]) .iconbtn--save  { color: #9fb3bd; }
-  :root:not([data-theme="light"]) .iconbtn--open  { color: #ffb74d; }
+  :root:not([data-theme="light"]) .iconbtn--open  { color: #ec9512; }
   :root:not([data-theme="light"]) .iconbtn--share { color: #ce93d8; }
   :root:not([data-theme="light"]) .iconbtn--print { color: #90caf9; }
   :root:not([data-theme="light"]) .iconbtn--paste { --paste-body: #b8895f; }
-  :root:not([data-theme="light"]) .iconbtn--settings { color: #b0bec5; }
-  :root:not([data-theme="light"]) .iconbtn--copy { --copy-back: #5ab4a8; }
+  :root:not([data-theme="light"]) .iconbtn--copy  { --copy-back: #5ab4a8; }
   /* A hover colour must outrank the theme colour, or the icon keeps its resting
      tint on top of the filled button. */
   :root:not([data-theme="light"]) .iconbtn--new:hover { color: #fff; }
   :root:not([data-theme="light"]) .iconbar--grid .iconbtn { color: #fff; }
   :root:not([data-theme="light"]) .iconbar--grid .iconbtn--settings { color: #b0bec5; }
+  :root:not([data-theme="light"]) .iconbar--grid .iconbtn--cut { color: #fff; }
+  :root:not([data-theme="light"]) .iconbar--grid .iconbtn--cut { --grip: #1565c0; }
+  :root:not([data-theme="light"]) .iconbar--grid .iconbtn--undo { --tip: rgb(0, 200, 0); }
+  :root:not([data-theme="light"]) .iconbar--grid .iconbtn--redo { --tip: rgb(200, 0, 200); }
 }
 :root[data-theme="dark"] .iconbtn--new   { color: #e57373; }
 :root[data-theme="dark"] .iconbtn--save  { color: #9fb3bd; }
-:root[data-theme="dark"] .iconbtn--open  { color: #ffb74d; }
-:root[data-theme="dark"] .iconbtn--share { color: #ce93d8; }
+:root[data-theme="dark"] .iconbtn--open  { color: #ec9512; }
+:root[data-theme="dark"] .iconbtn--share { color: #763f99; }
 :root[data-theme="dark"] .iconbtn--print { color: #90caf9; }
-:root[data-theme="dark"] .iconbtn--paste { --paste-body: #b8895f; }
-:root[data-theme="dark"] .iconbtn--settings { color: #b0bec5; }
+:root[data-theme="dark"] .iconbtn--paste { --paste-body: #8f6a49; }
 :root[data-theme="dark"] .iconbtn--copy { --copy-back: #5ab4a8; }
 :root[data-theme="dark"] .iconbtn--new:hover { color: #fff; }
 :root[data-theme="dark"] .iconbar--grid .iconbtn { color: #fff; }
 :root[data-theme="dark"] .iconbar--grid .iconbtn--settings { color: #b0bec5; }
+:root[data-theme="dark"] .iconbar--grid .iconbtn--cut { --grip: #1565c0; }
+:root[data-theme="dark"] .iconbar--grid .iconbtn--cut { color: #fff; }
+ :root[data-theme="light"] .iconbar--grid .iconbtn--undo { --tip: rgb(0, 200, 0); }
+:root[data-theme="light"] .iconbar--grid .iconbtn--redo { --tip: rgb(255, 0, 255); }
 
 /* Rotate-orientation button: a broken ring with the orientation's initial in
    the middle, and the word beside it. Drawn in the text colour so it stays
