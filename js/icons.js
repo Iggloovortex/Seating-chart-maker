@@ -164,32 +164,35 @@ const SYMBOL_MARKUP = {
     '<path d="M5 1a2 2 0 0 0-2 2v1h10V3a2 2 0 0 0-2-2zm6 8H5a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1" fill="FILL"/>' +
     '<path d="M0 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-1v-2a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2H2a2 2 0 0 1-2-2zm2.5 1a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1" fill="COLOR"/>',
   'ic-stairs-single':
-    '<path d="M750 0 L900 250 H800 V500 H700 V250 H600 Z" fill="COLOR"/>' +
-    '<rect x="-17.5" y="357.5" width="1535" height="35" fill="COLOR"/>' +
-    '<rect x="-17.5" y="732.5" width="1535" height="35" fill="COLOR"/>' +
-    '<rect x="-17.5" y="1107.5" width="1535" height="35" fill="COLOR"/>' +
-    '<rect x="-17.5" y="1466.5" width="1535" height="35" fill="COLOR"/>' +
-    '<path d="M750 1500 L600 1250 H700 V1000 H800 V1250 H900 Z" fill="COLOR"/>',
+    '<polygon points="12,1 15.5,5 13.2,5 13.2,6.5 10.8,6.5 10.8,5 8.5,5" fill="COLOR"/>' +
+    '<rect x="2" y="7.5" width="20" height="1.8" rx=".5" fill="COLOR"/>' +
+    '<rect x="2" y="10.7" width="20" height="1.8" rx=".5" fill="COLOR"/>' +
+    '<rect x="2" y="13.9" width="20" height="1.8" rx=".5" fill="COLOR"/>' +
+    '<polygon points="12,23 8.5,19 10.8,19 10.8,17.5 13.2,17.5 13.2,19 15.5,19" fill="COLOR"/>',
   'ic-stairs-start':
-    '<path d="M750 0 L900 250 H800 V500 H700 V250 H600 Z" fill="COLOR"/>' +
-    '<rect x="-17.5" y="357.5" width="1535" height="35" fill="COLOR"/>' +
-    '<rect x="-17.5" y="732.5" width="1535" height="35" fill="COLOR"/>' +
-    '<rect x="-17.5" y="1107.5" width="1535" height="35" fill="COLOR"/>' +
-    '<rect x="-17.5" y="1466.5" width="1535" height="35" fill="COLOR"/>',
+    '<polygon points="12,1 15.5,5 13.2,5 13.2,6.5 10.8,6.5 10.8,5 8.5,5" fill="COLOR"/>' +
+    '<rect x="2" y="8.5" width="20" height="1.8" rx=".5" fill="COLOR"/>' +
+    '<rect x="2" y="12" width="20" height="1.8" rx=".5" fill="COLOR"/>' +
+    '<rect x="2" y="15.5" width="20" height="1.8" rx=".5" fill="COLOR"/>' +
+    '<rect x="2" y="19" width="20" height="1.8" rx=".5" fill="COLOR"/>' +
+    '<rect x="2" y="22" width="20" height="1.8" rx=".5" fill="COLOR"/>',
   'ic-stairs-middle':
-    '<rect x="-17.5" y="357.5" width="1535" height="35" fill="COLOR"/>' +
-    '<rect x="-17.5" y="732.5" width="1535" height="35" fill="COLOR"/>' +
-    '<rect x="-17.5" y="1107.5" width="1535" height="35" fill="COLOR"/>' +
-    '<rect x="-17.5" y="1466.5" width="1535" height="35" fill="COLOR"/>',
+    '<rect x="2" y="1.4" width="20" height="1.8" rx=".5" fill="COLOR"/>' +
+    '<rect x="2" y="5.5" width="20" height="1.8" rx=".5" fill="COLOR"/>' +
+    '<rect x="2" y="9.6" width="20" height="1.8" rx=".5" fill="COLOR"/>' +
+    '<rect x="2" y="13.7" width="20" height="1.8" rx=".5" fill="COLOR"/>' +
+    '<rect x="2" y="17.8" width="20" height="1.8" rx=".5" fill="COLOR"/>' +
+    '<rect x="2" y="21.9" width="20" height="1.8" rx=".5" fill="COLOR"/>',
   'ic-stairs-end':
-    '<rect x="-17.5" y="357.5" width="1535" height="35" fill="COLOR"/>' +
-    '<rect x="-17.5" y="732.5" width="1535" height="35" fill="COLOR"/>' +
-    '<rect x="-17.5" y="1107.5" width="1535" height="35" fill="COLOR"/>' +
-    '<rect x="-17.5" y="1466.5" width="1535" height="35" fill="COLOR"/>' +
-    '<path d="M750 1500 L600 1250 H700 V1000 H800 V1250 H900 Z" fill="COLOR"/>',
+    '<rect x="2" y="1" width="20" height="1.8" rx=".5" fill="COLOR"/>' +
+    '<rect x="2" y="4.5" width="20" height="1.8" rx=".5" fill="COLOR"/>' +
+    '<rect x="2" y="8" width="20" height="1.8" rx=".5" fill="COLOR"/>' +
+    '<rect x="2" y="11.5" width="20" height="1.8" rx=".5" fill="COLOR"/>' +
+    '<rect x="2" y="15" width="20" height="1.8" rx=".5" fill="COLOR"/>' +
+    '<polygon points="12,23 8.5,19 10.8,19 10.8,17.5 13.2,17.5 13.2,19 15.5,19" fill="COLOR"/>',
 };
 
-const STAIRS_VIEWBOX = '0 0 1500 1500';
+const STAIRS_VIEWBOX = '0 0 24 24';
 const STAIRS_SYMBOLS = {
   single: 'ic-stairs-single',
   start:  'ic-stairs-start',
