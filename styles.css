@@ -760,6 +760,16 @@ body {
 }
 .subcell:not(.subcell--on):hover { background: var(--surface-2); }
 .subcell--on { background: var(--seat); }
+.subcell--polyhidden { visibility: hidden; }
+.subcell-merge-overlay {
+  position: absolute; inset: 0;
+  pointer-events: none; z-index: 1;
+}
+.subcell-merge-content {
+  position: absolute;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; pointer-events: auto; cursor: pointer;
+}
 .subcell .cell__content { padding: 1px; gap: 1px; }
 .subcell .cell__icon { width: 42%; max-width: 22px; }
 .subcell .cell__label { font-size: 9px; line-height: 1.1; }

@@ -550,14 +550,21 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan) {
   const { rows, cols } = sp.data.split;
   const cw = rect.w / cols, ch = rect.h / rows;
   const hidden = new Set();
+  const rectMerges = [];
+  const polyMerges = [];
   if (sp.data.submerges) {
-    for (const sm of sp.data.submerges)
-      for (const idx of sm.indices) if (idx !== sm.anchor) hidden.add(idx);
+    for (const sm of sp.data.submerges) {
+      const isRect = isRectSubcells(sm.indices, rows, cols);
+      if (isRect) rectMerges.push(sm);
+      else polyMerges.push(sm);
+      for (const idx of sm.indices) hidden.add(idx);
+    }
+    for (const sm of rectMerges) hidden.delete(sm.anchor);
   }
   sp.data.subcells.forEach((sub, i) => {
     if (!sub.enabled || hidden.has(i)) return;
     const rr = Math.floor(i / cols), cc = i % cols;
-    const sm = sp.data.submerges && submergeAt(sp.data, i);
+    const sm = rectMerges.find((m) => m.anchor === i) || null;
     const smRect = sm ? submergeRect(sm, cols) : null;
     const bw = smRect ? smRect.colSpan * cw : cw;
     const bh = smRect ? smRect.rowSpan * ch : ch;
@@ -576,6 +583,50 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan) {
     drawContent(ctx, box.x + bw / 2, box.y + bh / 2, bw, bh, sub, imgCache, false, plan,
                 undefined, 0, sub.fill || '#dbe7ff');
   });
+  for (const sm of polyMerges) drawSubmerge(ctx, rect, sp.data, sm, cw, ch, imgCache, plan);
+}
+
+/** Draw an L/T/+ shaped subcell merge — fills each cell, outlines outer edges,
+ *  content on the widest run (mirrors drawMerge for grid-level poly merges). */
+function drawSubmerge(ctx, rect, data, sm, cw, ch, imgCache, plan) {
+  const { rows, cols } = data.split;
+  const sub = data.subcells[sm.anchor];
+  if (!sub.enabled) return;
+  const fill = sub.fill || '#dbe7ff';
+  const border = sub.border || '#2f6feb';
+  const sp = submergePlan(sm, rows, cols);
+
+  ctx.fillStyle = fill;
+  for (const i of sm.indices) {
+    const sr = Math.floor(i / cols), sc = i % cols;
+    const bx = rect.x + sc * cw, by = rect.y + sr * ch;
+    ctx.fillRect(bx - 0.5, by - 0.5, cw + 1, ch + 1);
+  }
+  ctx.strokeStyle = border;
+  ctx.lineWidth = Math.max(1, Math.min(cw, ch) * 0.04);
+  ctx.beginPath();
+  for (const i of sm.indices) {
+    const sr = Math.floor(i / cols), sc = i % cols;
+    const bx = rect.x + sc * cw, by = rect.y + sr * ch;
+    if (!sp.has(sr - 1, sc)) { ctx.moveTo(bx, by); ctx.lineTo(bx + cw, by); }
+    if (!sp.has(sr, sc + 1)) { ctx.moveTo(bx + cw, by); ctx.lineTo(bx + cw, by + ch); }
+    if (!sp.has(sr + 1, sc)) { ctx.moveTo(bx, by + ch); ctx.lineTo(bx + cw, by + ch); }
+    if (!sp.has(sr, sc - 1)) { ctx.moveTo(bx, by); ctx.lineTo(bx, by + ch); }
+  }
+  ctx.stroke();
+
+  if (sp.labelRun) {
+    const lx = rect.x + sp.labelRun.scStart * cw;
+    const ly = rect.y + sp.labelRun.sr * ch;
+    const lw = sp.labelRun.len * cw;
+    drawContent(ctx, lx + lw / 2, ly + ch / 2, lw, ch, { ...sub, icon: null },
+                imgCache, false, plan, undefined, 0, fill);
+  }
+  if (sp.iconCell && sub.icon) {
+    const ix = rect.x + sp.iconCell.sc * cw;
+    const iy = rect.y + sp.iconCell.sr * ch;
+    drawIconOnly(ctx, ix + cw / 2, iy + ch / 2, Math.min(cw, ch), sub, imgCache);
+  }
 }
 
 /** A chair sized and placed inside an arbitrary rectangle — one space of a split

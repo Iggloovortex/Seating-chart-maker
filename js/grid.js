@@ -715,23 +715,135 @@ function buildSplitGrid(r, c, data) {
   wrap.className = 'cell__split';
   wrap.style.gridTemplateColumns = `repeat(${data.split.cols}, 1fr)`;
   wrap.style.gridTemplateRows = `repeat(${data.split.rows}, 1fr)`;
+  const { rows, cols } = data.split;
   const hidden = new Set();
+  const rectMerges = [];
+  const polyMerges = [];
   if (data.submerges) {
-    for (const sm of data.submerges)
+    for (const sm of data.submerges) {
+      const isRect = isRectSubcells(sm.indices, rows, cols);
+      if (isRect) rectMerges.push(sm);
+      else polyMerges.push(sm);
       for (const idx of sm.indices) if (idx !== sm.anchor) hidden.add(idx);
+    }
+    for (const sm of polyMerges) hidden.add(sm.anchor);
   }
   data.subcells.forEach((sub, i) => {
-    if (hidden.has(i)) return;
-    const sm = data.submerges && submergeAt(data, i);
+    if (hidden.has(i)) {
+      const polyOwner = polyMerges.find((sm) => sm.indices.includes(i));
+      if (polyOwner) {
+        const el = document.createElement('div');
+        el.className = 'subcell subcell--polyhidden';
+        el.dataset.sub = i;
+        wrap.appendChild(el);
+        return;
+      }
+      return;
+    }
+    const sm = rectMerges.find((m) => m.anchor === i) || null;
     const el = buildSubcell(sub, i, data.split, sm);
     if (sm) {
-      const rect = submergeRect(sm, data.split.cols);
+      const rect = submergeRect(sm, cols);
       el.style.gridColumn = `${rect.c + 1} / span ${rect.colSpan}`;
       el.style.gridRow = `${rect.r + 1} / span ${rect.rowSpan}`;
     }
     wrap.appendChild(el);
   });
+  for (const sm of polyMerges) {
+    buildSubmergeOverlay(wrap, data, sm);
+  }
   return wrap;
+}
+
+/** SVG overlay for an L/T/+ shaped subcell merge within a split grid. */
+function buildSubmergeOverlay(wrap, data, sm) {
+  const { rows, cols } = data.split;
+  const sub = data.subcells[sm.anchor];
+  const fill = sub.fill || '#dbe7ff';
+  const border = sub.border || '#2f6feb';
+  const cw = 100 / cols, ch = 100 / rows;
+  const plan = submergePlan(sm, rows, cols);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'subcell-merge-overlay';
+  overlay.dataset.sub = sm.anchor;
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', `0 0 100 100`);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;';
+
+  for (const i of sm.indices) {
+    const sr = Math.floor(i / cols), sc = i % cols;
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', sc * cw);
+    rect.setAttribute('y', sr * ch);
+    rect.setAttribute('width', cw);
+    rect.setAttribute('height', ch);
+    rect.setAttribute('fill', fill);
+    svg.appendChild(rect);
+  }
+
+  const lw = 0.8;
+  for (const i of sm.indices) {
+    const sr = Math.floor(i / cols), sc = i % cols;
+    const x0 = sc * cw, y0 = sr * ch, x1 = x0 + cw, y1 = y0 + ch;
+    const seg = (a1, b1, a2, b2) => {
+      const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      l.setAttribute('x1', a1); l.setAttribute('y1', b1);
+      l.setAttribute('x2', a2); l.setAttribute('y2', b2);
+      l.setAttribute('stroke', border); l.setAttribute('stroke-width', lw);
+      svg.appendChild(l);
+    };
+    if (!plan.has(sr - 1, sc)) seg(x0, y0, x1, y0);
+    if (!plan.has(sr, sc + 1)) seg(x1, y0, x1, y1);
+    if (!plan.has(sr + 1, sc)) seg(x0, y1, x1, y1);
+    if (!plan.has(sr, sc - 1)) seg(x0, y0, x0, y1);
+  }
+  overlay.appendChild(svg);
+
+  if (sub.enabled || hasContent(sub)) {
+    const content = document.createElement('div');
+    content.className = 'subcell-merge-content';
+    if (plan.labelRun) {
+      const lx = plan.labelRun.scStart * cw;
+      const ly = plan.labelRun.sr * ch;
+      const lw2 = plan.labelRun.len * cw;
+      content.style.left = `${lx}%`; content.style.top = `${ly}%`;
+      content.style.width = `${lw2}%`; content.style.height = `${ch}%`;
+    } else {
+      const rect = submergeRect(sm, cols);
+      content.style.left = `${rect.c * cw}%`; content.style.top = `${rect.r * ch}%`;
+      content.style.width = `${rect.colSpan * cw}%`; content.style.height = `${rect.rowSpan * ch}%`;
+    }
+    content.style.setProperty('--rot', `${sub.rotation || 0}deg`);
+    const inner = document.createElement('div');
+    inner.className = 'cell__content';
+    inner.style.setProperty('--rot', `${sub.rotation || 0}deg`);
+    if (sub.icon) {
+      const svgIcon = iconUse(sub.icon, 'cell__icon', sub.iconFill);
+      if (svgIcon) {
+        svgIcon.style.color = contrastLabelColor(sub.iconColor || '#1f2933', fill);
+        inner.appendChild(svgIcon);
+      }
+    }
+    if (sub.labels && sub.labels.some((l) => l.text)) {
+      const labelsEl = document.createElement('div');
+      labelsEl.className = 'cell__labels';
+      for (const line of sub.labels) {
+        if (!line.text) continue;
+        const span = document.createElement('span');
+        span.className = 'cell__label';
+        span.textContent = line.text;
+        span.style.color = contrastLabelColor(line.color, fill);
+        labelsEl.appendChild(span);
+      }
+      inner.appendChild(labelsEl);
+    }
+    content.appendChild(inner);
+    overlay.appendChild(content);
+  }
+  wrap.appendChild(overlay);
 }
 
 /** One sub-cell of a split square — a mini desk: fill/border when seated, its

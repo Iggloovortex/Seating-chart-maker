@@ -593,14 +593,14 @@ function renderSplitParent(cell) {
 
       if (submergeSelection.size >= 2) {
         const indices = [...submergeSelection];
-        const valid = isRectSubcells(indices, cell.split.rows, cell.split.cols)
+        const valid = isConnectedSubcells(indices, cell.split.rows, cell.split.cols)
           && !indices.some((i) => submergeAt(cell, i));
         const mergeBtn = document.createElement('button');
         mergeBtn.type = 'button';
         mergeBtn.className = 'btn btn--primary';
         mergeBtn.textContent = 'Merge';
         mergeBtn.disabled = !valid;
-        mergeBtn.title = valid ? 'Merge selected pieces' : 'Selection must be a rectangle of unmerged pieces';
+        mergeBtn.title = valid ? 'Merge selected pieces' : 'Selection must be connected unmerged pieces';
         mergeBtn.addEventListener('click', () => {
           addSubmerge(current.r, current.c, indices);
           submergeSelection.clear();

@@ -351,8 +351,9 @@ function toggleSubcell(r, c, i) {
 
 // ----------------------------------------------- sub-cell merge (within a split)
 //
-// Subcells within a 2×2 or 3×3 split can merge with each other — rectangular
-// groups only (CSS grid can't span an L). The model mirrors the grid-level merge:
+// Subcells within a 2×2 or 3×3 split can merge with each other. Rectangular
+// groups use CSS grid spans; L/T/+ shapes use an SVG overlay (like grid-level
+// poly merges). The model mirrors the grid merge:
 // cell.submerges = [{ id, indices:[int], anchor:int }], where anchor is the
 // top-left subcell whose content the merged region shows.
 
@@ -373,6 +374,26 @@ function isRectSubcells(indices, rows, cols) {
   return true;
 }
 
+/** True when a set of subcell indices forms one connected group (4-way adjacency). */
+function isConnectedSubcells(indices, rows, cols) {
+  if (!indices || indices.length < 2) return false;
+  const set = new Set(indices);
+  const visited = new Set();
+  const queue = [indices[0]];
+  visited.add(indices[0]);
+  while (queue.length) {
+    const cur = queue.shift();
+    const sr = Math.floor(cur / cols), sc = cur % cols;
+    for (const [dr, dc] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+      const nr = sr + dr, nc = sc + dc;
+      if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+      const ni = nr * cols + nc;
+      if (set.has(ni) && !visited.has(ni)) { visited.add(ni); queue.push(ni); }
+    }
+  }
+  return visited.size === indices.length;
+}
+
 /** The submerge covering subcell i inside a cell, or null. */
 function submergeAt(cell, i) {
   if (!cell || !cell.submerges) return null;
@@ -391,13 +412,52 @@ function submergeRect(sm, cols) {
   return { r: rMin, c: cMin, rowSpan: rMax - rMin + 1, colSpan: cMax - cMin + 1 };
 }
 
+/** Plan for rendering a subcell merge — mirrors mergePlan for grid merges. */
+function submergePlan(sm, rows, cols) {
+  const set = new Set(sm.indices);
+  const has = (sr, sc) => set.has(sr * cols + sc);
+  const isRect = isRectSubcells(sm.indices, rows, cols);
+
+  const rect = submergeRect(sm, cols);
+  const midR = (rect.r + rect.r + rect.rowSpan - 1) / 2;
+  let labelRun = null;
+  for (let sr = rect.r; sr < rect.r + rect.rowSpan; sr++) {
+    let start = null;
+    for (let sc = rect.c; sc <= rect.c + rect.colSpan; sc++) {
+      if (sc < rect.c + rect.colSpan && has(sr, sc)) { if (start === null) start = sc; continue; }
+      if (start !== null) {
+        const len = sc - start;
+        const better = !labelRun || len > labelRun.len ||
+          (len === labelRun.len && Math.abs(sr - midR) < Math.abs(labelRun.sr - midR));
+        if (better) labelRun = { sr, scStart: start, scEnd: sc - 1, len };
+        start = null;
+      }
+    }
+  }
+
+  const runLen = (sr, sc, dr, dc) => {
+    let n = 1;
+    for (let y = sr - dr, x = sc - dc; has(y, x); y -= dr, x -= dc) n++;
+    for (let y = sr + dr, x = sc + dc; has(y, x); y += dr, x += dc) n++;
+    return n;
+  };
+  let iconCell = null, best = Infinity;
+  for (const i of sm.indices) {
+    const sr = Math.floor(i / cols), sc = i % cols;
+    const score = runLen(sr, sc, 0, 1) + runLen(sr, sc, 1, 0);
+    if (score < best) { best = score; iconCell = { sr, sc, i }; }
+  }
+
+  return { set, has, isRect, labelRun, iconCell };
+}
+
 /** Merge a set of subcell indices within a split square. Returns the new submerge
- *  or null on failure (not rectangular, overlapping an existing merge). */
+ *  or null on failure (not connected, overlapping an existing merge). */
 function addSubmerge(r, c, indices) {
   const cell = peekCell(r, c);
   if (!cell || !isSplit(cell)) return null;
   const { rows, cols } = cell.split;
-  if (!isRectSubcells(indices, rows, cols)) return null;
+  if (!isConnectedSubcells(indices, rows, cols)) return null;
   if (!cell.submerges) cell.submerges = [];
   for (const i of indices) if (submergeAt(cell, i)) return null;
   if (typeof historyCheckpoint === 'function') historyCheckpoint();
@@ -427,7 +487,7 @@ function pruneSubmerges(cell) {
   const n = cell.split.rows * cell.split.cols;
   cell.submerges = cell.submerges.filter((sm) => {
     sm.indices = sm.indices.filter((i) => i >= 0 && i < n);
-    return sm.indices.length >= 2 && isRectSubcells(sm.indices, cell.split.rows, cell.split.cols);
+    return sm.indices.length >= 2 && isConnectedSubcells(sm.indices, cell.split.rows, cell.split.cols);
   });
   if (!cell.submerges.length) delete cell.submerges;
 }
@@ -1640,7 +1700,7 @@ function deserialize(data) {
               indices: sm.indices.filter((i) => typeof i === 'number' && i >= 0 && i < rows * cols).sort((a, b) => a - b),
               anchor: typeof sm.anchor === 'number' ? sm.anchor : Math.min(...sm.indices),
             }))
-            .filter((sm) => sm.indices.length >= 2 && isRectSubcells(sm.indices, rows, cols));
+            .filter((sm) => sm.indices.length >= 2 && isConnectedSubcells(sm.indices, rows, cols));
           if (!cell.submerges.length) delete cell.submerges;
         } else {
           delete cell.submerges;
