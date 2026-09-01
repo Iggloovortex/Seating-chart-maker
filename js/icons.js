@@ -12,6 +12,7 @@ const ICONS = {
   chair:    { label: 'Chair',          symbol: 'ic-chair' },
   question: { label: 'Question',       symbol: 'ic-question' },
   star:     { label: 'Star',           symbol: 'ic-star' },
+  stairs:   { label: 'Stairs',         symbol: 'ic-stairs-single' },
 };
 const ICON_IDS = Object.keys(ICONS);
 
@@ -162,7 +163,58 @@ const SYMBOL_MARKUP = {
   'ic-printer-fill':
     '<path d="M5 1a2 2 0 0 0-2 2v1h10V3a2 2 0 0 0-2-2zm6 8H5a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1" fill="FILL"/>' +
     '<path d="M0 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-1v-2a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2H2a2 2 0 0 1-2-2zm2.5 1a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1" fill="COLOR"/>',
+  'ic-stairs-single':
+    '<path d="M750 0 L900 250 H800 V500 H700 V250 H600 Z" fill="COLOR"/>' +
+    '<rect x="-17.5" y="357.5" width="1535" height="35" fill="COLOR"/>' +
+    '<rect x="-17.5" y="732.5" width="1535" height="35" fill="COLOR"/>' +
+    '<rect x="-17.5" y="1107.5" width="1535" height="35" fill="COLOR"/>' +
+    '<rect x="-17.5" y="1466.5" width="1535" height="35" fill="COLOR"/>' +
+    '<path d="M750 1500 L600 1250 H700 V1000 H800 V1250 H900 Z" fill="COLOR"/>',
+  'ic-stairs-start':
+    '<path d="M750 0 L900 250 H800 V500 H700 V250 H600 Z" fill="COLOR"/>' +
+    '<rect x="-17.5" y="357.5" width="1535" height="35" fill="COLOR"/>' +
+    '<rect x="-17.5" y="732.5" width="1535" height="35" fill="COLOR"/>' +
+    '<rect x="-17.5" y="1107.5" width="1535" height="35" fill="COLOR"/>' +
+    '<rect x="-17.5" y="1466.5" width="1535" height="35" fill="COLOR"/>',
+  'ic-stairs-middle':
+    '<rect x="-17.5" y="357.5" width="1535" height="35" fill="COLOR"/>' +
+    '<rect x="-17.5" y="732.5" width="1535" height="35" fill="COLOR"/>' +
+    '<rect x="-17.5" y="1107.5" width="1535" height="35" fill="COLOR"/>' +
+    '<rect x="-17.5" y="1466.5" width="1535" height="35" fill="COLOR"/>',
+  'ic-stairs-end':
+    '<rect x="-17.5" y="357.5" width="1535" height="35" fill="COLOR"/>' +
+    '<rect x="-17.5" y="732.5" width="1535" height="35" fill="COLOR"/>' +
+    '<rect x="-17.5" y="1107.5" width="1535" height="35" fill="COLOR"/>' +
+    '<rect x="-17.5" y="1466.5" width="1535" height="35" fill="COLOR"/>' +
+    '<path d="M750 1500 L600 1250 H700 V1000 H800 V1250 H900 Z" fill="COLOR"/>',
 };
+
+const STAIRS_VIEWBOX = '0 0 1500 1500';
+const STAIRS_SYMBOLS = {
+  single: 'ic-stairs-single',
+  start:  'ic-stairs-start',
+  middle: 'ic-stairs-middle',
+  end:    'ic-stairs-end',
+};
+
+function stairsDataUrl(variant, color) {
+  const symId = STAIRS_SYMBOLS[variant] || STAIRS_SYMBOLS.single;
+  const inner = SYMBOL_MARKUP[symId].replaceAll('COLOR', color);
+  return 'data:image/svg+xml;charset=utf-8,' +
+    encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${STAIRS_VIEWBOX}">${inner}</svg>`);
+}
+
+function stairsUse(variant, className, color) {
+  const symId = STAIRS_SYMBOLS[variant] || STAIRS_SYMBOLS.single;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', className);
+  svg.setAttribute('viewBox', STAIRS_VIEWBOX);
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', `#${symId}`);
+  svg.appendChild(use);
+  svg.style.color = color;
+  return svg;
+}
 
 // ---------------------------------------------------------------- printer overlay
 //

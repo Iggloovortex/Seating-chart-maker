@@ -374,6 +374,9 @@ const SPECIAL_SQUARE_NOTES = {
   server: 'This square is a server rack. One label shows the server icon and a slab tucked ' +
     'to the side it faces. Add more labels and each becomes its own server slab, filling the ' +
     'square. Labels turn with the facing, like a normal square.',
+  stairs: 'This square is a staircase. It fills the full square and shows arrows for direction. ' +
+    'Adjacent stair squares automatically connect: start → middle → end. Use Facing to set the ' +
+    'direction the stairs go.',
 };
 
 /** The Special section — a permanent home for the special icons. Picking one
@@ -407,6 +410,30 @@ function specialSection(cell) {
       note.className = 'egroup__note';
       note.textContent = text + ' Use Facing above to aim it.';
       g.appendChild(note);
+    }
+
+    if (cell && cell.icon === 'stairs') {
+      const row = document.createElement('div');
+      row.className = 'egroup__row';
+      const lbl = document.createElement('span');
+      lbl.textContent = 'Type';
+      row.appendChild(lbl);
+      const types = ['auto', 'single', 'start', 'middle', 'end'];
+      const labels = { auto: 'Auto', single: 'Single', start: 'Start', middle: 'Middle', end: 'End' };
+      for (const t of types) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn--sm';
+        btn.textContent = labels[t];
+        const cur = cell.stairType || 'auto';
+        if (cur === t) btn.classList.add('btn--active');
+        btn.addEventListener('click', () => {
+          updateCell(current.r, current.c, { stairType: t });
+          render(peekCell(current.r, current.c));
+        });
+        row.appendChild(btn);
+      }
+      g.appendChild(row);
     }
   });
 }
@@ -935,6 +962,55 @@ function renderSubcellEditor() {
       browse.textContent = '+ Browse icon library';
       browse.addEventListener('click', () => openIconLibrary((id) => set({ icon: id })));
       g.appendChild(browse);
+    }
+  }));
+
+  // Special icons for subcells (chair, server, stairs)
+  bodyEl.appendChild(group('Special', (g) => {
+    const picker = document.createElement('div');
+    picker.className = 'icon-picker';
+    for (const id of SPECIAL_ICON_IDS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'icon-picker__btn';
+      btn.title = ICONS[id].label;
+      btn.setAttribute('aria-label', ICONS[id].label);
+      btn.setAttribute('aria-pressed', String(sub.icon === id));
+      const svg = iconUse(id, '');
+      if (svg) btn.appendChild(svg);
+      btn.addEventListener('click', () => {
+        const next = sub.icon === id ? null : id;
+        set({ icon: next });
+      });
+      picker.appendChild(btn);
+    }
+    g.appendChild(picker);
+    const text = sub.icon && SPECIAL_SQUARE_NOTES[sub.icon];
+    if (text) {
+      const note = document.createElement('p');
+      note.className = 'egroup__note';
+      note.textContent = text + ' Use Facing above to aim it.';
+      g.appendChild(note);
+    }
+    if (sub.icon === 'stairs') {
+      const row = document.createElement('div');
+      row.className = 'egroup__row';
+      const lbl = document.createElement('span');
+      lbl.textContent = 'Type';
+      row.appendChild(lbl);
+      const types = ['auto', 'single', 'start', 'middle', 'end'];
+      const labels = { auto: 'Auto', single: 'Single', start: 'Start', middle: 'Middle', end: 'End' };
+      for (const t of types) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn--sm';
+        btn.textContent = labels[t];
+        const cur = sub.stairType || 'auto';
+        if (cur === t) btn.classList.add('btn--active');
+        btn.addEventListener('click', () => set({ stairType: t }));
+        row.appendChild(btn);
+      }
+      g.appendChild(row);
     }
   }));
 

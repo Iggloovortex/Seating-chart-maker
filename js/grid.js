@@ -787,7 +787,7 @@ function buildSplitGrid(r, c, data) {
       return;
     }
     const sm = rectMerges.find((m) => m.anchor === i) || null;
-    const el = buildSubcell(sub, i, data.split, sm);
+    const el = buildSubcell(sub, i, data.split, sm, r, c);
     if (sm) {
       const rect = submergeRect(sm, cols);
       el.style.gridColumn = `${rect.c + 1} / span ${rect.colSpan}`;
@@ -895,7 +895,7 @@ function buildSubmergeOverlay(wrap, data, sm) {
 /** One sub-cell of a split square — a mini desk: fill/border when seated, its
  *  icon and labels turned to its own facing, faded when it holds content but is
  *  empty (the same ghost treatment a whole square gets). */
-function buildSubcell(sub, i, split, sm) {
+function buildSubcell(sub, i, split, sm, parentR, parentC) {
   const el = document.createElement('div');
   el.className = 'subcell';
   el.dataset.sub = i;
@@ -944,7 +944,20 @@ function buildSubcell(sub, i, split, sm) {
       }
     }
 
-    if (furniture) {
+    if (furniture === 'stairs') {
+      const rot = sub.rotation || 0;
+      const variant = resolveStairType(sub, parentR, parentC, i, split.rows, split.cols);
+      const ic = sub.iconColor || '#1f2933';
+      const color = contrastLabelColor(ic, sub.fill || '#dbe7ff');
+      const svg = stairsUse(variant, 'cell__icon cell__stairs-icon', color);
+      svg.style.transform = `rotate(${rot}deg)`;
+      el.classList.add('subcell--on');
+      el.style.background = sub.fill;
+      el.style.borderColor = sub.border;
+      content.appendChild(svg);
+      if (labelsEl) content.appendChild(labelsEl);
+      el.appendChild(content);
+    } else if (furniture) {
       const rot = sub.rotation || 0;
       const tile = document.createElement('div');
       tile.className = `cell__furniture cell__${furniture}`;
@@ -953,10 +966,6 @@ function buildSubcell(sub, i, split, sm) {
       if (furniture === 'server') {
         placeServerTile(tile, rot);
       } else {
-        // A chair stays 1:1 and aims for 50% of the full cell in each dimension.
-        // In a split, the subcell is already 1/rows × 1/cols of the cell, so the
-        // chair compensates: min(50%×N, 100%) in each axis.  When the result would
-        // break 1:1 (asymmetric split) it shrinks to the smaller side.
         const f = Math.min(0.5, 1 / Math.max(effRows, effCols));
         const cw = f * effCols * 100;
         const ch = f * effRows * 100;
@@ -1090,7 +1099,20 @@ function buildCell(r, c, rects) {
 
     const labelCount = data.labels ? data.labels.filter((l) => l.text).length : 0;
 
-    if (furniture === 'server' && labelCount >= 2) {
+    if (furniture === 'stairs') {
+      const rot = (data.rotation || 0) + tableRot;
+      const variant = resolveStairType(data, r, c);
+      const ic = data.iconColor || '#1f2933';
+      const color = contrastLabelColor(ic, data.fill || '#dbe7ff');
+      const svg = stairsUse(variant, 'cell__icon cell__stairs-icon', color);
+      svg.style.transform = `rotate(${rot}deg)`;
+      el.classList.add('cell--on');
+      el.style.background = data.fill;
+      el.style.borderColor = data.border;
+      content.appendChild(svg);
+      if (labelsEl) content.appendChild(labelsEl);
+      el.appendChild(content);
+    } else if (furniture === 'server' && labelCount >= 2) {
       // A rack of several servers: one slab per label, stacked and turned to the
       // facing — the DOM twin of drawServerRack. The server icon sits upright in
       // the square's empty corner (the rack is only as wide as its labels).

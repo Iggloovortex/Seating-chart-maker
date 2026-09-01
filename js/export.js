@@ -131,7 +131,10 @@ async function renderToCanvas(dpi = 300) {
   for (const d of desks) {
     if (isChairCell(d.data)) d.geo = chairGeometry(rectOf, d);
     else if (isServerCell(d.data)) d.geo = serverGeometry(rectOf, d);
-    else {
+    else if (isStairsCell(d.data)) {
+      const { x, y, w, h } = rectOf(d.r, d.c);
+      d.geo = { cx: x + w / 2, cy: y + h / 2, w, h, rect: { x, y, w, h } };
+    } else {
       const { x, y, w, h } = rectOf(d.r, d.c);
       d.geo = { cx: x + w / 2, cy: y + h / 2, w, h };
     }
@@ -157,6 +160,7 @@ async function renderToCanvas(dpi = 300) {
   for (const d of desks) {
     if (isChairCell(d.data)) drawChair(ctx, d, imgCache, plan);
     else if (isServerCell(d.data)) (d.geo.units >= 2 ? drawServerRack : drawServer)(ctx, d, imgCache, plan);
+    else if (isStairsCell(d.data)) drawStairs(ctx, d, imgCache, plan);
     else drawDesk(ctx, rectOf, d, deskSet, imgCache, plan);
     if (hasPrinter(d.data) && isPrinterSecondary(d.data)) {
       const { x, y, w, h } = rectOf(d.r, d.c);
@@ -575,7 +579,12 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan) {
     const box = { x: rect.x + cc * cw, y: rect.y + rr * ch, w: bw, h: bh };
     const effRows = smRect ? rows / smRect.rowSpan : rows;
     const effCols = smRect ? cols / smRect.colSpan : cols;
-    if (subcellFurniture(sub, effRows, effCols)) {
+    const scFurn = subcellFurniture(sub, effRows, effCols);
+    if (scFurn === 'stairs') {
+      drawStairs(ctx, { data: sub, r: sp.r, c: sp.c, geo: { rect: box, cx: box.x + bw / 2, cy: box.y + bh / 2, w: bw, h: bh } }, imgCache, plan, i, rows, cols);
+      return;
+    }
+    if (scFurn) {
       drawChair(ctx, { data: sub, geo: chairInRect(box, sub, effRows, effCols) }, imgCache, plan);
       return;
     }
@@ -715,6 +724,30 @@ function drawChair(ctx, item, imgCache, plan) {
   // The furniture carries its icon and its labels, both turned to the facing.
   drawIconOnly(ctx, cx, cy, size, item.data, imgCache);
   if (labelBox) drawLabelBox(ctx, labelBox, item.data, plan, full || Math.min(labelBox.w, labelBox.h), item.data.rotation || 0);
+}
+
+function drawStairs(ctx, item, imgCache, plan, subIndex, splitRows, splitCols) {
+  const { rect } = item.geo;
+  const { x, y, w, h } = rect;
+  ctx.fillStyle = item.data.fill || '#dbe7ff';
+  ctx.fillRect(x, y, w, h);
+  ctx.lineWidth = Math.max(1, Math.min(w, h) * 0.04);
+  ctx.strokeStyle = item.data.border || '#2f6feb';
+  ctx.strokeRect(x, y, w, h);
+  const variant = resolveStairType(item.data, item.r, item.c, subIndex, splitRows, splitCols);
+  const cacheKey = `stairs-${variant}|${item.data.iconColor || '#1f2933'}`;
+  const img = imgCache.get(cacheKey);
+  if (img) {
+    const iconSize = Math.min(w, h) * 0.8;
+    ctx.save();
+    ctx.translate(x + w / 2, y + h / 2);
+    ctx.rotate(((item.data.rotation || 0) * Math.PI) / 180);
+    ctx.drawImage(img, -iconSize / 2, -iconSize / 2, iconSize, iconSize);
+    ctx.restore();
+  }
+  const labelBox = { x, y, w, h, anchor: 'top' };
+  if (item.data.labels && item.data.labels.some((l) => l.text))
+    drawLabelBox(ctx, labelBox, item.data, plan, Math.min(w, h), item.data.rotation || 0);
 }
 
 /** Where a server sits: a half-square slab hugging the edge it faces, filling
@@ -1145,6 +1178,11 @@ async function preloadIcons(desks, seats, covered = [], splitItems = [], mergeIt
       const pKey = printerCacheKey(data);
       const pColor = contrastLabelColor(data.iconColor || '#1f2933', data.fill || '#dbe7ff');
       needed.set(pKey, printerDataUrl(data.printer, pColor));
+    }
+    if (isStairsCell(data)) {
+      const ic = data.iconColor || '#1f2933';
+      for (const v of ['single', 'start', 'middle', 'end'])
+        needed.set(`stairs-${v}|${ic}`, stairsDataUrl(v, ic));
     }
   }
   for (const { data } of seats) {

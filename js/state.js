@@ -77,21 +77,68 @@ const DEFAULTS = {
 /** "Furniture" squares carry a special icon that renders as a piece tucked to
  *  the edge the square faces, with labels in the empty space, rather than a
  *  full desk. A chair is a small square; a server is a half-square slab. */
-const FURNITURE_ICONS = { chair: 'chair', server: 'server' };
+const FURNITURE_ICONS = { chair: 'chair', server: 'server', stairs: 'stairs' };
 function furnitureKind(cell) {
   return cell && cell.enabled && FURNITURE_ICONS[cell.icon] ? cell.icon : null;
 }
 function isFurnitureCell(cell) { return !!furnitureKind(cell); }
 
-/** A square acts as a "chair" when its icon is the chair: furniture rather than
- *  a desk. */
 function isChairCell(cell) {
   return !!(cell && cell.enabled && cell.icon === 'chair');
 }
 function isServerCell(cell) {
   return !!(cell && cell.enabled && cell.icon === 'server');
 }
+function isStairsCell(cell) {
+  return !!(cell && cell.enabled && cell.icon === 'stairs');
+}
 function isChairAt(r, c) { return isChairCell(peekCell(r, c)); }
+function isStairsAt(r, c) { return isStairsCell(peekCell(r, c)); }
+
+/** Resolve the stair variant for a cell. When stairType is 'auto' (or absent),
+ *  look at adjacent stair cells in the facing direction to pick single/start/
+ *  middle/end. For sub-cells within a split, pass the sub-cell and its row/col
+ *  within the split plus the parent cell's (r,c). */
+function resolveStairType(data, r, c, subIndex, splitRows, splitCols) {
+  if (!isStairsCell(data)) return 'single';
+  const forced = data.stairType;
+  if (forced && forced !== 'auto') return forced;
+  const rot = data.rotation || 0;
+  const step = STAIR_STEP[rot] || STAIR_STEP[0];
+  let hasFwd, hasBwd;
+  if (subIndex != null && splitRows && splitCols) {
+    const sr = Math.floor(subIndex / splitCols), sc = subIndex % splitCols;
+    hasFwd = stairNeighborSub(r, c, sr + step[0], sc + step[1], splitRows, splitCols);
+    hasBwd = stairNeighborSub(r, c, sr - step[0], sc - step[1], splitRows, splitCols);
+  } else {
+    hasFwd = isStairsAt(r + step[0], c + step[1]);
+    hasBwd = isStairsAt(r - step[0], c - step[1]);
+  }
+  if (hasFwd && hasBwd) return 'middle';
+  if (hasFwd) return 'start';
+  if (hasBwd) return 'end';
+  return 'single';
+}
+
+function stairNeighborSub(r, c, sr, sc, rows, cols) {
+  if (sr >= 0 && sr < rows && sc >= 0 && sc < cols) {
+    const cell = peekCell(r, c);
+    if (cell && cell.subcells) {
+      const sub = cell.subcells[sr * cols + sc];
+      return isStairsCell(sub);
+    }
+  }
+  if (sr < 0) return isStairsAt(r - 1, c);
+  if (sr >= rows) return isStairsAt(r + 1, c);
+  if (sc < 0) return isStairsAt(r, c - 1);
+  if (sc >= cols) return isStairsAt(r, c + 1);
+  return false;
+}
+
+const STAIR_STEP = {
+  0: [-1, 0], 90: [0, 1], 180: [1, 0], 270: [0, -1],
+  45: [-1, 1], 135: [1, 1], 225: [1, -1], 315: [-1, -1],
+};
 
 /** Default color for label line `index`. Line 1 has its own; line 2 and every
  *  line after it share the second colour. */
@@ -269,7 +316,7 @@ function isSplit(cell) {
  *    chair  — a small tile, so it still reads even in a ninth of a square
  *    server — IS a half-slab, and a split space is already that size or smaller,
  *             so a split server is simply the filled space itself */
-const FURNITURE_MIN_SPACE = { chair: 1 / 9, server: 1 };
+const FURNITURE_MIN_SPACE = { chair: 1 / 9, server: 1, stairs: 1 / 9 };
 
 /** Which furniture a sub-cell draws as, given the split it belongs to — or null
  *  when the space is too small and it should render as a plain filled square. */

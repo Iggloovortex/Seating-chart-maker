@@ -61,6 +61,42 @@
         <path d="M5 1a2 2 0 0 0-2 2v1h10V3a2 2 0 0 0-2-2zm6 8H5a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1" fill="var(--icon-fill, currentColor)"/>
         <path d="M0 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-1v-2a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2H2a2 2 0 0 1-2-2zm2.5 1a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1" fill="currentColor"/>
       </symbol>
+      <!-- Stairs icons: 4 variants (single, start, middle, end). viewBox 0 0 1500 1500.
+           Bars are the steps; the arrow motif marks start/end direction. -->
+      <symbol id="ic-stairs-single" viewBox="0 0 1500 1500">
+        <path d="M750 0 L900 250 H800 V500 H700 V250 H600 Z" fill="currentColor"/>
+        <rect x="-17.5" y="357.5" width="1535" height="35" fill="currentColor"/>
+        <rect x="-17.5" y="732.5" width="1535" height="35" fill="currentColor"/>
+        <rect x="-17.5" y="1107.5" width="1535" height="35" fill="currentColor"/>
+        <rect x="-17.5" y="1466.5" width="1535" height="35" fill="currentColor"/>
+        <path d="M750 1500 L600 1250 H700 V1000 H800 V1250 H900 Z" fill="currentColor"/>
+      </symbol>
+      <symbol id="ic-stairs-start" viewBox="0 0 1500 1500">
+        <defs><clipPath id="clip-stairs-start"><rect x="0" y="0" width="1500" height="1500"/></clipPath></defs>
+        <g clip-path="url(#clip-stairs-start)">
+          <path d="M750 0 L900 250 H800 V500 H700 V250 H600 Z" fill="currentColor"/>
+          <rect x="-17.5" y="357.5" width="1535" height="35" fill="currentColor"/>
+          <rect x="-17.5" y="732.5" width="1535" height="35" fill="currentColor"/>
+          <rect x="-17.5" y="1107.5" width="1535" height="35" fill="currentColor"/>
+          <rect x="-17.5" y="1466.5" width="1535" height="35" fill="currentColor"/>
+        </g>
+      </symbol>
+      <symbol id="ic-stairs-middle" viewBox="0 0 1500 1500">
+        <rect x="-17.5" y="357.5" width="1535" height="35" fill="currentColor"/>
+        <rect x="-17.5" y="732.5" width="1535" height="35" fill="currentColor"/>
+        <rect x="-17.5" y="1107.5" width="1535" height="35" fill="currentColor"/>
+        <rect x="-17.5" y="1466.5" width="1535" height="35" fill="currentColor"/>
+      </symbol>
+      <symbol id="ic-stairs-end" viewBox="0 0 1500 1500">
+        <defs><clipPath id="clip-stairs-end"><rect x="0" y="0" width="1500" height="1500"/></clipPath></defs>
+        <g clip-path="url(#clip-stairs-end)">
+          <rect x="-17.5" y="357.5" width="1535" height="35" fill="currentColor"/>
+          <rect x="-17.5" y="732.5" width="1535" height="35" fill="currentColor"/>
+          <rect x="-17.5" y="1107.5" width="1535" height="35" fill="currentColor"/>
+          <rect x="-17.5" y="1466.5" width="1535" height="35" fill="currentColor"/>
+          <path d="M750 1500 L600 1250 H700 V1000 H800 V1250 H900 Z" fill="currentColor"/>
+        </g>
+      </symbol>
       <symbol id="ic-question" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="9" fill="var(--icon-fill, none)" stroke="currentColor" stroke-width="1.6"/>
         <path d="M9.4 9.4a2.7 2.7 0 1 1 3.3 2.7c-.9.25-1.2.85-1.2 1.65v.35" fill="var(--icon-fill, none)" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
