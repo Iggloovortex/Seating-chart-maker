@@ -112,6 +112,7 @@ function makeCell() {
     fill: state.defaults.fill,
     border: state.defaults.border,
     split: null,                // null, or { rows, cols } — see subcells below
+    printer: null,              // null, or { color, compass, labels, size }
   };
 }
 
@@ -128,6 +129,7 @@ function makeSubcell() {
     rotation: 0,
     fill: state.defaults.fill,
     border: state.defaults.border,
+    printer: null,
   };
 }
 
@@ -225,9 +227,9 @@ function toggleEnabled(r, c) {
   emit();
 }
 
-/** A square has content once it carries an icon or real label text. */
+/** A square has content once it carries an icon, real label text, or a printer. */
 function hasContent(cell) {
-  return !!(cell.icon || (cell.labels || []).some((l) => l.text && l.text.trim()));
+  return !!(cell.icon || cell.printer || (cell.labels || []).some((l) => l.text && l.text.trim()));
 }
 
 /** Giving an EMPTY square content implies it is a seat, so setting an icon or
@@ -729,7 +731,7 @@ function copySquareFrom(r, c) {
  *  Missing fields fall back to the sub-cell defaults so a partial object is safe. */
 function cloneSubcell(s) {
   const base = makeSubcell();
-  return {
+  const out = {
     enabled: !!s.enabled,
     fill: s.fill || base.fill,
     border: s.border || base.border,
@@ -738,7 +740,27 @@ function cloneSubcell(s) {
     iconFill: s.iconFill || null,
     rotation: s.rotation || 0,
     labels: (s.labels || []).map((l) => ({ text: String(l.text || ''), color: l.color || DEFAULTS.labelColor })),
+    printer: clonePrinter(s.printer),
   };
+  return out;
+}
+
+function clonePrinter(p) {
+  if (!p) return null;
+  return {
+    color: !!p.color,
+    compass: p.compass || 'se',
+    labels: (p.labels || []).map((l) => ({ text: String(l.text || ''), color: l.color || DEFAULTS.labelColor })),
+    size: p.size === 'small' ? 'small' : 'max',
+  };
+}
+
+function isPrinterSecondary(data) {
+  return !!(data && data.printer && (data.icon || data.printer.size === 'small'));
+}
+
+function hasPrinter(data) {
+  return !!(data && data.printer);
 }
 
 /** Clone the copied square onto every listed square, label lines and all. The

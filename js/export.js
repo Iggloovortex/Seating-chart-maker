@@ -158,6 +158,10 @@ async function renderToCanvas(dpi = 300) {
     if (isChairCell(d.data)) drawChair(ctx, d, imgCache, plan);
     else if (isServerCell(d.data)) (d.geo.units >= 2 ? drawServerRack : drawServer)(ctx, d, imgCache, plan);
     else drawDesk(ctx, rectOf, d, deskSet, imgCache, plan);
+    if (hasPrinter(d.data) && isPrinterSecondary(d.data)) {
+      const { x, y, w, h } = rectOf(d.r, d.c);
+      drawPrinterOverlay(ctx, x, y, w, h, d.data, imgCache);
+    }
   }
 
   // 2.5) Split squares — a block of independent sub-cells filling the cell.
@@ -582,6 +586,7 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan) {
     ctx.strokeRect(box.x, box.y, bw, bh);
     drawContent(ctx, box.x + bw / 2, box.y + bh / 2, bw, bh, sub, imgCache, false, plan,
                 undefined, 0, sub.fill || '#dbe7ff');
+    if (hasPrinter(sub) && isPrinterSecondary(sub)) drawPrinterOverlay(ctx, box.x, box.y, bw, bh, sub, imgCache);
   });
   for (const sm of polyMerges) drawSubmerge(ctx, rect, sp.data, sm, cw, ch, imgCache, plan);
 }
@@ -956,8 +961,12 @@ function coveredGeometry(rectOf, { r, c }, footprints) {
 function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, extraRot = 0, labelBg = null) {
   const labels = labelsOf(data);
   let iconId = data.icon;
-  if (!iconId && labels.length === 0 && forceChair) iconId = 'chair';
-  const hasIcon = !!iconId;
+  let printerAsIcon = false;
+  if (!iconId && hasPrinter(data) && !isPrinterSecondary(data)) {
+    printerAsIcon = true;
+  }
+  if (!iconId && !printerAsIcon && labels.length === 0 && forceChair) iconId = 'chair';
+  const hasIcon = !!(iconId || printerAsIcon);
 
   const s = Math.min(w, h);
   // Labelled squares share the chart-wide sizes; an icon on its own has the
@@ -981,8 +990,14 @@ function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, 
 
   let cursorY = -totalH / 2;
   if (hasIcon) {
-    const img = imgCache.get(iconKey(iconId, data));
-    if (img) ctx.drawImage(img, -iconSize / 2, cursorY, iconSize, iconSize);
+    if (printerAsIcon) {
+      const pKey = printerCacheKey(data);
+      const img = imgCache.get(pKey);
+      if (img) ctx.drawImage(img, -iconSize / 2, cursorY, iconSize, iconSize);
+    } else {
+      const img = imgCache.get(iconKey(iconId, data));
+      if (img) ctx.drawImage(img, -iconSize / 2, cursorY, iconSize, iconSize);
+    }
     cursorY += iconSize;
   }
 
@@ -998,6 +1013,46 @@ function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, 
   }
 
   ctx.restore();
+}
+
+/** Draw a printer accessory overlay on a canvas rectangle. When secondary
+ *  (another icon is present or printer.size='small'), the printer is 0.3 of
+ *  the square at its compass position; when solo at max, it fills like a
+ *  normal icon. */
+function drawPrinterOverlay(ctx, x, y, w, h, data, imgCache) {
+  const p = data.printer;
+  if (!p) return;
+  const secondary = isPrinterSecondary(data);
+  const frac = secondary ? PRINTER_SIZE : 0.7;
+  const [cx, cy] = secondary ? (COMPASS_POS[p.compass] || COMPASS_POS.se) : [0.5, 0.5];
+  const pw = w * frac, ph = h * frac;
+  const px = x + Math.max(0, Math.min(w - pw, (cx - frac / 2) * w));
+  const py = y + Math.max(0, Math.min(h - ph, (cy - frac / 2) * h));
+  const pKey = printerCacheKey(data);
+  const img = imgCache.get(pKey);
+  if (img) ctx.drawImage(img, px, py, pw, ph);
+  if (secondary && p.labels && p.labels.length) {
+    const s = Math.min(pw, ph);
+    const lineH = s * 0.28;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.font = contentFont(lineH * 0.7);
+    let ly = py + ph;
+    for (const line of p.labels) {
+      if (!line.text || ly + lineH > y + h) break;
+      ctx.fillStyle = contrastLabelColor(line.color || '#1f2933', data.fill || '#dbe7ff');
+      ctx.fillText(fitText(ctx, line.text, pw * 1.5), px + pw / 2, ly);
+      ly += lineH;
+    }
+    ctx.restore();
+  }
+}
+
+function printerCacheKey(data) {
+  const p = data.printer;
+  const color = contrastLabelColor(data.iconColor || '#1f2933', data.fill || '#dbe7ff');
+  return `_printer|${p.color ? 'fill' : 'bw'}|${color}`;
 }
 
 /** Clamp into [lo, hi]; when the band is narrower than what has to go in it,
@@ -1085,8 +1140,12 @@ async function preloadIcons(desks, seats, covered = [], splitItems = [], mergeIt
 
   for (const { data } of [...desks, ...covered, ...splitItems, ...mergeItems]) {
     if (data.icon) want(data.icon, data);
-    // A server rack also needs its corner icon, contrasted against the page.
     if (isServerCell(data)) needed.set(cornerIconKey(data), iconDataUrl('server', cornerIconColor(data), data.iconFill));
+    if (hasPrinter(data)) {
+      const pKey = printerCacheKey(data);
+      const pColor = contrastLabelColor(data.iconColor || '#1f2933', data.fill || '#dbe7ff');
+      needed.set(pKey, printerDataUrl(data.printer, pColor));
+    }
   }
   for (const { data } of seats) {
     if (data.icon) want(data.icon, data);

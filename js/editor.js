@@ -294,6 +294,12 @@ function render(cell) {
   // furniture (a piece tucked to the faced edge, labels in the empty space).
   bodyEl.appendChild(specialSection(cell));
 
+  // --- Printer (accessory overlay) ----------------------------------------
+  bodyEl.appendChild(printerSection(cell, (patch) => {
+    updateCell(current.r, current.c, patch);
+    render(peekCell(current.r, current.c));
+  }));
+
   // --- Labels (each line has its own color) --------------------------------
   bodyEl.appendChild(group('Labels', (g) => {
     // There is always one label line to type into — blank by default. An empty
@@ -402,6 +408,140 @@ function specialSection(cell) {
       note.textContent = text + ' Use Facing above to aim it.';
       g.appendChild(note);
     }
+  });
+}
+
+// ---------------------------------------------------------------- printer
+//
+// The Printer section lets the user toggle a printer accessory on any square.
+// When a square already has a primary icon the printer renders as a small
+// secondary overlay (0.3×0.3) at a compass position; when it is the only icon
+// it fills the square at max size (or stays small if the user picks 'small').
+
+const COMPASS_DIRS = [
+  { id: 'nw', arrow: '↖', label: 'Top left' },
+  { id: 'n',  arrow: '↑', label: 'Top' },
+  { id: 'ne', arrow: '↗', label: 'Top right' },
+  { id: 'w',  arrow: '←', label: 'Left' },
+  { id: 'c',  arrow: '·', label: 'Center' },
+  { id: 'e',  arrow: '→', label: 'Right' },
+  { id: 'sw', arrow: '↙', label: 'Bottom left' },
+  { id: 's',  arrow: '↓', label: 'Bottom' },
+  { id: 'se', arrow: '↘', label: 'Bottom right' },
+];
+
+function buildPositionCompass(chosen, onPick) {
+  const grid = document.createElement('div');
+  grid.className = 'compass';
+  for (const dir of COMPASS_DIRS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'compass__btn';
+    b.textContent = dir.arrow;
+    b.title = dir.label;
+    b.setAttribute('aria-pressed', String(chosen === dir.id));
+    b.addEventListener('click', () => onPick(dir.id));
+    grid.appendChild(b);
+  }
+  return grid;
+}
+
+function printerSection(data, set) {
+  return group('Printer', (g) => {
+    const p = data.printer;
+    const togBtn = document.createElement('button');
+    togBtn.type = 'button';
+    togBtn.className = `btn ${p ? 'btn--seat' : 'btn--empty'}`;
+    togBtn.textContent = p ? 'On' : 'Off';
+    togBtn.addEventListener('click', () => {
+      if (p) set({ printer: null });
+      else set({ printer: { color: false, compass: 'se', labels: [], size: 'max' } });
+    });
+    g.appendChild(togBtn);
+    if (!p) return;
+
+    const opts = document.createElement('div');
+    opts.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-top:8px;';
+
+    // B&W vs Color
+    const colorRow = document.createElement('div');
+    colorRow.className = 'erow';
+    const bwBtn = document.createElement('button');
+    bwBtn.type = 'button';
+    bwBtn.className = `btn ${!p.color ? 'btn--primary' : ''}`;
+    bwBtn.textContent = 'B&W';
+    bwBtn.addEventListener('click', () => set({ printer: { ...p, color: false } }));
+    const colorBtn = document.createElement('button');
+    colorBtn.type = 'button';
+    colorBtn.className = `btn ${p.color ? 'btn--primary' : ''}`;
+    colorBtn.textContent = 'Color';
+    colorBtn.addEventListener('click', () => set({ printer: { ...p, color: true } }));
+    colorRow.append(bwBtn, colorBtn);
+    opts.appendChild(colorRow);
+
+    // Size toggle (solo only)
+    if (!data.icon) {
+      const sizeRow = document.createElement('div');
+      sizeRow.className = 'erow';
+      const maxBtn = document.createElement('button');
+      maxBtn.type = 'button';
+      maxBtn.className = `btn ${p.size !== 'small' ? 'btn--primary' : ''}`;
+      maxBtn.textContent = 'Max';
+      maxBtn.title = 'Fill the square';
+      maxBtn.addEventListener('click', () => set({ printer: { ...p, size: 'max' } }));
+      const smallBtn = document.createElement('button');
+      smallBtn.type = 'button';
+      smallBtn.className = `btn ${p.size === 'small' ? 'btn--primary' : ''}`;
+      smallBtn.textContent = 'Small';
+      smallBtn.title = 'Stay small at compass position';
+      smallBtn.addEventListener('click', () => set({ printer: { ...p, size: 'small' } }));
+      sizeRow.append(maxBtn, smallBtn);
+      opts.appendChild(sizeRow);
+    }
+
+    // Compass positioning (secondary or solo small)
+    if (isPrinterSecondary(data)) {
+      const posGroup = controlGroup('Position');
+      posGroup.appendChild(buildPositionCompass(p.compass || 'se', (dir) => {
+        set({ printer: { ...p, compass: dir } });
+      }));
+      opts.appendChild(posGroup);
+    }
+
+    // Printer labels
+    const lblGroup = controlGroup('Printer labels');
+    const pLabels = p.labels || [];
+    if (!pLabels.length) pLabels.push({ text: '', color: defaultLabelColor(0) });
+    const lblList = document.createElement('div');
+    pLabels.forEach((line, i) => {
+      const row = document.createElement('div');
+      row.className = 'field';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'field__input';
+      input.value = line.text || '';
+      input.placeholder = `Label ${i + 1}`;
+      input.addEventListener('input', () => {
+        const newLabels = [...pLabels];
+        newLabels[i] = { ...newLabels[i], text: input.value };
+        set({ printer: { ...p, labels: newLabels } });
+      });
+      row.appendChild(input);
+      lblList.appendChild(row);
+    });
+    lblGroup.appendChild(lblList);
+    const addLbl = document.createElement('button');
+    addLbl.type = 'button';
+    addLbl.className = 'link-btn';
+    addLbl.textContent = '+ Add printer label';
+    addLbl.addEventListener('click', () => {
+      const newLabels = [...pLabels, { text: '', color: defaultLabelColor(pLabels.length) }];
+      set({ printer: { ...p, labels: newLabels } });
+    });
+    lblGroup.appendChild(addLbl);
+    opts.appendChild(lblGroup);
+
+    g.appendChild(opts);
   });
 }
 
@@ -813,6 +953,12 @@ function renderSubcellEditor() {
       inputs[inputs.length - 1]?.focus();
     });
     g.appendChild(add);
+  }));
+
+  // Printer accessory on subcell
+  bodyEl.appendChild(printerSection(sub, (patch) => {
+    updateSubcell(current.r, current.c, current.sub, patch);
+    renderSubcellEditor();
   }));
 
   const foot = document.createElement('div');

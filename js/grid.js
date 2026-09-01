@@ -611,6 +611,52 @@ function attachMoveDrag(handle, geo) {
   handle.addEventListener('pointercancel', finish);
 }
 
+/** Build a printer accessory overlay for a cell or subcell. The printer sits at
+ *  a compass position when secondary (0.3×0.3 of the square), or fills the cell
+ *  like a normal icon when solo at max size. */
+function buildPrinterOverlay(data, bgFill) {
+  const p = data.printer;
+  if (!p) return null;
+  const secondary = isPrinterSecondary(data);
+  const frac = secondary ? PRINTER_SIZE : 0.7;
+  const [cx, cy] = secondary ? (COMPASS_POS[p.compass] || COMPASS_POS.se) : [0.5, 0.5];
+  const wrap = document.createElement('div');
+  wrap.className = 'cell__printer';
+  const pct = frac * 100;
+  const left = Math.max(0, Math.min(100 - pct, (cx - frac / 2) * 100));
+  const top = Math.max(0, Math.min(100 - pct, (cy - frac / 2) * 100));
+  wrap.style.width = pct + '%';
+  wrap.style.height = pct + '%';
+  wrap.style.left = left + '%';
+  wrap.style.top = top + '%';
+  const ic = data.iconColor || '#1f2933';
+  const color = contrastLabelColor(ic, bgFill || data.fill || '#dbe7ff');
+  const svg = printerUse(p, '', color);
+  svg.style.color = color;
+  wrap.appendChild(svg);
+  const frag = document.createDocumentFragment();
+  frag.appendChild(wrap);
+  if (secondary && p.labels && p.labels.length && p.labels.some((l) => l.text)) {
+    const lbl = document.createElement('div');
+    lbl.className = 'cell__printer--labels';
+    const lbFrac = frac;
+    const lblLeft = Math.max(0, Math.min(100 - pct, (cx - lbFrac / 2) * 100));
+    const lblTop = top + pct;
+    lbl.style.width = pct + '%';
+    lbl.style.left = lblLeft + '%';
+    lbl.style.top = Math.min(lblTop, 100 - 10) + '%';
+    for (const line of p.labels) {
+      if (!line.text) continue;
+      const s = document.createElement('span');
+      s.textContent = line.text;
+      s.style.color = contrastLabelColor(line.color || '#1f2933', bgFill || data.fill || '#dbe7ff');
+      lbl.appendChild(s);
+    }
+    frag.appendChild(lbl);
+  }
+  return frag;
+}
+
 /** Position a chair's furniture tile (50% of the square) against the edge it
  *  faces, centred on the other axis — the DOM twin of chairGeometry in the
  *  output. Diagonal facings tuck into the matching corner. */
@@ -875,6 +921,11 @@ function buildSubcell(sub, i, split, sm) {
         svg.style.color = ghost ? surfaceLabelColor(ic) : contrastLabelColor(ic, sub.fill || '#dbe7ff');
         content.appendChild(svg);
       }
+    } else if (hasPrinter(sub) && !isPrinterSecondary(sub) && !ghost) {
+      const ic = sub.iconColor || '#1f2933';
+      const svg = printerUse(sub.printer, 'cell__icon', contrastLabelColor(ic, sub.fill || '#dbe7ff'));
+      svg.style.color = contrastLabelColor(ic, sub.fill || '#dbe7ff');
+      content.appendChild(svg);
     }
     let labelsEl = null;
     if (sub.labels && sub.labels.some((l) => l.text)) {
@@ -928,6 +979,10 @@ function buildSubcell(sub, i, split, sm) {
     } else {
       if (labelsEl) content.appendChild(labelsEl);
       el.appendChild(content);
+    }
+    if (hasPrinter(sub) && isPrinterSecondary(sub) && !ghost) {
+      const po = buildPrinterOverlay(sub, sub.fill);
+      if (po) el.appendChild(po);
     }
   }
   return el;
@@ -1004,13 +1059,15 @@ function buildCell(r, c, rects) {
     if (data.icon) {
       const svg = iconUse(data.icon, 'cell__icon', data.iconFill);
       if (svg) {
-        // Keep the icon legible: a ghost's icon flips against the surface (like
-        // its labels); a live icon sits on its square/tile fill, so it flips
-        // against that fill when it would otherwise vanish (white on a light fill).
         const ic = data.iconColor || '#1f2933';
         svg.style.color = ghost ? surfaceLabelColor(ic) : contrastLabelColor(ic, data.fill || '#dbe7ff');
         content.appendChild(svg);
       }
+    } else if (hasPrinter(data) && !isPrinterSecondary(data) && !ghost) {
+      const ic = data.iconColor || '#1f2933';
+      const svg = printerUse(data.printer, 'cell__icon', contrastLabelColor(ic, data.fill || '#dbe7ff'));
+      svg.style.color = contrastLabelColor(ic, data.fill || '#dbe7ff');
+      content.appendChild(svg);
     }
 
     let labelsEl = null;
@@ -1065,6 +1122,10 @@ function buildCell(r, c, rects) {
     } else {
       if (labelsEl) content.appendChild(labelsEl);
       el.appendChild(content);
+    }
+    if (hasPrinter(data) && isPrinterSecondary(data) && !ghost) {
+      const po = buildPrinterOverlay(data, data.fill);
+      if (po) el.appendChild(po);
     }
     el.setAttribute('aria-label', ghost
       ? `Empty seat row ${r + 1}, column ${c + 1}, previously ${ariaLabel(r, c, data)}`

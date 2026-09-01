@@ -156,7 +156,48 @@ const SYMBOL_MARKUP = {
     '<circle cx="11.5" cy="17.2" r="1.05" fill="COLOR"/>',
   'ic-star':
     '<path d="M12 3l2.5 5.3 5.5.8-4 4 1 5.6L12 16l-5 2.7 1-5.6-4-4 5.5-.8L12 3z" fill="FILL" stroke="COLOR" stroke-width="1.6" stroke-linejoin="round"/>',
+  'ic-printer':
+    '<path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1" fill="COLOR"/>' +
+    '<path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4zm1 5a2 2 0 0 0-2 2v1H2a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v-1a2 2 0 0 0-2-2zm7 2v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1" fill="COLOR"/>',
+  'ic-printer-fill':
+    '<path d="M5 1a2 2 0 0 0-2 2v1h10V3a2 2 0 0 0-2-2zm6 8H5a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1" fill="FILL"/>' +
+    '<path d="M0 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-1v-2a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2H2a2 2 0 0 1-2-2zm2.5 1a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1" fill="COLOR"/>',
 };
+
+// ---------------------------------------------------------------- printer overlay
+//
+// A printer is an ACCESSORY that overlays on a square alongside the primary icon
+// (or stands alone). It has its own compass position, labels, and B&W/color mode.
+
+const PRINTER_VIEWBOX = '0 0 16 16';
+const PRINTER_SIZE = 0.3; // fraction of square when secondary
+const COMPASS_POS = {
+  nw: [0, 0],    n: [0.5, 0],   ne: [1, 0],
+  w:  [0, 0.5],  c: [0.5, 0.5], e:  [1, 0.5],
+  sw: [0, 1],    s: [0.5, 1],   se: [1, 1],
+};
+
+function printerSymbolId(p) { return p && p.color ? 'ic-printer-fill' : 'ic-printer'; }
+
+function printerDataUrl(p, color) {
+  const symId = printerSymbolId(p);
+  const fill = p && p.color ? color : 'none';
+  const inner = SYMBOL_MARKUP[symId].replaceAll('COLOR', color).replaceAll('FILL', fill);
+  return 'data:image/svg+xml;charset=utf-8,' +
+    encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${PRINTER_VIEWBOX}">${inner}</svg>`);
+}
+
+function printerUse(p, className, iconColor) {
+  const symId = printerSymbolId(p);
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', className);
+  svg.setAttribute('viewBox', PRINTER_VIEWBOX);
+  if (p && p.color) svg.style.setProperty('--icon-fill', iconColor || 'currentColor');
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', `#${symId}`);
+  svg.appendChild(use);
+  return svg;
+}
 
 // --- imported-icon "fill the open spaces" silhouette --------------------------
 //
