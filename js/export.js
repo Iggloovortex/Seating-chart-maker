@@ -252,7 +252,7 @@ function wallJunctions(rectOf) {
       // Whichever end of that arm is the one landing on this point.
       const atA = a.o === 'h' ? a.c === C : a.r === R;
       const p = wallPt(seg, atA ? seg.a0 : seg.a1, 0);
-      out.push({ x: p.x, y: p.y, type, u: seg.u });
+      out.push({ x: p.x, y: p.y, type, u: seg.u, o: a.o });
     }
   }
   return out;
@@ -392,13 +392,29 @@ function drawWalls(ctx, rectOf) {
     paintDoor(it.seg, wallOrient(it.value), ops, opts);
   }
 
-  // A double door's point is a seam. this is a hacky way to get the seam to show up in the export, but it works.
+  // A double door meets on ONE border, not two. The pair's leaves each end on the
+  // point, and on export each end reaches half a stroke PAST it, so what lands
+  // there is two parallel lines a stroke apart — a doubled seam. So the point's
+  // interior is painted over in the door's own fill (the frame's long edges are
+  // outside it and stay), and a single line is ruled across the seam in their
+  // place: the same one border the editing grid shows, where the two ends stop
+  // half a stroke SHORT and so already overlap into one.
   for (const j of juncs) {
     if (j.type !== 'doorseam') continue;
-    const b = junctionRect(j, -5);
+    const b = junctionRect(j, -1);
     if (b.w <= 0 || b.h <= 0) continue;
     ctx.fillStyle = doorFillColor();
     ctx.fillRect(b.x, b.y, b.w, b.h);
+    const u = j.u * WALL_OUT_SCALE;
+    const sw = WALL_STROKE * u;
+    const t = (WALL_THICK * u) / 2 + sw / 2;   // out to the frame's own outer edge
+    ctx.strokeStyle = doorInkColor();
+    ctx.lineWidth = sw;
+    ctx.beginPath();
+    // The border runs ACROSS the opening: the doors run along the arm's axis.
+    if (j.o === 'h') { ctx.moveTo(j.x, j.y - t); ctx.lineTo(j.x, j.y + t); }
+    else { ctx.moveTo(j.x - t, j.y); ctx.lineTo(j.x + t, j.y); }
+    ctx.stroke();
   }
 }
 
