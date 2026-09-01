@@ -945,18 +945,15 @@ function buildSubcell(sub, i, split, sm, parentR, parentC) {
     }
 
     if (furniture === 'stairs') {
+      // Fill the sub-cell edge to edge, no fill/border — same as a whole-square
+      // stair, so a flight can run across split spaces too.
       const rot = sub.rotation || 0;
       const variant = resolveStairType(sub, parentR, parentC, i, split.rows, split.cols);
-      const ic = sub.iconColor || '#1f2933';
-      const color = contrastLabelColor(ic, sub.fill || '#dbe7ff');
-      const svg = stairsUse(variant, 'cell__icon cell__stairs-icon', color);
+      const svg = stairsUse(variant, 'cell__stairs', surfaceLabelColor(sub.iconColor || '#1f2933'));
       svg.style.transform = `rotate(${rot}deg)`;
-      el.classList.add('subcell--on');
-      el.style.background = sub.fill;
-      el.style.borderColor = sub.border;
-      content.appendChild(svg);
-      if (labelsEl) content.appendChild(labelsEl);
-      el.appendChild(content);
+      el.classList.add('subcell--stairs');
+      el.appendChild(svg);
+      if (labelsEl) { content.appendChild(labelsEl); el.appendChild(content); }
     } else if (furniture) {
       const rot = sub.rotation || 0;
       const tile = document.createElement('div');
@@ -1100,18 +1097,16 @@ function buildCell(r, c, rects) {
     const labelCount = data.labels ? data.labels.filter((l) => l.text).length : 0;
 
     if (furniture === 'stairs') {
+      // Stairs fill the whole square edge to edge — no fill, no border, no
+      // padding — so a run of them reads as one flight, the half-bars on the
+      // seams merging into full step bars. The bars turn with the facing.
       const rot = (data.rotation || 0) + tableRot;
       const variant = resolveStairType(data, r, c);
-      const ic = data.iconColor || '#1f2933';
-      const color = contrastLabelColor(ic, data.fill || '#dbe7ff');
-      const svg = stairsUse(variant, 'cell__icon cell__stairs-icon', color);
+      const svg = stairsUse(variant, 'cell__stairs', surfaceLabelColor(data.iconColor || '#1f2933'));
       svg.style.transform = `rotate(${rot}deg)`;
-      el.classList.add('cell--on');
-      el.style.background = data.fill;
-      el.style.borderColor = data.border;
-      content.appendChild(svg);
-      if (labelsEl) content.appendChild(labelsEl);
-      el.appendChild(content);
+      el.classList.add('cell--stairs');
+      el.appendChild(svg);
+      if (labelsEl) { content.appendChild(labelsEl); el.appendChild(content); }
     } else if (furniture === 'server' && labelCount >= 2) {
       // A rack of several servers: one slab per label, stacked and turned to the
       // facing — the DOM twin of drawServerRack. The server icon sits upright in

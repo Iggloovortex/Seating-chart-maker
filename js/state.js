@@ -114,9 +114,13 @@ function resolveStairType(data, r, c, subIndex, splitRows, splitCols) {
     hasFwd = isStairsAt(r + step[0], c + step[1]);
     hasBwd = isStairsAt(r - step[0], c - step[1]);
   }
+  // The art's full-bar caps belong at the outer ends of a flight: 'start' caps
+  // the step-ward end (its full top bar), 'end' caps the other (full bottom bar
+  // + descent arrow), 'middle' has half-bars both sides. A cell with a neighbour
+  // only on its rear (no neighbour step-ward) is the step-ward extreme → start.
   if (hasFwd && hasBwd) return 'middle';
-  if (hasFwd) return 'start';
-  if (hasBwd) return 'end';
+  if (hasBwd) return 'start';
+  if (hasFwd) return 'end';
   return 'single';
 }
 

@@ -726,28 +726,21 @@ function drawChair(ctx, item, imgCache, plan) {
   if (labelBox) drawLabelBox(ctx, labelBox, item.data, plan, full || Math.min(labelBox.w, labelBox.h), item.data.rotation || 0);
 }
 
+/** Stairs fill the square edge to edge — no fill, border or padding — so a run
+ *  of them reads as one flight, the half-bars on the seams merging into full
+ *  step bars. The art turns with the facing. The DOM twin is the cell--stairs
+ *  branch in grid.js. */
 function drawStairs(ctx, item, imgCache, plan, subIndex, splitRows, splitCols) {
   const { rect } = item.geo;
   const { x, y, w, h } = rect;
-  ctx.fillStyle = item.data.fill || '#dbe7ff';
-  ctx.fillRect(x, y, w, h);
-  ctx.lineWidth = Math.max(1, Math.min(w, h) * 0.04);
-  ctx.strokeStyle = item.data.border || '#2f6feb';
-  ctx.strokeRect(x, y, w, h);
   const variant = resolveStairType(item.data, item.r, item.c, subIndex, splitRows, splitCols);
-  const cacheKey = `stairs-${variant}|${item.data.iconColor || '#1f2933'}`;
-  const img = imgCache.get(cacheKey);
-  if (img) {
-    const iconSize = Math.min(w, h) * 0.8;
-    ctx.save();
-    ctx.translate(x + w / 2, y + h / 2);
-    ctx.rotate(((item.data.rotation || 0) * Math.PI) / 180);
-    ctx.drawImage(img, -iconSize / 2, -iconSize / 2, iconSize, iconSize);
-    ctx.restore();
-  }
-  const labelBox = { x, y, w, h, anchor: 'top' };
-  if (item.data.labels && item.data.labels.some((l) => l.text))
-    drawLabelBox(ctx, labelBox, item.data, plan, Math.min(w, h), item.data.rotation || 0);
+  const img = imgCache.get(`stairs-${variant}|${item.data.iconColor || '#1f2933'}`);
+  if (!img) return;
+  ctx.save();
+  ctx.translate(x + w / 2, y + h / 2);
+  ctx.rotate(((item.data.rotation || 0) * Math.PI) / 180);
+  ctx.drawImage(img, -w / 2, -h / 2, w, h);
+  ctx.restore();
 }
 
 /** Where a server sits: a half-square slab hugging the edge it faces, filling

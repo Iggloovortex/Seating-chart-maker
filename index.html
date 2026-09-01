@@ -61,37 +61,53 @@
         <path d="M5 1a2 2 0 0 0-2 2v1h10V3a2 2 0 0 0-2-2zm6 8H5a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1" fill="var(--icon-fill, currentColor)"/>
         <path d="M0 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-1v-2a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2H2a2 2 0 0 1-2-2zm2.5 1a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1" fill="currentColor"/>
       </symbol>
-      <!-- Stairs icons: 4 variants. Bold step bars + directional arrows, 24×24. -->
-      <symbol id="ic-stairs-single" viewBox="0 0 24 24">
-        <polygon points="12,1 15.5,5 13.2,5 13.2,6.5 10.8,6.5 10.8,5 8.5,5" fill="currentColor"/>
-        <rect x="2" y="7.5" width="20" height="1.8" rx=".5" fill="currentColor"/>
-        <rect x="2" y="10.7" width="20" height="1.8" rx=".5" fill="currentColor"/>
-        <rect x="2" y="13.9" width="20" height="1.8" rx=".5" fill="currentColor"/>
-        <polygon points="12,23 8.5,19 10.8,19 10.8,17.5 13.2,17.5 13.2,19 15.5,19" fill="currentColor"/>
+      <!-- Stairs icons: the four variants exactly as authored (Serif export).
+           Each fills its own 1535 square; a half-thickness step bar sits on the
+           connecting edge so two adjacent stairs' half-bars merge into one full
+           bar across the seam. start caps the top of a run, end caps the bottom
+           (full bar + descent arrow), middle has half-bars both ends, single
+           caps both. currentColor so marks flip black↔white with the theme.
+           End is authored 1535×1518 (its bottom bar flush); rendered with
+           preserveAspectRatio=none so the art always fills the square. -->
+      <symbol id="ic-stairs-single" viewBox="0 0 1535 1535" preserveAspectRatio="none">
+        <g fill="currentColor">
+          <g transform="matrix(1,0,0,1,17.5,392.5)"><rect x="-17.5" y="1107.5" width="1535" height="35"/></g>
+          <g transform="matrix(1,0,0,1,17.5,16.74575)"><path d="M750,1290.719L960,1230.625L750,1395.883L540,1230.625L750,1290.719Z"/></g>
+          <g transform="matrix(1,0,0,1,17.5,-341.5)"><rect x="-17.5" y="1466.5" width="1535" height="35"/></g>
+          <g transform="matrix(1,0,0,1,17.5,17.5)"><rect x="-17.5" y="732.5" width="1535" height="35"/></g>
+          <g transform="matrix(1,0,0,1,17.5,-732.5)"><rect x="-17.5" y="1107.5" width="1535" height="35"/></g>
+          <g transform="matrix(1,0,0,1,17.5,-164.7105)"><path d="M750,422.293L630,317.128L750,364.452L870,317.128L750,422.293Z"/></g>
+          <g transform="matrix(1,0,0,1,17.5,-1107.5)"><rect x="-17.5" y="1107.5" width="1535" height="35"/></g>
+        </g>
       </symbol>
-      <symbol id="ic-stairs-start" viewBox="0 0 24 24">
-        <polygon points="12,1 15.5,5 13.2,5 13.2,6.5 10.8,6.5 10.8,5 8.5,5" fill="currentColor"/>
-        <rect x="2" y="8.5" width="20" height="1.8" rx=".5" fill="currentColor"/>
-        <rect x="2" y="12" width="20" height="1.8" rx=".5" fill="currentColor"/>
-        <rect x="2" y="15.5" width="20" height="1.8" rx=".5" fill="currentColor"/>
-        <rect x="2" y="19" width="20" height="1.8" rx=".5" fill="currentColor"/>
-        <rect x="2" y="22" width="20" height="1.8" rx=".5" fill="currentColor"/>
+      <symbol id="ic-stairs-start" viewBox="0 0 1535 1535" preserveAspectRatio="none">
+        <g fill="currentColor">
+          <g transform="matrix(1,0,0,0.5,17.5,963.75)"><rect x="-17.5" y="1107.5" width="1535" height="35"/></g>
+          <g transform="matrix(1,0,0,1,17.5,-341.5)"><rect x="-17.5" y="1466.5" width="1535" height="35"/></g>
+          <g transform="matrix(1,0,0,1,17.5,17.5)"><rect x="-17.5" y="732.5" width="1535" height="35"/></g>
+          <g transform="matrix(1,0,0,1,17.5,-732.5)"><rect x="-17.5" y="1107.5" width="1535" height="35"/></g>
+          <g transform="matrix(1,0,0,1,17.5,-164.7105)"><path d="M750,422.293L630,317.128L750,364.452L870,317.128L750,422.293Z"/></g>
+          <g transform="matrix(1,0,0,1,17.5,-357.5)"><rect x="-17.5" y="357.5" width="1535" height="35"/></g>
+        </g>
       </symbol>
-      <symbol id="ic-stairs-middle" viewBox="0 0 24 24">
-        <rect x="2" y="1.4" width="20" height="1.8" rx=".5" fill="currentColor"/>
-        <rect x="2" y="5.5" width="20" height="1.8" rx=".5" fill="currentColor"/>
-        <rect x="2" y="9.6" width="20" height="1.8" rx=".5" fill="currentColor"/>
-        <rect x="2" y="13.7" width="20" height="1.8" rx=".5" fill="currentColor"/>
-        <rect x="2" y="17.8" width="20" height="1.8" rx=".5" fill="currentColor"/>
-        <rect x="2" y="21.9" width="20" height="1.8" rx=".5" fill="currentColor"/>
+      <symbol id="ic-stairs-middle" viewBox="0 0 1535 1535" preserveAspectRatio="none">
+        <g fill="currentColor">
+          <g transform="matrix(1,0,0,0.5,17.5,963.75)"><rect x="-17.5" y="1107.5" width="1535" height="35"/></g>
+          <g transform="matrix(1,0,0,1,17.5,-332.75)"><rect x="-17.5" y="1466.5" width="1535" height="35"/></g>
+          <g transform="matrix(1,0,0,1,17.5,17.5)"><rect x="-17.5" y="732.5" width="1535" height="35"/></g>
+          <g transform="matrix(1,0,0,1,17.5,-741.25)"><rect x="-17.5" y="1107.5" width="1535" height="35"/></g>
+          <g transform="matrix(1,0,0,0.5,17.5,-553.75)"><rect x="-17.5" y="1107.5" width="1535" height="35"/></g>
+        </g>
       </symbol>
-      <symbol id="ic-stairs-end" viewBox="0 0 24 24">
-        <rect x="2" y="1" width="20" height="1.8" rx=".5" fill="currentColor"/>
-        <rect x="2" y="4.5" width="20" height="1.8" rx=".5" fill="currentColor"/>
-        <rect x="2" y="8" width="20" height="1.8" rx=".5" fill="currentColor"/>
-        <rect x="2" y="11.5" width="20" height="1.8" rx=".5" fill="currentColor"/>
-        <rect x="2" y="15" width="20" height="1.8" rx=".5" fill="currentColor"/>
-        <polygon points="12,23 8.5,19 10.8,19 10.8,17.5 13.2,17.5 13.2,19 15.5,19" fill="currentColor"/>
+      <symbol id="ic-stairs-end" viewBox="0 0 1535 1518" preserveAspectRatio="none">
+        <g fill="currentColor">
+          <g transform="matrix(1,0,0,1,17.5,16)"><rect x="-17.5" y="1466.5" width="1535" height="35"/></g>
+          <g transform="matrix(1,0,0,1,17.5,-0.75425)"><path d="M750,1290.719L960,1230.625L750,1395.883L540,1230.625L750,1290.719Z"/></g>
+          <g transform="matrix(1,0,0,1,17.5,-359)"><rect x="-17.5" y="1466.5" width="1535" height="35"/></g>
+          <g transform="matrix(1,0,0,1,17.5,0)"><rect x="-17.5" y="732.5" width="1535" height="35"/></g>
+          <g transform="matrix(1,0,0,1,17.5,-750)"><rect x="-17.5" y="1107.5" width="1535" height="35"/></g>
+          <g transform="matrix(1,0,0,0.5,17.5,-553.75)"><rect x="-17.5" y="1107.5" width="1535" height="35"/></g>
+        </g>
       </symbol>
       <symbol id="ic-question" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="9" fill="var(--icon-fill, none)" stroke="currentColor" stroke-width="1.6"/>
