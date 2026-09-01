@@ -525,6 +525,8 @@ function splitOptionButton(o, active, onClick) {
   return btn;
 }
 
+let submergeSelection = new Set();
+
 /** The pane for a split square: change or clear the split, and a list of pieces,
  *  each opening its own editor with a live preview of its state. */
 function renderSplitParent(cell) {
@@ -533,15 +535,87 @@ function renderSplitParent(cell) {
 
   bodyEl.appendChild(splitSection(cell));
 
+  const canMerge = cell.split.rows * cell.split.cols >= 4;
+
   bodyEl.appendChild(group('Pieces', (g) => {
     const grid = document.createElement('div');
     grid.className = 'piece-grid';
     grid.style.gridTemplateColumns = `repeat(${cell.split.cols}, 1fr)`;
-    cell.subcells.forEach((sub, i) => grid.appendChild(pieceButton(sub, i)));
+    const hidden = new Set();
+    if (cell.submerges) {
+      for (const sm of cell.submerges)
+        for (const idx of sm.indices) if (idx !== sm.anchor) hidden.add(idx);
+    }
+    cell.subcells.forEach((sub, i) => {
+      if (hidden.has(i)) return;
+      const sm = cell.submerges && submergeAt(cell, i);
+      const btn = pieceButton(sub, i, sm);
+      if (sm) {
+        const rect = submergeRect(sm, cell.split.cols);
+        btn.style.gridColumn = `${rect.c + 1} / span ${rect.colSpan}`;
+        btn.style.gridRow = `${rect.r + 1} / span ${rect.rowSpan}`;
+      }
+      if (submergeSelection.has(i)) btn.classList.add('piece-btn--sel');
+      if (canMerge) {
+        btn.addEventListener('click', (e) => {
+          if (!submergeSelection.size && !e.shiftKey) {
+            openSubcellEditor(current.r, current.c, i);
+            return;
+          }
+          e.preventDefault();
+          if (submergeSelection.has(i)) submergeSelection.delete(i);
+          else submergeSelection.add(i);
+          renderSplitParent(peekCell(current.r, current.c));
+        });
+      }
+      grid.appendChild(btn);
+    });
     g.appendChild(grid);
+
+    if (canMerge) {
+      const bar = document.createElement('div');
+      bar.className = 'erow erow--controls';
+      bar.style.marginTop = '6px';
+      bar.style.gap = '6px';
+      const selBtn = document.createElement('button');
+      selBtn.type = 'button';
+      selBtn.className = 'btn' + (submergeSelection.size ? ' btn--seat' : '');
+      selBtn.textContent = submergeSelection.size ? `${submergeSelection.size} selected` : 'Select to merge';
+      selBtn.title = 'Hold Shift+click or click here then click pieces to select for merging';
+      selBtn.addEventListener('click', () => {
+        if (submergeSelection.size) { submergeSelection.clear(); renderSplitParent(peekCell(current.r, current.c)); }
+        else {
+          submergeSelection.add(0);
+          renderSplitParent(peekCell(current.r, current.c));
+        }
+      });
+      bar.appendChild(selBtn);
+
+      if (submergeSelection.size >= 2) {
+        const indices = [...submergeSelection];
+        const valid = isRectSubcells(indices, cell.split.rows, cell.split.cols)
+          && !indices.some((i) => submergeAt(cell, i));
+        const mergeBtn = document.createElement('button');
+        mergeBtn.type = 'button';
+        mergeBtn.className = 'btn btn--primary';
+        mergeBtn.textContent = 'Merge';
+        mergeBtn.disabled = !valid;
+        mergeBtn.title = valid ? 'Merge selected pieces' : 'Selection must be a rectangle of unmerged pieces';
+        mergeBtn.addEventListener('click', () => {
+          addSubmerge(current.r, current.c, indices);
+          submergeSelection.clear();
+          renderSplitParent(peekCell(current.r, current.c));
+        });
+        bar.appendChild(mergeBtn);
+      }
+      g.appendChild(bar);
+    }
+
     const note = document.createElement('p');
     note.className = 'egroup__note';
-    note.textContent = 'Click a piece to edit its fill, icon, labels and facing.';
+    note.textContent = canMerge
+      ? 'Click a piece to edit it. Shift+click to select pieces, then Merge to combine them.'
+      : 'Click a piece to edit its fill, icon, labels and facing.';
     g.appendChild(note);
   }));
 
@@ -560,7 +634,7 @@ function renderSplitParent(cell) {
 
 /** One button in the piece list: a preview of the sub-cell's fill/border with its
  *  label/icon, opening that piece's editor. */
-function pieceButton(sub, i) {
+function pieceButton(sub, i, sm) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'piece-btn';
@@ -575,10 +649,11 @@ function pieceButton(sub, i) {
   }
   const cap = document.createElement('span');
   cap.className = 'piece-btn__cap';
-  cap.textContent = text || (sub.enabled ? 'Filled' : 'Empty');
+  const label = sm ? `${text || (sub.enabled ? 'Merged' : 'Empty')}` : (text || (sub.enabled ? 'Filled' : 'Empty'));
+  cap.textContent = label;
   btn.appendChild(cap);
-  btn.setAttribute('aria-label', `Edit piece ${i + 1}${text ? `: ${text}` : ''}`);
-  btn.addEventListener('click', () => openSubcellEditor(current.r, current.c, i));
+  if (sm) btn.classList.add('piece-btn--merged');
+  btn.setAttribute('aria-label', `${sm ? 'Merged piece' : 'Edit piece'} ${i + 1}${text ? `: ${text}` : ''}`);
   return btn;
 }
 
@@ -629,8 +704,31 @@ function renderSubcellEditor() {
   back.type = 'button';
   back.className = 'link-btn';
   back.textContent = '‹ Back to split square';
-  back.addEventListener('click', () => openEditor(current.r, current.c));
+  back.addEventListener('click', () => { submergeSelection.clear(); openEditor(current.r, current.c); });
   bodyEl.appendChild(back);
+
+  // Unmerge button when this piece is in a subcell merge.
+  const cell = peekCell(current.r, current.c);
+  const sm = cell && submergeAt(cell, current.sub);
+  if (sm) {
+    bodyEl.appendChild(group('Merged piece', (g) => {
+      const note = document.createElement('p');
+      note.className = 'egroup__note';
+      note.textContent = `This piece spans ${sm.indices.length} spaces.`;
+      g.appendChild(note);
+      const ubtn = document.createElement('button');
+      ubtn.type = 'button';
+      ubtn.className = 'btn btn--empty';
+      ubtn.style.marginTop = '6px';
+      ubtn.textContent = 'Unmerge';
+      ubtn.title = 'Split this merged piece back into separate spaces';
+      ubtn.addEventListener('click', () => {
+        removeSubmerge(current.r, current.c, sm.id);
+        renderSubcellEditor();
+      });
+      g.appendChild(ubtn);
+    }));
+  }
 
   const set = (patch) => { updateSubcell(current.r, current.c, current.sub, patch); renderSubcellEditor(); };
 

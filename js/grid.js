@@ -715,21 +715,38 @@ function buildSplitGrid(r, c, data) {
   wrap.className = 'cell__split';
   wrap.style.gridTemplateColumns = `repeat(${data.split.cols}, 1fr)`;
   wrap.style.gridTemplateRows = `repeat(${data.split.rows}, 1fr)`;
-  data.subcells.forEach((sub, i) => wrap.appendChild(buildSubcell(sub, i, data.split)));
+  const hidden = new Set();
+  if (data.submerges) {
+    for (const sm of data.submerges)
+      for (const idx of sm.indices) if (idx !== sm.anchor) hidden.add(idx);
+  }
+  data.subcells.forEach((sub, i) => {
+    if (hidden.has(i)) return;
+    const sm = data.submerges && submergeAt(data, i);
+    const el = buildSubcell(sub, i, data.split, sm);
+    if (sm) {
+      const rect = submergeRect(sm, data.split.cols);
+      el.style.gridColumn = `${rect.c + 1} / span ${rect.colSpan}`;
+      el.style.gridRow = `${rect.r + 1} / span ${rect.rowSpan}`;
+    }
+    wrap.appendChild(el);
+  });
   return wrap;
 }
 
 /** One sub-cell of a split square — a mini desk: fill/border when seated, its
  *  icon and labels turned to its own facing, faded when it holds content but is
  *  empty (the same ghost treatment a whole square gets). */
-function buildSubcell(sub, i, split) {
+function buildSubcell(sub, i, split, sm) {
   const el = document.createElement('div');
   el.className = 'subcell';
   el.dataset.sub = i;
+  if (sm) el.classList.add('subcell--merged');
   const ghost = !sub.enabled && hasContent(sub);
-  // A special icon draws as its piece of furniture while the space can still show
-  // it; below that it falls back to a plain filled square (see subcellFurniture).
-  const furniture = subcellFurniture(sub, split.rows, split.cols);
+  // For merged subcells, compute effective rows/cols for furniture sizing.
+  const effRows = sm ? split.rows / submergeRect(sm, split.cols).rowSpan : split.rows;
+  const effCols = sm ? split.cols / submergeRect(sm, split.cols).colSpan : split.cols;
+  const furniture = subcellFurniture(sub, effRows, effCols);
   if (sub.enabled && !furniture) {
     el.classList.add('subcell--on');
     el.style.background = sub.fill;
@@ -765,14 +782,28 @@ function buildSubcell(sub, i, split) {
     }
 
     if (furniture) {
-      // The piece is tucked to the edge it faces inside its own space, exactly as
-      // it would be in a whole square — just at the space's scale.
       const rot = sub.rotation || 0;
       const tile = document.createElement('div');
       tile.className = `cell__furniture cell__${furniture}`;
       tile.style.background = sub.fill;
       tile.style.borderColor = sub.border;
-      if (furniture === 'server') placeServerTile(tile, rot); else placeChairTile(tile, rot);
+      if (furniture === 'server') {
+        placeServerTile(tile, rot);
+      } else {
+        // A chair stays 1:1 and aims for 50% of the full cell in each dimension.
+        // In a split, the subcell is already 1/rows × 1/cols of the cell, so the
+        // chair compensates: min(50%×N, 100%) in each axis.  When the result would
+        // break 1:1 (asymmetric split) it shrinks to the smaller side.
+        const f = Math.min(0.5, 1 / Math.max(effRows, effCols));
+        const cw = f * effCols * 100;
+        const ch = f * effRows * 100;
+        tile.style.width = `${cw}%`;
+        tile.style.height = `${ch}%`;
+        const n = ((Math.round(rot / 45) * 45) % 360 + 360) % 360;
+        const [dr, dc] = FACING_STEP[n] || FACING_STEP[0];
+        tile.style.left = dc < 0 ? '0' : dc > 0 ? `${100 - cw}%` : `${(100 - cw) / 2}%`;
+        tile.style.top  = dr < 0 ? '0' : dr > 0 ? `${100 - ch}%` : `${(100 - ch) / 2}%`;
+      }
       tile.appendChild(content);
       el.classList.add('cell--furniturehost');
       el.appendChild(tile);

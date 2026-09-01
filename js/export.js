@@ -549,32 +549,43 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan) {
   const rect = rectOf(sp.r, sp.c);
   const { rows, cols } = sp.data.split;
   const cw = rect.w / cols, ch = rect.h / rows;
+  const hidden = new Set();
+  if (sp.data.submerges) {
+    for (const sm of sp.data.submerges)
+      for (const idx of sm.indices) if (idx !== sm.anchor) hidden.add(idx);
+  }
   sp.data.subcells.forEach((sub, i) => {
-    if (!sub.enabled) return;
+    if (!sub.enabled || hidden.has(i)) return;
     const rr = Math.floor(i / cols), cc = i % cols;
-    const box = { x: rect.x + cc * cw, y: rect.y + rr * ch, w: cw, h: ch };
-    // A special icon draws as its piece of furniture while the space can show it
-    // — the grid twin of buildSubcell — and as a plain filled square below that.
-    if (subcellFurniture(sub, rows, cols)) {
-      drawChair(ctx, { data: sub, geo: chairInRect(box, sub) }, imgCache, plan);
+    const sm = sp.data.submerges && submergeAt(sp.data, i);
+    const smRect = sm ? submergeRect(sm, cols) : null;
+    const bw = smRect ? smRect.colSpan * cw : cw;
+    const bh = smRect ? smRect.rowSpan * ch : ch;
+    const box = { x: rect.x + cc * cw, y: rect.y + rr * ch, w: bw, h: bh };
+    const effRows = smRect ? rows / smRect.rowSpan : rows;
+    const effCols = smRect ? cols / smRect.colSpan : cols;
+    if (subcellFurniture(sub, effRows, effCols)) {
+      drawChair(ctx, { data: sub, geo: chairInRect(box, sub, effRows, effCols) }, imgCache, plan);
       return;
     }
     ctx.fillStyle = sub.fill || '#dbe7ff';
-    ctx.fillRect(box.x, box.y, cw, ch);
+    ctx.fillRect(box.x, box.y, bw, bh);
     ctx.strokeStyle = sub.border || '#2f6feb';
-    ctx.lineWidth = Math.max(1, Math.min(cw, ch) * 0.04);
-    ctx.strokeRect(box.x, box.y, cw, ch);
-    drawContent(ctx, box.x + cw / 2, box.y + ch / 2, cw, ch, sub, imgCache, false, plan,
+    ctx.lineWidth = Math.max(1, Math.min(bw, bh) * 0.04);
+    ctx.strokeRect(box.x, box.y, bw, bh);
+    drawContent(ctx, box.x + bw / 2, box.y + bh / 2, bw, bh, sub, imgCache, false, plan,
                 undefined, 0, sub.fill || '#dbe7ff');
   });
 }
 
 /** A chair sized and placed inside an arbitrary rectangle — one space of a split
- *  square. The same rules as a whole square's chair (tucked to the edge it faces,
- *  labels in the space left over), just at the space's own scale, so a chair in a
- *  ninth simply comes out smaller. */
-function chairInRect(rect, data) {
-  const size = Math.min(rect.w, rect.h) * CHAIR_SCALE;
+ *  square. The chair stays 1:1 and targets 50% of the full cell; the split already
+ *  shrinks the subcell, so the percentage compensates (min(50%×N, 100%) per axis),
+ *  capped to 1:1 via the smaller side. */
+function chairInRect(rect, data, rows, cols) {
+  rows = rows || 1; cols = cols || 1;
+  const f = Math.min(CHAIR_SCALE, 1 / Math.max(rows, cols));
+  const size = Math.min(f * rect.w * cols, f * rect.h * rows);
   const inset = size * 0.04;
   let cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;
   const [dr, dc] = FACING_STEP[data.rotation || 0] || FACING_STEP[0];

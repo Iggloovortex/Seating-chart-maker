@@ -311,6 +311,7 @@ function splitCell(r, c, rows, cols) {
   cell.split = { rows, cols };
   cell.subcells = subs;
   cell.enabled = true;
+  pruneSubmerges(cell);
   emit();
 }
 
@@ -319,6 +320,7 @@ function unsplitCell(r, c) {
   const cell = getCell(r, c);
   cell.split = null;
   delete cell.subcells;
+  delete cell.submerges;
   emit();
 }
 
@@ -345,6 +347,89 @@ function toggleSubcell(r, c, i) {
   if (!sub) return;
   sub.enabled = !sub.enabled;
   emit();
+}
+
+// ----------------------------------------------- sub-cell merge (within a split)
+//
+// Subcells within a 2×2 or 3×3 split can merge with each other — rectangular
+// groups only (CSS grid can't span an L). The model mirrors the grid-level merge:
+// cell.submerges = [{ id, indices:[int], anchor:int }], where anchor is the
+// top-left subcell whose content the merged region shows.
+
+/** True when a set of subcell indices forms a complete rectangle in a rows×cols grid. */
+function isRectSubcells(indices, rows, cols) {
+  if (!indices || indices.length < 2) return false;
+  let rMin = rows, rMax = -1, cMin = cols, cMax = -1;
+  for (const i of indices) {
+    const sr = Math.floor(i / cols), sc = i % cols;
+    if (sr < rMin) rMin = sr; if (sr > rMax) rMax = sr;
+    if (sc < cMin) cMin = sc; if (sc > cMax) cMax = sc;
+  }
+  const expected = (rMax - rMin + 1) * (cMax - cMin + 1);
+  if (indices.length !== expected) return false;
+  for (let sr = rMin; sr <= rMax; sr++)
+    for (let sc = cMin; sc <= cMax; sc++)
+      if (!indices.includes(sr * cols + sc)) return false;
+  return true;
+}
+
+/** The submerge covering subcell i inside a cell, or null. */
+function submergeAt(cell, i) {
+  if (!cell || !cell.submerges) return null;
+  for (const sm of cell.submerges) if (sm.indices.includes(i)) return sm;
+  return null;
+}
+
+/** The rectangle a submerge spans in grid coordinates: { r, c, rowSpan, colSpan }. */
+function submergeRect(sm, cols) {
+  let rMin = Infinity, rMax = -1, cMin = Infinity, cMax = -1;
+  for (const i of sm.indices) {
+    const sr = Math.floor(i / cols), sc = i % cols;
+    if (sr < rMin) rMin = sr; if (sr > rMax) rMax = sr;
+    if (sc < cMin) cMin = sc; if (sc > cMax) cMax = sc;
+  }
+  return { r: rMin, c: cMin, rowSpan: rMax - rMin + 1, colSpan: cMax - cMin + 1 };
+}
+
+/** Merge a set of subcell indices within a split square. Returns the new submerge
+ *  or null on failure (not rectangular, overlapping an existing merge). */
+function addSubmerge(r, c, indices) {
+  const cell = peekCell(r, c);
+  if (!cell || !isSplit(cell)) return null;
+  const { rows, cols } = cell.split;
+  if (!isRectSubcells(indices, rows, cols)) return null;
+  if (!cell.submerges) cell.submerges = [];
+  for (const i of indices) if (submergeAt(cell, i)) return null;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  const anchor = Math.min(...indices);
+  const sm = { id: `sm${Date.now().toString(36)}`, indices: [...indices].sort((a, b) => a - b), anchor };
+  cell.submerges.push(sm);
+  const anchorSub = cell.subcells[anchor];
+  if (anchorSub && !anchorSub.enabled) anchorSub.enabled = true;
+  emit();
+  return sm;
+}
+
+/** Remove a subcell merge by id. */
+function removeSubmerge(r, c, id) {
+  const cell = peekCell(r, c);
+  if (!cell || !cell.submerges) return;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  cell.submerges = cell.submerges.filter((sm) => sm.id !== id);
+  if (!cell.submerges.length) delete cell.submerges;
+  emit();
+}
+
+/** Prune submerges when the split shape changes or the cell is unsplit. */
+function pruneSubmerges(cell) {
+  if (!cell || !cell.submerges) return;
+  if (!isSplit(cell)) { delete cell.submerges; return; }
+  const n = cell.split.rows * cell.split.cols;
+  cell.submerges = cell.submerges.filter((sm) => {
+    sm.indices = sm.indices.filter((i) => i >= 0 && i < n);
+    return sm.indices.length >= 2 && isRectSubcells(sm.indices, cell.split.rows, cell.split.cols);
+  });
+  if (!cell.submerges.length) delete cell.submerges;
 }
 
 /** Set one label line's text on a single square, seating it if this is the
@@ -1547,9 +1632,23 @@ function deserialize(data) {
         cell.subcells = [];
         for (let i = 0; i < rows * cols; i++) cell.subcells.push(cloneSubcell(v.subcells[i] || {}));
         cell.enabled = true;
+        if (Array.isArray(v.submerges) && v.submerges.length) {
+          cell.submerges = v.submerges
+            .filter((sm) => sm && Array.isArray(sm.indices) && sm.indices.length >= 2)
+            .map((sm) => ({
+              id: String(sm.id || `sm${Math.random().toString(36).slice(2)}`),
+              indices: sm.indices.filter((i) => typeof i === 'number' && i >= 0 && i < rows * cols).sort((a, b) => a - b),
+              anchor: typeof sm.anchor === 'number' ? sm.anchor : Math.min(...sm.indices),
+            }))
+            .filter((sm) => sm.indices.length >= 2 && isRectSubcells(sm.indices, rows, cols));
+          if (!cell.submerges.length) delete cell.submerges;
+        } else {
+          delete cell.submerges;
+        }
       } else {
         cell.split = null;
         delete cell.subcells;
+        delete cell.submerges;
       }
       state.cells.set(k, cell);
     }
