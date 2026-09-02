@@ -947,7 +947,7 @@ function buildSubcell(sub, i, split, sm, parentR, parentC) {
     if (furniture === 'stairs') {
       // Fill the sub-cell edge to edge, no fill/border — same as a whole-square
       // stair, so a flight can run across split spaces too.
-      const rot = sub.rotation || 0;
+      const rot = (sub.rotation || 0) + 180; // arrow follows the compass (see buildCell)
       const variant = resolveStairType(sub, parentR, parentC, i, split.rows, split.cols);
       const svg = stairsUse(variant, 'cell__stairs', surfaceLabelColor(sub.iconColor || '#1f2933'));
       svg.style.transform = `rotate(${rot}deg)`;
@@ -1100,7 +1100,10 @@ function buildCell(r, c, rects) {
       // Stairs fill the whole square edge to edge — no fill, no border, no
       // padding — so a run of them reads as one flight, the half-bars on the
       // seams merging into full step bars. The bars turn with the facing.
-      const rot = (data.rotation || 0) + tableRot;
+      // The art is authored descending downward (arrow at the foot). The compass
+      // reads 0° = up, so add 180° to aim the descent arrow the way the facing
+      // points — otherwise the arrow reads backwards from the compass.
+      const rot = (data.rotation || 0) + tableRot + 180;
       const variant = resolveStairType(data, r, c);
       const svg = stairsUse(variant, 'cell__stairs', surfaceLabelColor(data.iconColor || '#1f2933'));
       svg.style.transform = `rotate(${rot}deg)`;

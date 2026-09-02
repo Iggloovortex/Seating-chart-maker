@@ -168,6 +168,13 @@ async function renderToCanvas(dpi = 300) {
     }
   }
 
+  // 2.1) Stair seams. Each stair caps a run with a half-thickness bar on its
+  //      connecting edge, so a neighbour's half + this one make a full step bar.
+  //      Two anti-aliased halves meeting on a seam never fuse cleanly at finite
+  //      resolution, so paint one solid full-thickness bar over every internal
+  //      seam — it covers both halves exactly and reads as one continuous step.
+  for (const d of desks) if (isStairsCell(d.data)) drawStairSeams(ctx, rectOf, d);
+
   // 2.5) Split squares — a block of independent sub-cells filling the cell.
   for (const sp of splits) drawSplit(ctx, rectOf, sp, imgCache, plan);
 
@@ -738,9 +745,35 @@ function drawStairs(ctx, item, imgCache, plan, subIndex, splitRows, splitCols) {
   if (!img) return;
   ctx.save();
   ctx.translate(x + w / 2, y + h / 2);
-  ctx.rotate(((item.data.rotation || 0) * Math.PI) / 180);
+  // +180: the art descends downward; the compass reads 0° = up, so aim the
+  // descent arrow the way the facing points (matches the grid).
+  ctx.rotate((((item.data.rotation || 0) + 180) * Math.PI) / 180);
   ctx.drawImage(img, -w / 2, -h / 2, w, h);
   ctx.restore();
+}
+
+/** Paint one solid full-thickness step bar over each internal seam of a stair
+ *  run, covering the two abutting half-bars so the flight reads as continuous.
+ *  The run axis follows the facing: an upright/inverted stair (rot 0/180) joins
+ *  its up/down neighbours, a sideways one (rot 90/270) its left/right. The bar
+ *  is 35/1535 of the cell (the authored step-bar thickness), centred on the
+ *  shared edge so it lands exactly on both halves. */
+function drawStairSeams(ctx, rectOf, item) {
+  const { r, c, data } = item;
+  const rect = rectOf(r, c);
+  const rot = (((data.rotation || 0) % 360) + 360) % 360;
+  const vertical = rot % 180 === 0;
+  ctx.fillStyle = data.iconColor || '#1f2933';
+  const BAR = 35 / 1535;
+  if (vertical) {
+    const T = BAR * rect.h;
+    if (isStairsAt(r - 1, c)) ctx.fillRect(rect.x, rect.y - T / 2, rect.w, T);
+    if (isStairsAt(r + 1, c)) ctx.fillRect(rect.x, rect.y + rect.h - T / 2, rect.w, T);
+  } else {
+    const T = BAR * rect.w;
+    if (isStairsAt(r, c - 1)) ctx.fillRect(rect.x - T / 2, rect.y, T, rect.h);
+    if (isStairsAt(r, c + 1)) ctx.fillRect(rect.x + rect.w - T / 2, rect.y, T, rect.h);
+  }
 }
 
 /** Where a server sits: a half-square slab hugging the edge it faces, filling
