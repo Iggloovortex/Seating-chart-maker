@@ -12,7 +12,7 @@ const ICONS = {
   chair:    { label: 'Chair',          symbol: 'ic-chair' },
   question: { label: 'Question',       symbol: 'ic-question' },
   star:     { label: 'Star',           symbol: 'ic-star' },
-  stairs:   { label: 'Stairs',         symbol: 'ic-stairs-single' },
+  stairs:   { label: 'Stairs',         symbol: 'ic-stairs-icon' },
 };
 const ICON_IDS = Object.keys(ICONS);
 
@@ -158,11 +158,20 @@ const SYMBOL_MARKUP = {
   'ic-star':
     '<path d="M12 3l2.5 5.3 5.5.8-4 4 1 5.6L12 16l-5 2.7 1-5.6-4-4 5.5-.8L12 3z" fill="FILL" stroke="COLOR" stroke-width="1.6" stroke-linejoin="round"/>',
   'ic-printer':
-    '<path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1" fill="COLOR"/>' +
-    '<path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4zm1 5a2 2 0 0 0-2 2v1H2a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v-1a2 2 0 0 0-2-2zm7 2v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1" fill="COLOR"/>',
+    '<g transform="matrix(0.5,0,0,1.666667,2,-7)"><rect x="4" y="9" width="8" height="3" style="fill:white;"/></g>' +
+    '<g transform="matrix(0.5,0,0,1.666667,6,-7)"><rect x="4" y="9" width="8" height="3" style="fill:rgb(8,6,5);"/></g>' +
+    '<g transform="matrix(1,0,0,1,0,-1)"><path d="M2.5,8C2.774,8 3,7.774 3,7.5C3,7.226 2.774,7 2.5,7C2.226,7 2,7.226 2,7.5C2,7.774 2.226,8 2.5,8" style="fill:rgb(175,0,0);fill-rule:nonzero;"/></g>' +
+    '<g transform="matrix(1,0,0,1,0,-1)"><path d="M5,1C3.903,1 3,1.903 3,3L3,5L2,5C0.903,5 -0,5.903 0,7L0,10C0,11.097 0.903,12 2,12L3,12L3,13C3,14.097 3.903,15 5,15L11,15C12.097,15 13,14.097 13,13L13,12L14,12C15.097,12 16,11.097 16,10L16,7C16,5.903 15.097,5 14,5L13,5L13,3C13,1.903 12.097,1 11,1L5,1ZM4,3C4,2.451 4.451,2 5,2L11,2C11.549,2 12,2.451 12,3L12,5L4,5L4,3ZM5,8C3.903,8 3,8.903 3,10L3,11L2,11C1.451,11 1,10.549 1,10L1,7C1,6.451 1.451,6 2,6L14,6C14.549,6 15,6.451 15,7L15,10C15,10.549 14.549,11 14,11L13,11L13,10C13,8.903 12.097,8 11,8L5,8ZM12,10L12,13C12,13.549 11.549,14 11,14L5,14C4.451,14 4,13.549 4,13L4,10C4,9.451 4.451,9 5,9L11,9C11.549,9 12,9.451 12,10" style="fill-rule:nonzero;" fill="COLOR"/></g>',
   'ic-printer-fill':
-    '<path d="M5 1a2 2 0 0 0-2 2v1h10V3a2 2 0 0 0-2-2zm6 8H5a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1" fill="FILL"/>' +
-    '<path d="M0 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-1v-2a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2H2a2 2 0 0 1-2-2zm2.5 1a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1" fill="COLOR"/>',
+    '<g transform="matrix(0.333333,0,0,1.666667,5.333333,-7)"><rect x="4" y="9" width="8" height="3" style="fill:rgb(236,0,140);"/></g>' +
+    '<g transform="matrix(0.333333,0,0,1.666667,2.666667,-7)"><rect x="4" y="9" width="8" height="3" style="fill:rgb(0,174,239);"/></g>' +
+    '<g transform="matrix(0.333333,0,0,1.666667,8,-7)"><rect x="4" y="9" width="8" height="3" style="fill:rgb(255,242,0);"/></g>' +
+    '<g transform="matrix(1,0,0,1,0,-1)"><path d="M2.5,8C2.774,8 3,7.774 3,7.5C3,7.226 2.774,7 2.5,7C2.226,7 2,7.226 2,7.5C2,7.774 2.226,8 2.5,8" style="fill:rgb(175,0,0);fill-rule:nonzero;"/></g>' +
+    '<g transform="matrix(1,0,0,1,0,-1)"><path d="M5,1C3.903,1 3,1.903 3,3L3,5L2,5C0.903,5 -0,5.903 0,7L0,10C0,11.097 0.903,12 2,12L3,12L3,13C3,14.097 3.903,15 5,15L11,15C12.097,15 13,14.097 13,13L13,12L14,12C15.097,12 16,11.097 16,10L16,7C16,5.903 15.097,5 14,5L13,5L13,3C13,1.903 12.097,1 11,1L5,1ZM4,3C4,2.451 4.451,2 5,2L11,2C11.549,2 12,2.451 12,3L12,5L4,5L4,3ZM5,8C3.903,8 3,8.903 3,10L3,11L2,11C1.451,11 1,10.549 1,10L1,7C1,6.451 1.451,6 2,6L14,6C14.549,6 15,6.451 15,7L15,10C15,10.549 14.549,11 14,11L13,11L13,10C13,8.903 12.097,8 11,8L5,8ZM12,10L12,13C12,13.549 11.549,14 11,14L5,14C4.451,14 4,13.549 4,13L4,10C4,9.451 4.451,9 5,9L11,9C11.549,9 12,9.451 12,10" style="fill-rule:nonzero;" fill="COLOR"/></g>',
+  // Stairs picker-button icon (side staircase outline), scaled from its 1140
+  // space into the 24-unit icon box. Only the Special-row button uses it.
+  'ic-stairs-icon':
+    '<g transform="scale(0.02105263)"><g transform="matrix(1,0,0,1.235871,12.5,-726.806108)"><path d="M0,1500L0,1319.641L222.886,1319.641L222.886,1139.283L445.773,1139.283L445.773,958.924L668.659,958.924L668.659,778.565L891.546,778.565L891.546,598.207L1114.3,598.207L1114.3,1500L0,1500ZM25,1479.771L1089.3,1479.771L1089.3,618.435L916.546,618.435L916.546,778.565C916.546,789.737 905.353,798.794 891.546,798.794L693.659,798.794L693.659,958.924C693.659,970.096 682.466,979.153 668.659,979.153L470.773,979.153L470.773,1139.283C470.773,1150.455 459.58,1159.511 445.773,1159.511L247.886,1159.511L247.886,1319.641C247.886,1330.813 236.694,1339.87 222.886,1339.87L25,1339.87L25,1479.771Z" fill="COLOR" stroke="COLOR" stroke-width="55"/></g></g>',
   // The four stair variants, exactly as authored (Serif export). Each fills its
   // own square and positions the step bars so a half-bar sits on the connecting
   // edge: two adjacent stairs' half-bars meet on the seam to form one full bar.
@@ -295,7 +304,7 @@ function stairsUse(variant, className, color) {
 // A printer is an ACCESSORY that overlays on a square alongside the primary icon
 // (or stands alone). It has its own compass position, labels, and B&W/color mode.
 
-const PRINTER_VIEWBOX = '0 0 16 16';
+const PRINTER_VIEWBOX = '0 0 16 14';
 const PRINTER_SIZE = 0.3; // fraction of square when secondary
 const COMPASS_POS = {
   nw: [0, 0],    n: [0.5, 0],   ne: [1, 0],
@@ -305,20 +314,26 @@ const COMPASS_POS = {
 
 function printerSymbolId(p) { return p && p.color ? 'ic-printer-fill' : 'ic-printer'; }
 
-function printerDataUrl(p, color) {
+function printerDataUrl(p, color, iconFill) {
   const symId = printerSymbolId(p);
   const fill = p && p.color ? color : 'none';
-  const inner = SYMBOL_MARKUP[symId].replaceAll('COLOR', color).replaceAll('FILL', fill);
+  const ink = SYMBOL_MARKUP[symId].replaceAll('COLOR', color).replaceAll('FILL', fill);
+  // Icon fill paints the printer body's open spaces (a silhouette behind the ink).
+  const inner = (iconFill ? customIconFillLayer(SYMBOL_MARKUP[symId], iconFill) : '') + ink;
   return 'data:image/svg+xml;charset=utf-8,' +
     encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${PRINTER_VIEWBOX}">${inner}</svg>`);
 }
 
-function printerUse(p, className, iconColor) {
+function printerUse(p, className, iconColor, iconFill) {
   const symId = printerSymbolId(p);
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('class', className);
   svg.setAttribute('viewBox', PRINTER_VIEWBOX);
-  if (p && p.color) svg.style.setProperty('--icon-fill', iconColor || 'currentColor');
+  // Only the printer body is currentColor (theme-aware); paper bars and the
+  // power light carry their own fixed colours.
+  if (iconColor) svg.style.color = iconColor;
+  // Icon fill paints the printer body's open spaces (a silhouette behind the ink).
+  if (iconFill) svg.innerHTML = customIconFillLayer(SYMBOL_MARKUP[symId], iconFill);
   const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
   use.setAttribute('href', `#${symId}`);
   svg.appendChild(use);

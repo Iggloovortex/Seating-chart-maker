@@ -631,7 +631,7 @@ function buildPrinterOverlay(data, bgFill) {
   wrap.style.top = top + '%';
   const ic = data.iconColor || '#1f2933';
   const color = contrastLabelColor(ic, bgFill || data.fill || '#dbe7ff');
-  const svg = printerUse(p, '', color);
+  const svg = printerUse(p, '', color, data.iconFill || null);
   svg.style.color = color;
   wrap.appendChild(svg);
   const frag = document.createDocumentFragment();
@@ -923,7 +923,7 @@ function buildSubcell(sub, i, split, sm, parentR, parentC) {
       }
     } else if (hasPrinter(sub) && !isPrinterSecondary(sub) && !ghost) {
       const ic = sub.iconColor || '#1f2933';
-      const svg = printerUse(sub.printer, 'cell__icon', contrastLabelColor(ic, sub.fill || '#dbe7ff'));
+      const svg = printerUse(sub.printer, 'cell__icon', contrastLabelColor(ic, sub.fill || '#dbe7ff'), sub.iconFill || null);
       svg.style.color = contrastLabelColor(ic, sub.fill || '#dbe7ff');
       content.appendChild(svg);
     }
@@ -1071,7 +1071,7 @@ function buildCell(r, c, rects) {
       }
     } else if (hasPrinter(data) && !isPrinterSecondary(data) && !ghost) {
       const ic = data.iconColor || '#1f2933';
-      const svg = printerUse(data.printer, 'cell__icon', contrastLabelColor(ic, data.fill || '#dbe7ff'));
+      const svg = printerUse(data.printer, 'cell__icon', contrastLabelColor(ic, data.fill || '#dbe7ff'), data.iconFill || null);
       svg.style.color = contrastLabelColor(ic, data.fill || '#dbe7ff');
       content.appendChild(svg);
     }

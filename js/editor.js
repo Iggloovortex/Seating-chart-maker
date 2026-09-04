@@ -294,11 +294,12 @@ function render(cell) {
   // furniture (a piece tucked to the faced edge, labels in the empty space).
   bodyEl.appendChild(specialSection(cell));
 
-  // --- Printer (accessory overlay) ----------------------------------------
-  bodyEl.appendChild(printerSection(cell, (patch) => {
+  // --- Printer (accessory overlay) — options only when the printer is on ----
+  const cellPrinter = printerSection(cell, (patch) => {
     updateCell(current.r, current.c, patch);
     render(peekCell(current.r, current.c));
-  }));
+  });
+  if (cellPrinter) bodyEl.appendChild(cellPrinter);
 
   // --- Labels (each line has its own color) --------------------------------
   bodyEl.appendChild(group('Labels', (g) => {
@@ -402,6 +403,22 @@ function specialSection(cell) {
       });
       picker.appendChild(btn);
     }
+    // Printer is an accessory, not furniture: it lives in this row too but toggles
+    // on/off (it coexists with a main icon) instead of taking over the square.
+    const pbtn = document.createElement('button');
+    pbtn.type = 'button';
+    pbtn.className = 'icon-picker__btn';
+    pbtn.title = 'Printer';
+    pbtn.setAttribute('aria-label', 'Printer');
+    pbtn.setAttribute('aria-pressed', String(hasPrinter(cell)));
+    pbtn.appendChild(printerUse({ color: false }, '', 'currentColor'));
+    pbtn.addEventListener('click', () => {
+      updateCell(current.r, current.c, {
+        printer: hasPrinter(cell) ? null : { color: false, compass: 'se', labels: [], size: 'max' },
+      });
+      render(peekCell(current.r, current.c));
+    });
+    picker.appendChild(pbtn);
     g.appendChild(picker);
 
     const text = cell && cell.icon && SPECIAL_SQUARE_NOTES[cell.icon];
@@ -473,20 +490,13 @@ function buildPositionCompass(chosen, onPick) {
   return grid;
 }
 
+// The printer's own options (B&W/Color, size, position, labels). The on/off
+// toggle lives in the Special row; this renders only while the printer is on,
+// so it returns null when there is no printer (callers skip a null).
 function printerSection(data, set) {
+  const p = data.printer;
+  if (!p) return null;
   return group('Printer', (g) => {
-    const p = data.printer;
-    const togBtn = document.createElement('button');
-    togBtn.type = 'button';
-    togBtn.className = `btn ${p ? 'btn--seat' : 'btn--empty'}`;
-    togBtn.textContent = p ? 'On' : 'Off';
-    togBtn.addEventListener('click', () => {
-      if (p) set({ printer: null });
-      else set({ printer: { color: false, compass: 'se', labels: [], size: 'max' } });
-    });
-    g.appendChild(togBtn);
-    if (!p) return;
-
     const opts = document.createElement('div');
     opts.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-top:8px;';
 
@@ -984,6 +994,18 @@ function renderSubcellEditor() {
       });
       picker.appendChild(btn);
     }
+    // Printer accessory — toggles on/off, coexists with a main icon.
+    const pbtn = document.createElement('button');
+    pbtn.type = 'button';
+    pbtn.className = 'icon-picker__btn';
+    pbtn.title = 'Printer';
+    pbtn.setAttribute('aria-label', 'Printer');
+    pbtn.setAttribute('aria-pressed', String(hasPrinter(sub)));
+    pbtn.appendChild(printerUse({ color: false }, '', 'currentColor'));
+    pbtn.addEventListener('click', () => {
+      set({ printer: hasPrinter(sub) ? null : { color: false, compass: 'se', labels: [], size: 'max' } });
+    });
+    picker.appendChild(pbtn);
     g.appendChild(picker);
     const text = sub.icon && SPECIAL_SQUARE_NOTES[sub.icon];
     if (text) {
@@ -1031,11 +1053,12 @@ function renderSubcellEditor() {
     g.appendChild(add);
   }));
 
-  // Printer accessory on subcell
-  bodyEl.appendChild(printerSection(sub, (patch) => {
+  // Printer accessory on subcell — options only when the printer is on
+  const subPrinter = printerSection(sub, (patch) => {
     updateSubcell(current.r, current.c, current.sub, patch);
     renderSubcellEditor();
-  }));
+  });
+  if (subPrinter) bodyEl.appendChild(subPrinter);
 
   const foot = document.createElement('div');
   foot.className = 'editor__foot';

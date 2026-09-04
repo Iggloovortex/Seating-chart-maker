@@ -1123,7 +1123,7 @@ function drawPrinterOverlay(ctx, x, y, w, h, data, imgCache) {
 function printerCacheKey(data) {
   const p = data.printer;
   const color = contrastLabelColor(data.iconColor || '#1f2933', data.fill || '#dbe7ff');
-  return `_printer|${p.color ? 'fill' : 'bw'}|${color}`;
+  return `_printer|${p.color ? 'fill' : 'bw'}|${color}|${data.iconFill || ''}`;
 }
 
 /** Clamp into [lo, hi]; when the band is narrower than what has to go in it,
@@ -1215,7 +1215,7 @@ async function preloadIcons(desks, seats, covered = [], splitItems = [], mergeIt
     if (hasPrinter(data)) {
       const pKey = printerCacheKey(data);
       const pColor = contrastLabelColor(data.iconColor || '#1f2933', data.fill || '#dbe7ff');
-      needed.set(pKey, printerDataUrl(data.printer, pColor));
+      needed.set(pKey, printerDataUrl(data.printer, pColor, data.iconFill || null));
     }
     if (isStairsCell(data)) {
       const ic = data.iconColor || '#1f2933';
