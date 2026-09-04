@@ -1294,6 +1294,10 @@ body {
 .erow .field__input { flex: 1; min-width: 0; }
 /* Color wells stay square; beats the flex:1 above (same specificity, later). */
 .erow .field__input--color { flex: 0 0 auto; width: var(--tap); }
+/* The label-line remove ✕ reads as a removal everywhere it appears (cell,
+   subcell, preset, printer). Panel/modal close ✕ buttons are left untouched. */
+.erow__del { color: var(--danger); }
+.erow__del:hover, .erow__del:focus-visible { background: var(--danger); color: #fff; }
 
 .seg {
   display: inline-flex;
@@ -1767,6 +1771,10 @@ body {
   color: var(--ink-soft);
 }
 .controlgroup .btn { width: 100%; }
+/* A label row inside a controlgroup (printer labels) keeps its remove ✕ compact
+   — the full-width rule above is for the group's own stacked buttons, not the
+   inline controls of a label line. */
+.controlgroup .erow .btn { width: auto; }
 
 /* The three fill buttons stand exactly as tall as the compass beside them:
    three 34px rows with the compass's own 3px gaps — 108px either way, so the

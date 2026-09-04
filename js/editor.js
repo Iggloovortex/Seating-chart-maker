@@ -203,7 +203,7 @@ function presetLabelRow(n, cur, line, index) {
   });
   const del = document.createElement('button');
   del.type = 'button';
-  del.className = 'btn btn--icon btn--ghost';
+  del.className = 'btn btn--icon btn--ghost erow__del';
   del.textContent = '✕';
   del.setAttribute('aria-label', `Remove label line ${index + 1}`);
   del.addEventListener('click', () => {
@@ -298,6 +298,11 @@ function render(cell) {
   const cellPrinter = printerSection(cell, (patch) => {
     updateCell(current.r, current.c, patch);
     render(peekCell(current.r, current.c));
+  }, (mutate) => {
+    // Live edit: mutate the printer in place and emit, no re-render (keeps caret).
+    const c = getCell(current.r, current.c);
+    if (c && c.printer) mutate(c.printer);
+    updateCell(current.r, current.c, {});
   });
   if (cellPrinter) bodyEl.appendChild(cellPrinter);
 
@@ -493,7 +498,7 @@ function buildPositionCompass(chosen, onPick) {
 // The printer's own options (B&W/Color, size, position, labels). The on/off
 // toggle lives in the Special row; this renders only while the printer is on,
 // so it returns null when there is no printer (callers skip a null).
-function printerSection(data, set) {
+function printerSection(data, set, live) {
   const p = data.printer;
   if (!p) return null;
   return group('Printer', (g) => {
@@ -545,25 +550,63 @@ function printerSection(data, set) {
       opts.appendChild(posGroup);
     }
 
-    // Printer labels
+    // Printer labels — the same row as a regular label: reorder grip, live text
+    // (no re-render so the caret survives), its own colour, a colour grip, and a
+    // red remove. `live` mutates the printer in place + emits; `set` re-renders.
     const lblGroup = controlGroup('Printer labels');
-    const pLabels = p.labels || [];
-    if (!pLabels.length) pLabels.push({ text: '', color: defaultLabelColor(0) });
+    const pLabels = p.labels && p.labels.length ? p.labels : [{ text: '', color: defaultLabelColor(0) }];
+    const applyLabels = (labels) => set({ printer: { ...p, labels } });
+    const reorder = (from, to, kind) => {
+      const labels = pLabels.map((l) => ({ ...l }));
+      if (kind === 'color') {
+        const col = labels[from].color;
+        if (from < to) for (let k = from; k < to; k++) labels[k].color = labels[k + 1].color;
+        else for (let k = from; k > to; k--) labels[k].color = labels[k - 1].color;
+        labels[to].color = col;
+      } else {
+        const [m] = labels.splice(from, 1);
+        labels.splice(to, 0, m);
+      }
+      applyLabels(labels);
+    };
     const lblList = document.createElement('div');
+    lblList.id = 'printer-label-list';
     pLabels.forEach((line, i) => {
       const row = document.createElement('div');
-      row.className = 'field';
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.className = 'field__input';
-      input.value = line.text || '';
-      input.placeholder = `Label ${i + 1}`;
-      input.addEventListener('input', () => {
-        const newLabels = [...pLabels];
-        newLabels[i] = { ...newLabels[i], text: input.value };
-        set({ printer: { ...p, labels: newLabels } });
+      row.className = 'erow';
+
+      const grip = labelGrip('Drag to reorder this line');
+      const colorGrip = labelGrip('Drag to move this color to another line');
+      colorGrip.classList.add('erow__grip--color');
+
+      const text = document.createElement('input');
+      text.type = 'text';
+      text.className = 'field__input';
+      text.value = line.text || '';
+      text.placeholder = `Label ${i + 1}`;
+      text.addEventListener('input', () => {
+        live((pr) => { if (pr.labels && pr.labels[i]) pr.labels[i].text = text.value; });
       });
-      row.appendChild(input);
+
+      const color = document.createElement('input');
+      color.type = 'color';
+      color.className = 'field__input field__input--color erow__color';
+      setColorInput(color, line.color || DEFAULTS.labelColor);
+      bindColorInput(color, () => {
+        live((pr) => { if (pr.labels && pr.labels[i]) pr.labels[i].color = colorOf(color); });
+      });
+
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'btn btn--icon btn--ghost erow__del';
+      del.textContent = '✕';
+      del.setAttribute('aria-label', `Remove printer label ${i + 1}`);
+      del.addEventListener('click', () => applyLabels(pLabels.filter((_, j) => j !== i)));
+
+      attachLabelDrag(grip, i, 'line', { listId: 'printer-label-list', apply: reorder });
+      attachLabelDrag(colorGrip, i, 'color', { listId: 'printer-label-list', apply: reorder });
+
+      row.append(grip, text, color, colorGrip, del);
       lblList.appendChild(row);
     });
     lblGroup.appendChild(lblList);
@@ -572,8 +615,7 @@ function printerSection(data, set) {
     addLbl.className = 'link-btn';
     addLbl.textContent = '+ Add printer label';
     addLbl.addEventListener('click', () => {
-      const newLabels = [...pLabels, { text: '', color: defaultLabelColor(pLabels.length) }];
-      set({ printer: { ...p, labels: newLabels } });
+      applyLabels([...pLabels, { text: '', color: defaultLabelColor(pLabels.length) }]);
     });
     lblGroup.appendChild(addLbl);
     opts.appendChild(lblGroup);
@@ -1057,6 +1099,11 @@ function renderSubcellEditor() {
   const subPrinter = printerSection(sub, (patch) => {
     updateSubcell(current.r, current.c, current.sub, patch);
     renderSubcellEditor();
+  }, (mutate) => {
+    // Live edit: mutate the printer in place and emit, no re-render (keeps caret).
+    const s = subCur();
+    if (s && s.printer) mutate(s.printer);
+    updateSubcell(current.r, current.c, current.sub, {});
   });
   if (subPrinter) bodyEl.appendChild(subPrinter);
 
@@ -1116,7 +1163,7 @@ function subLabelRow(line, index) {
   });
   const del = document.createElement('button');
   del.type = 'button';
-  del.className = 'btn btn--icon btn--ghost';
+  del.className = 'btn btn--icon btn--ghost erow__del';
   del.textContent = '✕';
   del.setAttribute('aria-label', `Remove label line ${index + 1}`);
   del.addEventListener('click', () => {
@@ -1357,7 +1404,7 @@ function bulkLabelRow(keys, index) {
 
   const del = document.createElement('button');
   del.type = 'button';
-  del.className = 'btn btn--icon btn--ghost';
+  del.className = 'btn btn--icon btn--ghost erow__del';
   del.textContent = '✕';
   del.setAttribute('aria-label', `Remove label line ${index + 1} from all selected`);
   del.addEventListener('click', () => {
@@ -1382,11 +1429,12 @@ function labelGrip(title) {
 /** Drag a grip up or down the label list to reorder. `kind` decides what
  *  travels: the whole line, or only its colour. Same pointer-drag shape as the
  *  grid's move handle — press, track the nearest row, apply on release. */
-function attachLabelDrag(handle, index, kind) {
+function attachLabelDrag(handle, index, kind, cfg) {
   let drag = null;
+  const listId = (cfg && cfg.listId) || 'label-list';
 
   handle.addEventListener('pointerdown', (e) => {
-    const list = document.getElementById('label-list');
+    const list = document.getElementById(listId);
     const rows = list ? [...list.children] : [];
     if (rows.length < 2) return;
     e.preventDefault();
@@ -1414,7 +1462,10 @@ function attachLabelDrag(handle, index, kind) {
     drag.rows.forEach((el) =>
       el.classList.remove('erow--dragging', 'erow--dragging-color', 'erow--drop'));
     drag = null;
-    if (to === index || !current) return;
+    if (to === index) return;
+    // A caller (e.g. printer labels) can own the reorder + refresh.
+    if (cfg && cfg.apply) { cfg.apply(index, to, kind); return; }
+    if (!current) return;
     const moved = kind === 'color'
       ? moveLabelColor(current.r, current.c, index, to)
       : moveLabelLine(current.r, current.c, index, to);
@@ -1488,7 +1539,7 @@ function labelRow(line, index) {
 
   const del = document.createElement('button');
   del.type = 'button';
-  del.className = 'btn btn--icon btn--ghost';
+  del.className = 'btn btn--icon btn--ghost erow__del';
   del.textContent = '✕';
   del.setAttribute('aria-label', 'Remove label line');
   del.addEventListener('click', () => {
