@@ -205,21 +205,66 @@ const SYMBOL_MARKUP = {
     '<g transform="matrix(1,0,0,1,17.5,-750)"><rect x="-17.5" y="1107.5" width="1535" height="35"/></g>' +
     '<g transform="matrix(1,0,0,0.5,17.5,-553.75)"><rect x="-17.5" y="1107.5" width="1535" height="35"/></g>' +
     '</g>',
+  'ic-stairs-corner':
+    '<g transform="matrix(1,0,0,1,13.368513,13.39392)" fill="COLOR">' +
+    '<g transform="matrix(1,0,0,0.5,17.5,963.75)"><rect x="-17.5" y="1107.5" width="1535" height="35"/></g>' +
+    '<g transform="matrix(1.000017,0.41422,-0.381232,0.920375,576.551034,-475.572633)"><path d="M1517.5,1466.5L1517.5,1501.5L-4.132,1501.5L-17.5,1466.5L1517.5,1466.5Z"/></g>' +
+    '<g transform="matrix(0.999967,0.999967,-0.707107,0.707107,547.829507,-512.830665)"><path d="M1517.5,750L1505.025,767.5L-5.025,767.5L-17.5,750L-5.025,732.5L1505.025,732.5L1517.5,750Z"/></g>' +
+    '<g transform="matrix(0.414214,1,-0.92388,0.382683,1929.627501,-419.715821)"><path d="M1517.5,1107.5L1517.5,1142.5L-17.5,1142.5L-4.106,1107.5L1517.5,1107.5Z"/></g>' +
+    '<g transform="matrix(0,1,-0.5,0,2088.75,17.5)"><rect x="-17.5" y="1107.5" width="1535" height="35"/></g>' +
+    '</g>',
 };
 
-// End is authored 1535×1518 (bottom bar flush); the others are 1535×1535.
+// Diagonal step-bars (authored at facing 45°), shared by diag single/start/end;
+// the chevron (start) and arrow (end) are the same shapes the straight art uses,
+// pre-rotated into the diagonal. A single carries both, a middle uses the fan.
+const DIAG_BARS =
+  '<g transform="matrix(-0.325139,-0.325139,0.707107,-0.707107,746.189305,1276.519391)"><path d="M1517.5,1107.5L1441.383,1142.5L58.617,1142.5L-17.5,1107.5L1517.5,1107.5Z"/></g>' +
+  '<g transform="matrix(-0.670631,-0.670631,0.707107,-0.707107,486.291862,2054.654703)"><path d="M1517.5,1466.5L1517.5,1501.5L19.404,1501.5L-17.5,1466.5L1517.5,1466.5Z"/></g>' +
+  '<g transform="matrix(-1,-1,0.707107,-0.707107,987.169914,2047.830086)"><path d="M1517.5,750L1505.126,767.5L-5.126,767.5L-17.5,750L-5.126,732.5L1505.126,732.5L1517.5,750Z"/></g>' +
+  '<g transform="matrix(-0.670631,-0.670631,0.707107,-0.707107,209.813111,2331.133454)"><path d="M1480.596,1107.5L1517.5,1142.5L-17.5,1142.5L19.404,1107.5L1480.596,1107.5Z"/></g>' +
+  '<g transform="matrix(-0.325139,-0.325139,0.707107,-0.707107,-314.470867,2337.179563)"><path d="M1441.383,1107.5L1517.5,1142.5L-17.5,1142.5L58.617,1107.5L1441.383,1107.5Z"/></g>';
+const DIAG_CHEVRON =
+  '<g transform="matrix(-0.707107,-0.707107,0.707107,-0.707107,638.65772,1957.002452)"><path d="M750,422.293L630,317.128L750,364.452L870,317.128L750,422.293Z"/></g>';
+const DIAG_ARROW =
+  '<g transform="matrix(-0.707107,-0.707107,0.707107,-0.707107,766.966665,1828.693507)"><path d="M750,1290.719L960,1230.625L750,1395.883L540,1230.625L750,1290.719Z"/></g>';
+const DIAG_WRAP = (inner) => '<g transform="matrix(1,0,0,1,24.748737,24.748737)" fill="COLOR">' + inner + '</g>';
+SYMBOL_MARKUP['ic-stairs-diag-single'] = DIAG_WRAP(DIAG_BARS + DIAG_CHEVRON + DIAG_ARROW);
+SYMBOL_MARKUP['ic-stairs-diag-start'] = DIAG_WRAP(DIAG_BARS + DIAG_CHEVRON);
+SYMBOL_MARKUP['ic-stairs-diag-end'] = DIAG_WRAP(DIAG_BARS + DIAG_ARROW);
+
+// Straight: end is 1535×1518 (bottom bar flush), the rest 1535×1535. Diagonal
+// variants are authored at facing 45° (arrow ↗): the winder-corner fan is the
+// diagonal MIDDLE (1561); diag-single/start/end are the diagonal step-bars
+// carrying both / chevron / arrow (1585).
 const STAIRS_VIEWBOXES = {
   single: '0 0 1535 1535',
   start:  '0 0 1535 1535',
   middle: '0 0 1535 1535',
   end:    '0 0 1535 1518',
+  corner: '0 0 1561 1561',
+  diagSingle: '0 0 1585 1585',
+  diagStart:  '0 0 1585 1585',
+  diagEnd:    '0 0 1585 1585',
 };
 const STAIRS_SYMBOLS = {
   single: 'ic-stairs-single',
   start:  'ic-stairs-start',
   middle: 'ic-stairs-middle',
   end:    'ic-stairs-end',
+  corner: 'ic-stairs-corner',
+  diagSingle: 'ic-stairs-diag-single',
+  diagStart:  'ic-stairs-diag-start',
+  diagEnd:    'ic-stairs-diag-end',
 };
+
+// The diagonal variant to draw for a resolved stair type (facing is diagonal).
+function diagStairSymbol(variant) {
+  if (variant === 'middle') return 'corner';
+  if (variant === 'start') return 'diagStart';
+  if (variant === 'end') return 'diagEnd';
+  return 'diagSingle';
+}
 
 function stairsDataUrl(variant, color) {
   const symId = STAIRS_SYMBOLS[variant] || STAIRS_SYMBOLS.single;

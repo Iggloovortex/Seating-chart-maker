@@ -1104,9 +1104,19 @@ function buildCell(r, c, rects) {
       // reads 0° = up, so add 180° to aim the descent arrow the way the facing
       // points — otherwise the arrow reads backwards from the compass.
       const rot = (data.rotation || 0) + tableRot + 180;
+      const color = surfaceLabelColor(data.iconColor || '#1f2933');
       const variant = resolveStairType(data, r, c);
-      const svg = stairsUse(variant, 'cell__stairs', surfaceLabelColor(data.iconColor || '#1f2933'));
-      svg.style.transform = `rotate(${rot}deg)`;
+      let svg;
+      if (((data.rotation || 0) % 90) !== 0) {
+        // Diagonal facing → its own baked art: winder-corner fan (middle) or the
+        // diagonal step-bars with chevron/arrow/both (start/end/single). The art
+        // is authored at facing 45°, so rotate by facing − 45.
+        svg = stairsUse(diagStairSymbol(variant), 'cell__stairs', color);
+        svg.style.transform = `rotate(${(data.rotation || 0) + tableRot - 45}deg)`;
+      } else {
+        svg = stairsUse(variant, 'cell__stairs', color);
+        svg.style.transform = `rotate(${rot}deg)`;
+      }
       el.classList.add('cell--stairs');
       el.appendChild(svg);
       if (labelsEl) { content.appendChild(labelsEl); el.appendChild(content); }

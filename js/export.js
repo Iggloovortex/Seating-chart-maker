@@ -741,13 +741,18 @@ function drawStairs(ctx, item, imgCache, plan, subIndex, splitRows, splitCols) {
   const { rect } = item.geo;
   const { x, y, w, h } = rect;
   const variant = resolveStairType(item.data, item.r, item.c, subIndex, splitRows, splitCols);
-  const img = imgCache.get(`stairs-${variant}|${item.data.iconColor || '#1f2933'}`);
+  const ic = item.data.iconColor || '#1f2933';
+  const diagonal = ((item.data.rotation || 0) % 90) !== 0;
+  // Diagonal: its own baked art (fan for middle; diagonal step-bars + marker for
+  // the rest), authored at facing 45° → rotate by facing − 45. Straight: +180 so
+  // the descent arrow points the way it faces.
+  const sym = diagonal ? diagStairSymbol(variant) : variant;
+  const img = imgCache.get(`stairs-${sym}|${ic}`);
   if (!img) return;
+  const spin = diagonal ? (item.data.rotation || 0) - 45 : (item.data.rotation || 0) + 180;
   ctx.save();
   ctx.translate(x + w / 2, y + h / 2);
-  // +180: the art descends downward; the compass reads 0° = up, so aim the
-  // descent arrow the way the facing points (matches the grid).
-  ctx.rotate((((item.data.rotation || 0) + 180) * Math.PI) / 180);
+  ctx.rotate((spin * Math.PI) / 180);
   ctx.drawImage(img, -w / 2, -h / 2, w, h);
   ctx.restore();
 }
@@ -760,19 +765,26 @@ function drawStairs(ctx, item, imgCache, plan, subIndex, splitRows, splitCols) {
  *  shared edge so it lands exactly on both halves. */
 function drawStairSeams(ctx, rectOf, item) {
   const { r, c, data } = item;
-  const rect = rectOf(r, c);
   const rot = (((data.rotation || 0) % 360) + 360) % 360;
+  if (rot % 90 !== 0) return; // a diagonal landing owns its own hatch — no seams
+  // A straight step-run only fuses with another straight stair on the shared
+  // edge; a diagonal landing keeps its own cropped edge, so skip those neighbours.
+  const straightStairAt = (rr, cc) => {
+    const n = peekCell(rr, cc);
+    return isStairsCell(n) && ((n.rotation || 0) % 90 === 0);
+  };
+  const rect = rectOf(r, c);
   const vertical = rot % 180 === 0;
   ctx.fillStyle = data.iconColor || '#1f2933';
   const BAR = 35 / 1535;
   if (vertical) {
     const T = BAR * rect.h;
-    if (isStairsAt(r - 1, c)) ctx.fillRect(rect.x, rect.y - T / 2, rect.w, T);
-    if (isStairsAt(r + 1, c)) ctx.fillRect(rect.x, rect.y + rect.h - T / 2, rect.w, T);
+    if (straightStairAt(r - 1, c)) ctx.fillRect(rect.x, rect.y - T / 2, rect.w, T);
+    if (straightStairAt(r + 1, c)) ctx.fillRect(rect.x, rect.y + rect.h - T / 2, rect.w, T);
   } else {
     const T = BAR * rect.w;
-    if (isStairsAt(r, c - 1)) ctx.fillRect(rect.x - T / 2, rect.y, T, rect.h);
-    if (isStairsAt(r, c + 1)) ctx.fillRect(rect.x + rect.w - T / 2, rect.y, T, rect.h);
+    if (straightStairAt(r, c - 1)) ctx.fillRect(rect.x - T / 2, rect.y, T, rect.h);
+    if (straightStairAt(r, c + 1)) ctx.fillRect(rect.x + rect.w - T / 2, rect.y, T, rect.h);
   }
 }
 
@@ -1207,7 +1219,7 @@ async function preloadIcons(desks, seats, covered = [], splitItems = [], mergeIt
     }
     if (isStairsCell(data)) {
       const ic = data.iconColor || '#1f2933';
-      for (const v of ['single', 'start', 'middle', 'end'])
+      for (const v of ['single', 'start', 'middle', 'end', 'corner', 'diagSingle', 'diagStart', 'diagEnd'])
         needed.set(`stairs-${v}|${ic}`, stairsDataUrl(v, ic));
     }
   }
