@@ -657,9 +657,10 @@ body {
 .cell__furniture .cell__content { padding: 1px; }
 .cell__furniture .cell__icon { width: 62%; }
 .cell__server .cell__icon { width: 74%; }
-/* Stairs fill the whole square edge to edge — no fill, border or padding — so a
-   run reads as one continuous flight (half-bars on the seams join up). */
-.cell--stairs, .subcell--stairs { background: transparent !important; border-color: transparent !important; }
+/* Stairs fill the whole square edge to edge: the square's own fill shows behind
+   the bars, but with no border — so a run reads as one continuous flight
+   (half-bars on the seams join up). The background is set inline from the fill. */
+.cell--stairs, .subcell--stairs { border-color: transparent !important; }
 .cell__stairs {
   position: absolute;
   inset: 0;

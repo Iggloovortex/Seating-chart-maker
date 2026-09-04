@@ -742,13 +742,20 @@ function drawStairs(ctx, item, imgCache, plan, subIndex, splitRows, splitCols) {
   const { x, y, w, h } = rect;
   const variant = resolveStairType(item.data, item.r, item.c, subIndex, splitRows, splitCols);
   const ic = item.data.iconColor || '#1f2933';
+  const fill = item.data.fill || '#dbe7ff';
+  // The square's own fill is the stair background; the bars are inked to
+  // contrast against it (white on a dark fill), matching the grid.
+  const ink = contrastLabelColor(ic, fill);
   const diagonal = ((item.data.rotation || 0) % 90) !== 0;
   // Diagonal: its own baked art (fan for middle; diagonal step-bars + marker for
   // the rest), authored at facing 45° → rotate by facing − 45. Straight: +180 so
   // the descent arrow points the way it faces.
   const sym = diagonal ? diagStairSymbol(variant) : variant;
-  const img = imgCache.get(`stairs-${sym}|${ic}`);
+  const img = imgCache.get(`stairs-${sym}|${ink}`);
   if (!img) return;
+  // Background fill sits under the bars (axis-aligned; only the bars rotate).
+  ctx.fillStyle = fill;
+  ctx.fillRect(x, y, w, h);
   const spin = diagonal ? (item.data.rotation || 0) - 45 : (item.data.rotation || 0) + 180;
   ctx.save();
   ctx.translate(x + w / 2, y + h / 2);
@@ -775,7 +782,7 @@ function drawStairSeams(ctx, rectOf, item) {
   };
   const rect = rectOf(r, c);
   const vertical = rot % 180 === 0;
-  ctx.fillStyle = data.iconColor || '#1f2933';
+  ctx.fillStyle = contrastLabelColor(data.iconColor || '#1f2933', data.fill || '#dbe7ff');
   const BAR = 35 / 1535;
   if (vertical) {
     const T = BAR * rect.h;
@@ -1218,9 +1225,9 @@ async function preloadIcons(desks, seats, covered = [], splitItems = [], mergeIt
       needed.set(pKey, printerDataUrl(data.printer, pColor, data.iconFill || null));
     }
     if (isStairsCell(data)) {
-      const ic = data.iconColor || '#1f2933';
+      const ink = contrastLabelColor(data.iconColor || '#1f2933', data.fill || '#dbe7ff');
       for (const v of ['single', 'start', 'middle', 'end', 'corner', 'diagSingle', 'diagStart', 'diagEnd'])
-        needed.set(`stairs-${v}|${ic}`, stairsDataUrl(v, ic));
+        needed.set(`stairs-${v}|${ink}`, stairsDataUrl(v, ink));
     }
   }
   for (const { data } of seats) {

@@ -314,12 +314,22 @@ const COMPASS_POS = {
 
 function printerSymbolId(p) { return p && p.color ? 'ic-printer-fill' : 'ic-printer'; }
 
+// Icon fill for the printer: two authored shapes (body panel + paper-in tray)
+// laid behind the ink, sized to sit exactly inside the outline — no silhouette,
+// so nothing bleeds past the strokes. Same pair for B&W and colour.
+const PRINTER_FILL_SHAPES =
+  '<path d="M15,5.956L15,9.044C15,9.572 14.572,10 14.044,10L1.956,10C1.428,10 1,9.572 1,9.044L1,5.956C1,5.428 1.428,5 1.956,5L14.044,5C14.572,5 15,5.428 15,5.956Z"/>' +
+  '<path d="M12,2.002L12,4L4,4L4,2.002C4,1.449 4.449,1 5.002,1L10.998,1C11.551,1 12,1.449 12,2.002Z"/>';
+function printerFillLayer(fill) {
+  return `<g fill="${fill}" stroke="none">${PRINTER_FILL_SHAPES}</g>`;
+}
+
 function printerDataUrl(p, color, iconFill) {
   const symId = printerSymbolId(p);
   const fill = p && p.color ? color : 'none';
   const ink = SYMBOL_MARKUP[symId].replaceAll('COLOR', color).replaceAll('FILL', fill);
-  // Icon fill paints the printer body's open spaces (a silhouette behind the ink).
-  const inner = (iconFill ? customIconFillLayer(SYMBOL_MARKUP[symId], iconFill) : '') + ink;
+  // Icon fill paints the printer body behind the ink (authored fill shapes).
+  const inner = (iconFill ? printerFillLayer(iconFill) : '') + ink;
   return 'data:image/svg+xml;charset=utf-8,' +
     encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${PRINTER_VIEWBOX}">${inner}</svg>`);
 }
@@ -332,8 +342,8 @@ function printerUse(p, className, iconColor, iconFill) {
   // Only the printer body is currentColor (theme-aware); paper bars and the
   // power light carry their own fixed colours.
   if (iconColor) svg.style.color = iconColor;
-  // Icon fill paints the printer body's open spaces (a silhouette behind the ink).
-  if (iconFill) svg.innerHTML = customIconFillLayer(SYMBOL_MARKUP[symId], iconFill);
+  // Icon fill paints the printer body behind the ink (authored fill shapes).
+  if (iconFill) svg.innerHTML = printerFillLayer(iconFill);
   const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
   use.setAttribute('href', `#${symId}`);
   svg.appendChild(use);

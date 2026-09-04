@@ -945,11 +945,13 @@ function buildSubcell(sub, i, split, sm, parentR, parentC) {
     }
 
     if (furniture === 'stairs') {
-      // Fill the sub-cell edge to edge, no fill/border — same as a whole-square
-      // stair, so a flight can run across split spaces too.
+      // Fill the sub-cell edge to edge — the sub-cell's own fill shows behind the
+      // bars, inked to contrast against it — same as a whole-square stair, so a
+      // flight can run across split spaces too.
+      el.style.background = sub.fill;
       const rot = (sub.rotation || 0) + 180; // arrow follows the compass (see buildCell)
       const variant = resolveStairType(sub, parentR, parentC, i, split.rows, split.cols);
-      const svg = stairsUse(variant, 'cell__stairs', surfaceLabelColor(sub.iconColor || '#1f2933'));
+      const svg = stairsUse(variant, 'cell__stairs', contrastLabelColor(sub.iconColor || '#1f2933', sub.fill || '#dbe7ff'));
       svg.style.transform = `rotate(${rot}deg)`;
       el.classList.add('subcell--stairs');
       el.appendChild(svg);
@@ -1097,14 +1099,16 @@ function buildCell(r, c, rects) {
     const labelCount = data.labels ? data.labels.filter((l) => l.text).length : 0;
 
     if (furniture === 'stairs') {
-      // Stairs fill the whole square edge to edge — no fill, no border, no
-      // padding — so a run of them reads as one flight, the half-bars on the
-      // seams merging into full step bars. The bars turn with the facing.
-      // The art is authored descending downward (arrow at the foot). The compass
-      // reads 0° = up, so add 180° to aim the descent arrow the way the facing
-      // points — otherwise the arrow reads backwards from the compass.
+      // Stairs fill the whole square edge to edge — the square's own fill shows
+      // as the background and the step bars are inked to contrast against it
+      // (white on a dark fill, like every other mark in the app). No border, so
+      // a run still reads as one flight, the half-bars on the seams merging into
+      // full step bars. The bars turn with the facing. The art is authored
+      // descending downward (arrow at the foot); the compass reads 0° = up, so
+      // add 180° to aim the descent arrow the way the facing points.
+      el.style.background = data.fill;
       const rot = (data.rotation || 0) + tableRot + 180;
-      const color = surfaceLabelColor(data.iconColor || '#1f2933');
+      const color = contrastLabelColor(data.iconColor || '#1f2933', data.fill || '#dbe7ff');
       const variant = resolveStairType(data, r, c);
       let svg;
       if (((data.rotation || 0) % 90) !== 0) {
