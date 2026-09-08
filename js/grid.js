@@ -921,10 +921,11 @@ function buildSubcell(sub, i, split, sm, parentR, parentC) {
         svg.style.color = ghost ? surfaceLabelColor(ic) : contrastLabelColor(ic, sub.fill || '#dbe7ff');
         content.appendChild(svg);
       }
-    } else if (hasPrinter(sub) && !isPrinterSecondary(sub) && !ghost) {
+    } else if (hasPrinter(sub) && !isPrinterSecondary(sub)) {
       const ic = sub.iconColor || '#1f2933';
-      const svg = printerUse(sub.printer, 'cell__icon', contrastLabelColor(ic, sub.fill || '#dbe7ff'), sub.iconFill || null);
-      svg.style.color = contrastLabelColor(ic, sub.fill || '#dbe7ff');
+      const clr = ghost ? surfaceLabelColor(ic) : contrastLabelColor(ic, sub.fill || '#dbe7ff');
+      const svg = printerUse(sub.printer, 'cell__icon', clr, ghost ? null : (sub.iconFill || null));
+      svg.style.color = clr;
       content.appendChild(svg);
     }
     let labelsEl = null;
@@ -1071,10 +1072,11 @@ function buildCell(r, c, rects) {
         svg.style.color = ghost ? surfaceLabelColor(ic) : contrastLabelColor(ic, data.fill || '#dbe7ff');
         content.appendChild(svg);
       }
-    } else if (hasPrinter(data) && !isPrinterSecondary(data) && !ghost) {
+    } else if (hasPrinter(data) && !isPrinterSecondary(data)) {
       const ic = data.iconColor || '#1f2933';
-      const svg = printerUse(data.printer, 'cell__icon', contrastLabelColor(ic, data.fill || '#dbe7ff'), data.iconFill || null);
-      svg.style.color = contrastLabelColor(ic, data.fill || '#dbe7ff');
+      const clr = ghost ? surfaceLabelColor(ic) : contrastLabelColor(ic, data.fill || '#dbe7ff');
+      const svg = printerUse(data.printer, 'cell__icon', clr, ghost ? null : (data.iconFill || null));
+      svg.style.color = clr;
       content.appendChild(svg);
     }
 
