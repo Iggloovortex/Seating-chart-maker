@@ -28,8 +28,20 @@ function uniformCellSize() {
   return Math.round(Math.max(CELL_BASE, neededW, neededH));
 }
 
-const CHART_PAD = 4;   // .chart padding, in px
-const CELL_GAP = 4;    // .chart gap, in px
+// The gap between squares — the seam — and the chart's padding around the
+// outside, which is the same measure. Both live in the stylesheet as .chart's
+// `--seam`, and are read back here each render so there is ONE place to change
+// how wide the seams are. (Widening --seam widens the ground a wall sits on, and
+// with it the ground the wall hover owns.)
+let CHART_PAD = 8;
+let CELL_GAP = 8;
+function refreshSeamMetrics() {
+  const cs = getComputedStyle(chart);
+  const gap = parseFloat(cs.gap);
+  const pad = parseFloat(cs.paddingTop);
+  if (Number.isFinite(gap)) CELL_GAP = gap;
+  if (Number.isFinite(pad)) CHART_PAD = pad;
+}
 const BADGE_PAD = 5;   // inset for a badge inside a shape (matches .cell__check)
 const TABLE_BADGE = 24; // .table-remove size, in px
 
@@ -37,6 +49,7 @@ const TABLE_BADGE = 24; // .table-remove size, in px
 function renderGrid() {
   const { cols, rows } = state.grid;
   refreshGridSurface();
+  refreshSeamMetrics();
 
   // All cells share one square size, so the grid stays uniform as content grows.
   const size = uniformCellSize();
@@ -72,8 +85,10 @@ function renderGrid() {
   fitCellLabels();
   renderTables();
   renderMerges();
+  renderWalls();
   renderMoveHandle();
   buildInsertGuides();
+  buildWallHint();
 }
 
 /** Natural width of label text at the base font — measured on a canvas, so a
@@ -273,6 +288,9 @@ function chartZoom() {
 /** Reveal whichever insert the pointer is reaching for, or nothing. */
 function updateInsertGuides(e) {
   if (!rowGuide || !colGuide || movingSelection || cornerMenuOpen) return;
+  // Walls mode owns the seams — including the outer border, which is where the
+  // guides live — so the row/column offers stand down while it is on.
+  if (typeof isWallsMode === 'function' && isWallsMode()) { hideInsertGuides(); return; }
   const chartRect = chart.getBoundingClientRect();
   const zoom = chartZoom();
   const x = (e.clientX - chartRect.left) / zoom;
@@ -487,8 +505,15 @@ function initInsertGuides(stageEl) {
     if (e.target.closest &&
         e.target.closest('.insert-guide, .insert-corner, .insert-menu, .line-remove')) return;
     updateInsertGuides(e);
+    // The wall bar is deliberately NOT in the guard above: it sits on the seam it
+    // offers, so the pointer is over it for most of the gesture and it still has
+    // to hand over to the next seam along.
+    updateWallHint(e);
   });
-  stageEl.addEventListener('pointerleave', () => { if (!cornerMenuOpen) hideInsertGuides(); });
+  stageEl.addEventListener('pointerleave', () => {
+    if (!cornerMenuOpen) hideInsertGuides();
+    clearWallHover();
+  });
   // The menu is modal-ish: anything else you click dismisses it.
   document.addEventListener('pointerdown', (e) => {
     if (!cornerMenuOpen) return;
@@ -584,6 +609,52 @@ function attachMoveDrag(handle, geo) {
   };
   handle.addEventListener('pointerup', finish);
   handle.addEventListener('pointercancel', finish);
+}
+
+/** Build a printer accessory overlay for a cell or subcell. The printer sits at
+ *  a compass position when secondary (0.3×0.3 of the square), or fills the cell
+ *  like a normal icon when solo at max size. */
+function buildPrinterOverlay(data, bgFill) {
+  const p = data.printer;
+  if (!p) return null;
+  const secondary = isPrinterSecondary(data);
+  const frac = secondary ? PRINTER_SIZE : 0.7;
+  const [cx, cy] = secondary ? (COMPASS_POS[p.compass] || COMPASS_POS.se) : [0.5, 0.5];
+  const wrap = document.createElement('div');
+  wrap.className = 'cell__printer';
+  const pct = frac * 100;
+  const left = Math.max(0, Math.min(100 - pct, (cx - frac / 2) * 100));
+  const top = Math.max(0, Math.min(100 - pct, (cy - frac / 2) * 100));
+  wrap.style.width = pct + '%';
+  wrap.style.height = pct + '%';
+  wrap.style.left = left + '%';
+  wrap.style.top = top + '%';
+  const ic = data.iconColor || '#1f2933';
+  const color = contrastLabelColor(ic, bgFill || data.fill || '#dbe7ff');
+  const svg = printerUse(p, '', color, data.iconFill || null);
+  svg.style.color = color;
+  wrap.appendChild(svg);
+  const frag = document.createDocumentFragment();
+  frag.appendChild(wrap);
+  if (secondary && p.labels && p.labels.length && p.labels.some((l) => l.text)) {
+    const lbl = document.createElement('div');
+    lbl.className = 'cell__printer--labels';
+    const lbFrac = frac;
+    const lblLeft = Math.max(0, Math.min(100 - pct, (cx - lbFrac / 2) * 100));
+    const lblTop = top + pct;
+    lbl.style.width = pct + '%';
+    lbl.style.left = lblLeft + '%';
+    lbl.style.top = Math.min(lblTop, 100 - 10) + '%';
+    for (const line of p.labels) {
+      if (!line.text) continue;
+      const s = document.createElement('span');
+      s.textContent = line.text;
+      s.style.color = contrastLabelColor(line.color || '#1f2933', bgFill || data.fill || '#dbe7ff');
+      lbl.appendChild(s);
+    }
+    frag.appendChild(lbl);
+  }
+  return frag;
 }
 
 /** Position a chair's furniture tile (50% of the square) against the edge it
@@ -690,19 +761,151 @@ function buildSplitGrid(r, c, data) {
   wrap.className = 'cell__split';
   wrap.style.gridTemplateColumns = `repeat(${data.split.cols}, 1fr)`;
   wrap.style.gridTemplateRows = `repeat(${data.split.rows}, 1fr)`;
-  data.subcells.forEach((sub, i) => wrap.appendChild(buildSubcell(sub, i)));
+  const { rows, cols } = data.split;
+  const hidden = new Set();
+  const rectMerges = [];
+  const polyMerges = [];
+  if (data.submerges) {
+    for (const sm of data.submerges) {
+      const isRect = isRectSubcells(sm.indices, rows, cols);
+      if (isRect) rectMerges.push(sm);
+      else polyMerges.push(sm);
+      for (const idx of sm.indices) if (idx !== sm.anchor) hidden.add(idx);
+    }
+    for (const sm of polyMerges) hidden.add(sm.anchor);
+  }
+  data.subcells.forEach((sub, i) => {
+    if (hidden.has(i)) {
+      const polyOwner = polyMerges.find((sm) => sm.indices.includes(i));
+      if (polyOwner) {
+        const el = document.createElement('div');
+        el.className = 'subcell subcell--polyhidden';
+        el.dataset.sub = i;
+        wrap.appendChild(el);
+        return;
+      }
+      return;
+    }
+    const sm = rectMerges.find((m) => m.anchor === i) || null;
+    const el = buildSubcell(sub, i, data.split, sm, r, c);
+    if (sm) {
+      const rect = submergeRect(sm, cols);
+      el.style.gridColumn = `${rect.c + 1} / span ${rect.colSpan}`;
+      el.style.gridRow = `${rect.r + 1} / span ${rect.rowSpan}`;
+    }
+    wrap.appendChild(el);
+  });
+  for (const sm of polyMerges) {
+    buildSubmergeOverlay(wrap, data, sm);
+  }
   return wrap;
+}
+
+/** SVG overlay for an L/T/+ shaped subcell merge within a split grid. */
+function buildSubmergeOverlay(wrap, data, sm) {
+  const { rows, cols } = data.split;
+  const sub = data.subcells[sm.anchor];
+  const fill = sub.fill || '#dbe7ff';
+  const border = sub.border || '#2f6feb';
+  const cw = 100 / cols, ch = 100 / rows;
+  const plan = submergePlan(sm, rows, cols);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'subcell-merge-overlay';
+  overlay.dataset.sub = sm.anchor;
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', `0 0 100 100`);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;';
+
+  for (const i of sm.indices) {
+    const sr = Math.floor(i / cols), sc = i % cols;
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', sc * cw);
+    rect.setAttribute('y', sr * ch);
+    rect.setAttribute('width', cw);
+    rect.setAttribute('height', ch);
+    rect.setAttribute('fill', fill);
+    svg.appendChild(rect);
+  }
+
+  const lw = 0.8;
+  for (const i of sm.indices) {
+    const sr = Math.floor(i / cols), sc = i % cols;
+    const x0 = sc * cw, y0 = sr * ch, x1 = x0 + cw, y1 = y0 + ch;
+    const seg = (a1, b1, a2, b2) => {
+      const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      l.setAttribute('x1', a1); l.setAttribute('y1', b1);
+      l.setAttribute('x2', a2); l.setAttribute('y2', b2);
+      l.setAttribute('stroke', border); l.setAttribute('stroke-width', lw);
+      svg.appendChild(l);
+    };
+    if (!plan.has(sr - 1, sc)) seg(x0, y0, x1, y0);
+    if (!plan.has(sr, sc + 1)) seg(x1, y0, x1, y1);
+    if (!plan.has(sr + 1, sc)) seg(x0, y1, x1, y1);
+    if (!plan.has(sr, sc - 1)) seg(x0, y0, x0, y1);
+  }
+  overlay.appendChild(svg);
+
+  if (sub.enabled || hasContent(sub)) {
+    const content = document.createElement('div');
+    content.className = 'subcell-merge-content';
+    if (plan.labelRun) {
+      const lx = plan.labelRun.scStart * cw;
+      const ly = plan.labelRun.sr * ch;
+      const lw2 = plan.labelRun.len * cw;
+      content.style.left = `${lx}%`; content.style.top = `${ly}%`;
+      content.style.width = `${lw2}%`; content.style.height = `${ch}%`;
+    } else {
+      const rect = submergeRect(sm, cols);
+      content.style.left = `${rect.c * cw}%`; content.style.top = `${rect.r * ch}%`;
+      content.style.width = `${rect.colSpan * cw}%`; content.style.height = `${rect.rowSpan * ch}%`;
+    }
+    content.style.setProperty('--rot', `${sub.rotation || 0}deg`);
+    const inner = document.createElement('div');
+    inner.className = 'cell__content';
+    inner.style.setProperty('--rot', `${sub.rotation || 0}deg`);
+    if (sub.icon) {
+      const svgIcon = iconUse(sub.icon, 'cell__icon', sub.iconFill);
+      if (svgIcon) {
+        svgIcon.style.color = contrastLabelColor(sub.iconColor || '#1f2933', fill);
+        inner.appendChild(svgIcon);
+      }
+    }
+    if (sub.labels && sub.labels.some((l) => l.text)) {
+      const labelsEl = document.createElement('div');
+      labelsEl.className = 'cell__labels';
+      for (const line of sub.labels) {
+        if (!line.text) continue;
+        const span = document.createElement('span');
+        span.className = 'cell__label';
+        span.textContent = line.text;
+        span.style.color = contrastLabelColor(line.color, fill);
+        labelsEl.appendChild(span);
+      }
+      inner.appendChild(labelsEl);
+    }
+    content.appendChild(inner);
+    overlay.appendChild(content);
+  }
+  wrap.appendChild(overlay);
 }
 
 /** One sub-cell of a split square — a mini desk: fill/border when seated, its
  *  icon and labels turned to its own facing, faded when it holds content but is
  *  empty (the same ghost treatment a whole square gets). */
-function buildSubcell(sub, i) {
+function buildSubcell(sub, i, split, sm, parentR, parentC) {
   const el = document.createElement('div');
   el.className = 'subcell';
   el.dataset.sub = i;
+  if (sm) el.classList.add('subcell--merged');
   const ghost = !sub.enabled && hasContent(sub);
-  if (sub.enabled) {
+  // For merged subcells, compute effective rows/cols for furniture sizing.
+  const effRows = sm ? split.rows / submergeRect(sm, split.cols).rowSpan : split.rows;
+  const effCols = sm ? split.cols / submergeRect(sm, split.cols).colSpan : split.cols;
+  const furniture = subcellFurniture(sub, effRows, effCols);
+  if (sub.enabled && !furniture) {
     el.classList.add('subcell--on');
     el.style.background = sub.fill;
     el.style.borderColor = sub.border;
@@ -718,22 +921,77 @@ function buildSubcell(sub, i) {
         svg.style.color = ghost ? surfaceLabelColor(ic) : contrastLabelColor(ic, sub.fill || '#dbe7ff');
         content.appendChild(svg);
       }
+    } else if (hasPrinter(sub) && !isPrinterSecondary(sub) && !ghost) {
+      const ic = sub.iconColor || '#1f2933';
+      const svg = printerUse(sub.printer, 'cell__icon', contrastLabelColor(ic, sub.fill || '#dbe7ff'), sub.iconFill || null);
+      svg.style.color = contrastLabelColor(ic, sub.fill || '#dbe7ff');
+      content.appendChild(svg);
     }
+    let labelsEl = null;
     if (sub.labels && sub.labels.some((l) => l.text)) {
-      const labels = document.createElement('div');
-      labels.className = 'cell__labels';
+      labelsEl = document.createElement('div');
+      labelsEl.className = 'cell__labels';
       for (const line of sub.labels) {
         if (!line.text) continue;
         const span = document.createElement('span');
         span.className = 'cell__label';
         span.textContent = line.text;
-        span.style.color = ghost ? surfaceLabelColor(line.color)
-                                 : contrastLabelColor(line.color, sub.fill || '#dbe7ff');
-        labels.appendChild(span);
+        // A furniture piece's label sits on the bare space, not on a fill.
+        span.style.color = (furniture || ghost)
+          ? surfaceLabelColor(line.color)
+          : contrastLabelColor(line.color, sub.fill || '#dbe7ff');
+        labelsEl.appendChild(span);
       }
-      content.appendChild(labels);
     }
-    el.appendChild(content);
+
+    if (furniture === 'stairs') {
+      // Fill the sub-cell edge to edge — the sub-cell's own fill shows behind the
+      // bars, inked to contrast against it — same as a whole-square stair, so a
+      // flight can run across split spaces too.
+      el.style.background = sub.fill;
+      const rot = (sub.rotation || 0) + 180; // arrow follows the compass (see buildCell)
+      const variant = resolveStairType(sub, parentR, parentC, i, split.rows, split.cols);
+      const svg = stairsUse(variant, 'cell__stairs', contrastLabelColor(sub.iconColor || '#1f2933', sub.fill || '#dbe7ff'));
+      svg.style.transform = `rotate(${rot}deg)`;
+      el.classList.add('subcell--stairs');
+      el.appendChild(svg);
+      if (labelsEl) { content.appendChild(labelsEl); el.appendChild(content); }
+    } else if (furniture) {
+      const rot = sub.rotation || 0;
+      const tile = document.createElement('div');
+      tile.className = `cell__furniture cell__${furniture}`;
+      tile.style.background = sub.fill;
+      tile.style.borderColor = sub.border;
+      if (furniture === 'server') {
+        placeServerTile(tile, rot);
+      } else {
+        const f = Math.min(0.5, 1 / Math.max(effRows, effCols));
+        const cw = f * effCols * 100;
+        const ch = f * effRows * 100;
+        tile.style.width = `${cw}%`;
+        tile.style.height = `${ch}%`;
+        const n = ((Math.round(rot / 45) * 45) % 360 + 360) % 360;
+        const [dr, dc] = FACING_STEP[n] || FACING_STEP[0];
+        tile.style.left = dc < 0 ? '0' : dc > 0 ? `${100 - cw}%` : `${(100 - cw) / 2}%`;
+        tile.style.top  = dr < 0 ? '0' : dr > 0 ? `${100 - ch}%` : `${(100 - ch) / 2}%`;
+      }
+      tile.appendChild(content);
+      el.classList.add('cell--furniturehost');
+      el.appendChild(tile);
+      if (labelsEl) {
+        labelsEl.classList.add('cell__furniturelabels');
+        if (furniture === 'server') placeServerLabels(labelsEl, rot); else placeChairLabels(labelsEl, rot);
+        labelsEl.style.transform = `rotate(${rot}deg)`;
+        el.appendChild(labelsEl);
+      }
+    } else {
+      if (labelsEl) content.appendChild(labelsEl);
+      el.appendChild(content);
+    }
+    if (hasPrinter(sub) && isPrinterSecondary(sub) && !ghost) {
+      const po = buildPrinterOverlay(sub, sub.fill);
+      if (po) el.appendChild(po);
+    }
   }
   return el;
 }
@@ -809,13 +1067,15 @@ function buildCell(r, c, rects) {
     if (data.icon) {
       const svg = iconUse(data.icon, 'cell__icon', data.iconFill);
       if (svg) {
-        // Keep the icon legible: a ghost's icon flips against the surface (like
-        // its labels); a live icon sits on its square/tile fill, so it flips
-        // against that fill when it would otherwise vanish (white on a light fill).
         const ic = data.iconColor || '#1f2933';
         svg.style.color = ghost ? surfaceLabelColor(ic) : contrastLabelColor(ic, data.fill || '#dbe7ff');
         content.appendChild(svg);
       }
+    } else if (hasPrinter(data) && !isPrinterSecondary(data) && !ghost) {
+      const ic = data.iconColor || '#1f2933';
+      const svg = printerUse(data.printer, 'cell__icon', contrastLabelColor(ic, data.fill || '#dbe7ff'), data.iconFill || null);
+      svg.style.color = contrastLabelColor(ic, data.fill || '#dbe7ff');
+      content.appendChild(svg);
     }
 
     let labelsEl = null;
@@ -838,7 +1098,33 @@ function buildCell(r, c, rects) {
 
     const labelCount = data.labels ? data.labels.filter((l) => l.text).length : 0;
 
-    if (furniture === 'server' && labelCount >= 2) {
+    if (furniture === 'stairs') {
+      // Stairs fill the whole square edge to edge — the square's own fill shows
+      // as the background and the step bars are inked to contrast against it
+      // (white on a dark fill, like every other mark in the app). No border, so
+      // a run still reads as one flight, the half-bars on the seams merging into
+      // full step bars. The bars turn with the facing. The art is authored
+      // descending downward (arrow at the foot); the compass reads 0° = up, so
+      // add 180° to aim the descent arrow the way the facing points.
+      el.style.background = data.fill;
+      const rot = (data.rotation || 0) + tableRot + 180;
+      const color = contrastLabelColor(data.iconColor || '#1f2933', data.fill || '#dbe7ff');
+      const variant = resolveStairType(data, r, c);
+      let svg;
+      if (((data.rotation || 0) % 90) !== 0) {
+        // Diagonal facing → its own baked art: winder-corner fan (middle) or the
+        // diagonal step-bars with chevron/arrow/both (start/end/single). The art
+        // is authored at facing 45°, so rotate by facing − 45.
+        svg = stairsUse(diagStairSymbol(variant), 'cell__stairs', color);
+        svg.style.transform = `rotate(${(data.rotation || 0) + tableRot - 45}deg)`;
+      } else {
+        svg = stairsUse(variant, 'cell__stairs', color);
+        svg.style.transform = `rotate(${rot}deg)`;
+      }
+      el.classList.add('cell--stairs');
+      el.appendChild(svg);
+      if (labelsEl) { content.appendChild(labelsEl); el.appendChild(content); }
+    } else if (furniture === 'server' && labelCount >= 2) {
       // A rack of several servers: one slab per label, stacked and turned to the
       // facing — the DOM twin of drawServerRack. The server icon sits upright in
       // the square's empty corner (the rack is only as wide as its labels).
@@ -870,6 +1156,10 @@ function buildCell(r, c, rects) {
     } else {
       if (labelsEl) content.appendChild(labelsEl);
       el.appendChild(content);
+    }
+    if (hasPrinter(data) && isPrinterSecondary(data) && !ghost) {
+      const po = buildPrinterOverlay(data, data.fill);
+      if (po) el.appendChild(po);
     }
     el.setAttribute('aria-label', ghost
       ? `Empty seat row ${r + 1}, column ${c + 1}, previously ${ariaLabel(r, c, data)}`
@@ -977,8 +1267,7 @@ const MERGE_SVGNS = 'http://www.w3.org/2000/svg';
 function renderMerges() {
   if (!state.merges.length) return;
   for (const merge of state.merges) {
-    const [ar, ac] = parseKey(merge.keys[0]);
-    const data = peekCell(ar, ac) || {};
+    const data = mergeContentOf(merge);
     const fill = data.fill || '#dbe7ff';
     const border = data.border || '#2f6feb';
 
@@ -1124,6 +1413,429 @@ function placeMergeContent(data, fill, box, which) {
   chart.appendChild(wrap);
 }
 
+// ---------------------------------------------------------------- walls
+//
+// Walls, railings, doors and windows live on the seams between squares. They are
+// drawn (renderWalls) as an SVG overlay of axis-aligned bars — the export twin is
+// drawWalls. Placing one is a hover gesture rather than a layer of hit boxes —
+// see the wall hover affordance further down (updateWallHint).
+
+/** A {x,y,w,h} for cell (r,c) in the chart's own layout px — the shape wallSegment
+ *  expects — or null if the cell isn't in the DOM. */
+function cellXYWH(r, c) {
+  const b = cellLocalRect(r, c);
+  return b ? { x: b.left, y: b.top, w: b.width, h: b.height } : null;
+}
+
+function makeWallsSvg(cls) {
+  const svg = document.createElementNS(MERGE_SVGNS, 'svg');
+  svg.setAttribute('class', cls);
+  svg.style.left = '0';
+  svg.style.top = '0';
+  svg.setAttribute('width', chart.clientWidth);
+  svg.setAttribute('height', chart.clientHeight);
+  return svg;
+}
+
+/** SVG drawing primitives for a walls overlay — the shapes paintWall / paintDoor
+ *  hand geometry to. */
+function svgWallOps(svg) {
+  // Everything one wall paints goes into that wall's own <g> (see `into`), so the
+  // whole piece can be picked out later — that group is what a hover brightens.
+  let host = svg;
+  const el = (name, attrs) => {
+    const e = document.createElementNS(MERGE_SVGNS, name);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    host.appendChild(e);
+    return e;
+  };
+  return {
+    poly(points, fill, stroke, sw) {
+      el('polygon', { points: points.map((p) => `${p.x},${p.y}`).join(' '),
+                      fill, stroke, 'stroke-width': sw, 'stroke-linejoin': 'round' });
+    },
+    circle(cx, cy, r, fill, stroke, sw) { el('circle', { cx, cy, r, fill, stroke, 'stroke-width': sw }); },
+    line(x1, y1, x2, y2, stroke, sw) { el('line', { x1, y1, x2, y2, stroke, 'stroke-width': sw, 'stroke-linecap': 'round' }); },
+    /** Send the next shapes into `g`, or back to the layer itself with null. */
+    into(g) { host = g || svg; },
+  };
+}
+
+function renderWalls() {
+  hotWallKey = null;         // the layer is rebuilt; nothing is lit on it yet
+  if (!hasWalls()) return;
+  const svg = makeWallsSvg('walls-layer');
+  const ops = svgWallOps(svg);
+  const rectOf = (r, c) => cellXYWH(r, c);
+  const posts = new Map();   // railing corners, one octagon per junction
+  for (const [key, value] of Object.entries(state.walls)) {
+    const m = /^([hv]):(\d+),(\d+)$/.exec(key);
+    if (!m) continue;
+    const seg = wallSegment(m[1], Number(m[2]), Number(m[3]), rectOf, CELL_GAP);
+    if (!seg || !Number.isFinite(seg.cross)) continue;
+    // The editing grid keeps the bevelled ends, so runs miter at their corners.
+    const type = wallTypeOf(value);
+    const o = m[1], r = Number(m[2]), c = Number(m[3]);
+    const opts = { bevel: true };
+    // One group per wall, named by its edge key, so hovering can light it up.
+    const g = document.createElementNS(MERGE_SVGNS, 'g');
+    g.setAttribute('class', 'wall-piece');
+    g.setAttribute('data-wall', key);
+    svg.appendChild(g);
+    ops.into(g);
+    if (type === 'railing') {
+      const jA = railingJoin(o, r, c, 'A'), jB = railingJoin(o, r, c, 'B');
+      const wallHalf = (WALL_THICK * seg.u) / 2;
+      paintRailing(seg, ops, { ...opts, endA: jA.mode, endB: jB.mode,
+                               clipA: jA.meetsWall ? wallHalf : 0,
+                               clipB: jB.meetsWall ? wallHalf : 0 });
+      for (const [end, j] of [['A', jA], ['B', jB]]) {
+        if (j.mode !== 'corner') continue;
+        const p = wallPt(seg, end === 'A' ? seg.a0 : seg.a1, 0);
+        posts.set(`${Math.round(p.x)},${Math.round(p.y)}`, { p, u: seg.u });
+      }
+    } else if (type === 'door') {
+      paintDoor(seg, wallOrient(value), ops, opts);
+    } else {
+      paintWall(seg, type, ops, opts);
+      // Glass gets its `/ / /` rule, ruled inside the pane.
+      if (type === 'window') {
+        const bar = wallBar(seg, opts);
+        const t = bar.h - WALL_STROKE * seg.u * 0.5;
+        const lo = Math.min(bar.a0, bar.a1), hi = Math.max(bar.a0, bar.a1);
+        const pane = seg.o === 'h'
+          ? { x: lo, y: seg.cross - t, w: hi - lo, h: t * 2 }
+          : { x: seg.cross - t, y: lo, w: t * 2, h: hi - lo };
+        paintWindowHatch(pane, seg.u, ops);
+      }
+    }
+  }
+  // One octagonal post per railing junction, over the shafts that meet there.
+  // A post belongs to the junction rather than to either rail, so it goes back
+  // on the layer itself.
+  ops.into(null);
+  for (const { p, u } of posts.values()) paintRailingPost(p.x, p.y, u, ops);
+  chart.appendChild(svg);
+}
+
+/** Which wall a page point lands on, or null. The walls are painted in a
+ *  pointer-events:none layer, so the seam is resolved geometrically — through the
+ *  SAME band the hover uses, so what a point reaches and what it lights can never
+ *  disagree. Lets a right-click on a wall reach the wall rather than the square. */
+function wallAtPoint(clientX, clientY) {
+  if (!hasWalls()) return null;
+  const edge = wallEdgeNear(clientX, clientY);
+  return edge && wallAt(edge.o, edge.r, edge.c) ? edge : null;
+}
+
+// ------------------------------------------------------- wall hover affordance
+//
+// Offering a wall is a hover gesture, not a layer of hit boxes: running the
+// pointer near a seam reveals a slim bar sitting exactly where the wall would be
+// drawn, with a + through its middle. It is the insert guides' gesture (see
+// updateInsertGuides) applied to the seams themselves — a wall goes on the same
+// line a new row or column is offered from.
+//
+// Near a CROSSING nothing is offered, with generous padding: that spot belongs to
+// the junction point rather than to either seam running through it.
+//
+// The bar never covers an existing wall. Hovering one of those brightens the wall
+// itself instead — the same "this is what you are pointing at" feedback an empty
+// square gives (.cell:not(.cell--on):hover).
+
+// What the seam owns is the SPACE BETWEEN the squares — the grid's gap, and the
+// chart's padding around the outside — and nothing more. The moment the pointer
+// is over a square itself, the square owns it. That one rule makes the two
+// mutually exclusive with a single boundary between them (the square's own edge),
+// and the hint element is laid out to exactly that space, so what reveals the bar
+// and what takes the press are the same ground.
+//
+// Reaching PAST the gap only matters at the outer border, where there is no
+// second square to stop at: the chart's padding is the seam's there.
+function wallGapReach() { return CELL_GAP + CHART_PAD; }
+// The + at the middle of the bar: the mark in the theme's ink with an OUTER
+// stroke in the bar's colour, one seam thick — the stroke sits entirely outside
+// the +, adding to it rather than eating into it.
+//
+// Two crossing shapes rather than a stroked one, because an SVG stroke straddles
+// its own outline: half of it falls inside, so a stroke as thick as the bar
+// swallows the mark it is meant to be edging. The larger cross IS the outer
+// stroke; the smaller one is the + laid over it.
+//
+// Measured in seams, in a box 5 seams across: the ink + is one seam thick (the
+// bar's own thickness, carried through the mark) and the colour shows one seam
+// all round it. The points are fixed and only the drawn SIZE scales, so the
+// proportions hold at any seam width.
+const wallPlusCross = (arm, reach) =>
+  [[-arm, -reach], [arm, -reach], [arm, -arm], [reach, -arm], [reach, arm], [arm, arm],
+   [arm, reach], [-arm, reach], [-arm, arm], [-reach, arm], [-reach, -arm], [-arm, -arm]];
+
+/** A closed outline with every corner rounded off — the concave ones as well as
+ *  the convex — as an SVG path. Each corner is cut back along both of its edges
+ *  and the point itself becomes the control of a curve through the gap. The cut
+ *  can never take more than half an edge, so neighbouring corners cannot eat into
+ *  each other however hard the rounding is pushed. */
+function roundedPolyPath(pts, radius) {
+  const n = pts.length;
+  const towards = (from, to) => {
+    const dx = to[0] - from[0], dy = to[1] - from[1];
+    const len = Math.hypot(dx, dy) || 1;
+    return { x: dx / len, y: dy / len, len };
+  };
+  const d = [];
+  for (let i = 0; i < n; i++) {
+    const cur = pts[i], prev = pts[(i - 1 + n) % n], next = pts[(i + 1) % n];
+    const a = towards(cur, prev), b = towards(cur, next);
+    const r = Math.min(radius, a.len / 2, b.len / 2);
+    const p1 = [cur[0] + a.x * r, cur[1] + a.y * r];
+    const p2 = [cur[0] + b.x * r, cur[1] + b.y * r];
+    const f = (v) => Math.round(v * 100) / 100;
+    d.push(`${i === 0 ? 'M' : 'L'}${f(p1[0])},${f(p1[1])}`);
+    d.push(`Q${f(cur[0])},${f(cur[1])} ${f(p2[0])},${f(p2[1])}`);
+  }
+  return d.join(' ') + ' Z';
+}
+
+// All in box units, where one seam is 20.
+//
+// The + scales as a whole: its thickness and its reach move together, so the one
+// number below is how big the mark is, and the shape of it does not change with
+// the size.
+//
+// At half, the + is about as wide as the bar it sits on, so its arms along the
+// bar only just clear the bar's edges. To go smaller, the bar (--wall-bar) has to
+// come down with it, or those arms disappear into the bar.
+const WALL_PLUS_SCALE = 0.5;
+const WALL_PLUS_ARM = 5 * WALL_PLUS_SCALE;    // half the + 's own thickness
+const WALL_PLUS_REACH = 40 * WALL_PLUS_SCALE; // how far the + reaches from the middle
+// One radius for every corner, held back from what the shape would allow. Rounded
+// as hard as it goes, the arms lose the straight run down their sides and the
+// mark reads as a star rather than a +; this keeps enough of that run to stay a
+// +, with every corner still fully curved.
+const WALL_PLUS_ROUND = 12;
+const WALL_PLUS_INNER = roundedPolyPath(
+  wallPlusCross(WALL_PLUS_ARM, WALL_PLUS_REACH), WALL_PLUS_ROUND);
+// The box holds the + exactly, so the shape fills whatever size it is drawn at —
+// and that size is --grid-icon, the one the grid's other controls carry inside
+// their buttons (see .wall-hint__add). Only the SHAPE is settled here.
+const WALL_PLUS_HALF = WALL_PLUS_REACH;
+// What a junction keeps for itself, at the corners where two seams cross. The
+// point's own footprint (one wall thickness) plus a little air; the rest of a
+// seam's length is the wall's.
+const WALL_POINT_PAD = 4;
+
+// WHICH + the wall hover shows. `true` is the same character the insert guides
+// carry, so the two marks are literally the same glyph; `false` is the drawn one
+// below (wallPlusCross / roundedPolyPath), a rounded cross of its own. Both are
+// live — flip this to change back, nothing else needs touching.
+const WALL_PLUS_TYPED = false;
+
+/** The + as the insert guides draw it: the character itself. */
+function typedWallPlus() {
+  const el = document.createElement('span');
+  el.className = 'wall-hint__add wall-hint__add--typed';
+  el.textContent = '+';
+  el.setAttribute('aria-hidden', 'true');
+  return el;
+}
+
+/** The + drawn as a rounded cross, sized to fill the mark's box. */
+function drawnWallPlus() {
+  const svg = document.createElementNS(MERGE_SVGNS, 'svg');
+  svg.setAttribute('class', 'wall-hint__add');
+  const half = WALL_PLUS_HALF;
+  svg.setAttribute('viewBox', `${-half} ${-half} ${half * 2} ${half * 2}`);
+  svg.setAttribute('aria-hidden', 'true');
+  const plus = document.createElementNS(MERGE_SVGNS, 'path');
+  plus.setAttribute('class', 'wall-hint__plus');
+  plus.setAttribute('d', WALL_PLUS_INNER);
+  svg.appendChild(plus);
+  return svg;
+}
+
+let wallHint = null;
+let hotWallKey = null;       // the wall currently lit by a hover, if any
+
+/** The seam's own strip of the grid. Built with the grid (a re-render throws the
+ *  old one away) and moved onto whichever seam the pointer is in by
+ *  updateWallHint. It covers the WHOLE band, not just the bar drawn inside it, so
+ *  it is what the pointer is over for every part of the seam the seam owns: the
+ *  square underneath never lights at the same time, and a press anywhere the bar
+ *  was offered reaches the seam rather than the square.
+ *
+ *  It stays in place over a seam that ALREADY has a wall — invisible there, since
+ *  the wall itself lights instead — so that boundary is the same one line. */
+function buildWallHint() {
+  wallHint = document.createElement('div');
+  wallHint.className = 'wall-hint';
+  wallHint.hidden = true;
+  wallHint.appendChild(WALL_PLUS_TYPED ? typedWallPlus() : drawnWallPlus());
+  // Acted on at pointerDOWN, not click: the bar is a hover affordance that moves
+  // and hides as the pointer travels, so a hair of drift between press and
+  // release would retarget the click onto the chart and the press would be lost.
+  wallHint.addEventListener('pointerdown', (e) => {
+    if (e.button === 2) return;              // right-click has its own meaning
+    e.preventDefault();
+    e.stopPropagation();
+    const { o, r, c } = wallHint.dataset;
+    if (!o) return;
+    hideWallHint();
+    placeWallFromHint(o, Number(r), Number(c));
+  });
+  chart.appendChild(wallHint);
+  return wallHint;
+}
+
+/** The square at a point, or the nearest one just across a seam. The seams — and
+ *  the chart's own padding around the outer border — are GAPS in the DOM, so a
+ *  pointer sitting exactly on a seam is over no square at all. Probe a step
+ *  either way to find the square the seam belongs to, or the bar would vanish at
+ *  the very spot it is offering. */
+function cellNearPoint(clientX, clientY) {
+  const probe = Math.max(6, (CELL_GAP + CHART_PAD) * chartZoom());
+  for (const [dx, dy] of [[0, 0], [-probe, 0], [probe, 0], [0, -probe], [0, probe]]) {
+    const stack = document.elementsFromPoint(clientX + dx, clientY + dy) || [];
+    const el = stack.find((n) => n.classList && n.classList.contains('cell'));
+    if (el && el.dataset.key) return el;
+  }
+  return null;
+}
+
+/** Which seam the pointer is reaching for, or null. Resolved from the square the
+ *  pointer is on or beside and that square's own box, so it stays exact under
+ *  "true sizes", where a column's offset differs from row to row. */
+function wallEdgeNear(clientX, clientY) {
+  const cellEl = cellNearPoint(clientX, clientY);
+  if (!cellEl) return null;
+  const [r, c] = parseKey(cellEl.dataset.key);
+  const box = cellLocalRect(r, c);
+  if (!box) return null;
+
+  const chartRect = chart.getBoundingClientRect();
+  const zoom = chartZoom();
+  const px = (clientX - chartRect.left) / zoom;
+  const py = (clientY - chartRect.top) / zoom;
+
+  const x0 = box.left, x1 = box.left + box.width;
+  const y0 = box.top, y1 = box.top + box.height;
+
+  // Over the square itself: it is the square's, full stop.
+  if (px >= x0 && px <= x1 && py >= y0 && py <= y1) return null;
+
+  // Otherwise the pointer is in the space beside it. How far out, on each axis —
+  // zero on the axis it still lines up with.
+  const dx = px < x0 ? x0 - px : px > x1 ? px - x1 : 0;
+  const dy = py < y0 ? y0 - py : py > y1 ? py - y1 : 0;
+  const reach = wallGapReach();
+  if (dx > reach || dy > reach) return null;
+
+  // Out on BOTH axes means the diagonal space off a corner — the junction's, not
+  // either seam's.
+  if (dx > 0 && dy > 0) return null;
+  if (dy > 0) return { o: 'h', r: py < y0 ? r : r + 1, c };
+  if (dx > 0) return { o: 'v', r, c: px < x0 ? c : c + 1 };
+  return null;
+}
+
+/** How much of a seam each end gives up to its junction: the point's own
+ *  footprint (one wall thickness) and a few px of air. Everything between the two
+ *  reserves belongs to the wall. */
+function wallPointReserve(box) {
+  return (WALL_THICK * Math.min(box.width, box.height)) / 2 + WALL_POINT_PAD;
+}
+
+/** Follow the pointer: light an existing wall, or offer a bar on a bare seam. */
+function updateWallHint(e) {
+  // A drag, an open menu, or the insert guides claiming the border all own the
+  // pointer for the moment. Walls mode suppresses the guides instead, so its
+  // perimeter seams stay reachable.
+  const guidesUp = rowGuide && (!rowGuide.hidden || !colGuide.hidden ||
+                                (cornerBtn && !cornerBtn.hidden));
+  if (movingSelection || cornerMenuOpen || guidesUp) { clearWallHover(); return; }
+
+  const edge = wallEdgeNear(e.clientX, e.clientY);
+  if (!edge) { clearWallHover(); return; }
+  // Exactly one of the two is ever lit: a seam that already carries a wall
+  // brightens the wall and draws no bar, a bare one draws the bar. Either way the
+  // strip itself stays over the square, so the square never lights as well.
+  const set = !!wallAt(edge.o, edge.r, edge.c);
+  highlightWall(set ? wallKey(edge.o, edge.r, edge.c) : null);
+  showWallHint(edge, set);
+}
+
+/** Lay the strip along a seam. `onWall` makes it invisible — the wall under it is
+ *  what lights — while it still covers the band and takes the press. */
+function showWallHint({ o, r, c }, onWall) {
+  if (!wallHint) return;
+  const seg = wallSegment(o, r, c, (rr, cc) => cellXYWH(rr, cc), CELL_GAP);
+  if (!seg || !Number.isFinite(seg.cross)) { hideWallHint(); return; }
+  // The band is the seam's own reach either side of it, and runs the seam's whole
+  // length bar the two junction reserves.
+  const box = cellLocalRect(Math.min(r, state.grid.rows - 1), Math.min(c, state.grid.cols - 1));
+  const keep = box ? wallPointReserve(box) : WALL_POINT_PAD;
+  const a0 = seg.a0 + keep, a1 = seg.a1 - keep;
+  if (a1 <= a0) { hideWallHint(); return; }
+  // Across the seam the strip is the gap itself — square edge to square edge — so
+  // it stops exactly where the square starts.
+  const t = CELL_GAP;
+  if (o === 'h') {
+    wallHint.style.left = `${a0}px`;
+    wallHint.style.top = `${seg.cross - t / 2}px`;
+    wallHint.style.width = `${a1 - a0}px`;
+    wallHint.style.height = `${t}px`;
+  } else {
+    wallHint.style.left = `${seg.cross - t / 2}px`;
+    wallHint.style.top = `${a0}px`;
+    wallHint.style.width = `${t}px`;
+    wallHint.style.height = `${a1 - a0}px`;
+  }
+  // Which way the bar inside the strip runs (the strip itself is the whole seam).
+  wallHint.classList.toggle('wall-hint--h', o === 'h');
+  wallHint.classList.toggle('wall-hint--v', o === 'v');
+  wallHint.classList.toggle('wall-hint--onwall', !!onWall);
+  wallHint.dataset.o = o;
+  wallHint.dataset.r = String(r);
+  wallHint.dataset.c = String(c);
+  wallHint.title = onWall ? wallOnTitle() : wallHintTitle();
+  wallHint.hidden = false;
+}
+
+/** What pressing a seam that already carries a wall will do. */
+function wallOnTitle() {
+  if (typeof isWallsMode !== 'function' || !isWallsMode()) return 'Edit this wall';
+  const t = typeof activeWall === 'function' ? activeWall() : 'wall';
+  return t === 'erase' ? 'Erase this wall' : `Replace with ${(WALL_LABELS[t] || 'wall').toLowerCase()}`;
+}
+
+/** What the bar says it will do, which depends on whether walls mode is on. */
+function wallHintTitle() {
+  if (typeof isWallsMode === 'function' && isWallsMode()) {
+    const t = typeof activeWall === 'function' ? activeWall() : 'wall';
+    return t === 'erase' ? 'Erase' : `Place a ${(WALL_LABELS[t] || 'wall').toLowerCase()} here`;
+  }
+  return 'Place a wall here (starts walls mode)';
+}
+
+function hideWallHint() {
+  if (wallHint) { wallHint.hidden = true; delete wallHint.dataset.o; }
+}
+
+function clearWallHover() {
+  hideWallHint();
+  highlightWall(null);
+}
+
+/** Light one wall (by edge key), or none. */
+function highlightWall(key) {
+  if (key === hotWallKey) return;
+  hotWallKey = key;
+  const layer = chart.querySelector('.walls-layer');
+  if (!layer) return;
+  layer.querySelectorAll('.wall-piece--hot').forEach((g) => g.classList.remove('wall-piece--hot'));
+  if (!key) return;
+  layer.querySelector(`[data-wall="${CSS.escape(key)}"]`)?.classList.add('wall-piece--hot');
+}
+
 // ------------------------------------------------------------ table resizing
 //
 // Eight handles on a picked table's shape — four corners and four sides. Each
@@ -1238,10 +1950,12 @@ function showResizePreview({ preview, next }) {
 
 /** Re-measure table overlays after layout changes (zoom, resize). */
 function refreshTables() {
-  chart.querySelectorAll('.table-shape, .table-remove, .table-handle, .move-handle, .merge-shape, .merge-content, .merge-unit')
+  chart.querySelectorAll('.table-shape, .table-remove, .table-handle, .move-handle, .merge-shape, .merge-content, .merge-unit, .walls-layer')
     .forEach((n) => n.remove());
   renderTables();
   renderMerges();
+  renderWalls();
+  hideWallHint();       // its position was measured against the old layout
   renderMoveHandle();
 }
 

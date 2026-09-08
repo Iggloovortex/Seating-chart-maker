@@ -91,6 +91,33 @@ function hslToRgb(h, s, l) {
 
 /** Called by bindColorInput on every color input. Suppresses the OS dialog and
  *  opens the themed popover in its place. Idempotent per input. */
+// A colour input can hold one value its own `.value` cannot express: nothing at
+// all. TRANSPARENT is kept as a flag on the element beside the hex, so the input
+// still remembers the colour you had if you turn transparency back off.
+const TRANSPARENT = 'transparent';
+
+/** What a colour input is currently worth — its hex, or TRANSPARENT. Every place
+ *  that reads a swatch goes through this rather than `.value`. */
+function colorOf(input) {
+  return input && input.dataset.transparent === '1' ? TRANSPARENT : (input ? input.value : '');
+}
+
+/** Put a value into a colour input, transparency included. A transparent input
+ *  keeps its last hex, so the picker opens where you left it. */
+function setColorInput(input, value) {
+  if (!input) return;
+  const clear = value === TRANSPARENT;
+  input.dataset.transparent = clear ? '1' : '';
+  input.classList.toggle('is-transparent', clear);
+  if (!clear && value) input.value = value;
+}
+
+/** Whether this swatch may be made transparent. Fills opt out: a transparent
+ *  fill is just an empty square, which the app already has other ways to say. */
+function allowsTransparent(input) {
+  return !!input && input.dataset.noTransparent !== '1';
+}
+
 function enhanceColorInput(input) {
   if (!input || input.type !== 'color' || input.dataset.cpick) return;
   input.dataset.cpick = '1';
@@ -98,7 +125,7 @@ function enhanceColorInput(input) {
     if (input.disabled) return;
     e.preventDefault();   // cancels the input's activation → the OS picker never shows
     openColorPopover(input, input.value, (hex, commit) => {
-      input.value = hex;
+      setColorInput(input, hex);
       input.dispatchEvent(new Event('input', { bubbles: true }));
       if (commit) input.dispatchEvent(new Event('change', { bubbles: true }));
     });
@@ -106,6 +133,39 @@ function enhanceColorInput(input) {
   input.addEventListener('click', open);
   // Keyboard activation (Enter/Space) fires a synthetic click, which `open` above
   // already cancels — nothing extra needed.
+}
+
+// Icon glyphs for the picker's tool row (Bootstrap Icons style, MIT).
+// The dropper, as supplied. Drawn on a 24-unit grid, unlike the palette beside
+// it, so each glyph carries its own viewBox.
+const CPICK_EYE_BOX = '0 0 24 24';
+const CPICK_EYE =
+  '<path d="M20.3847 2.87868C19.2132 1.70711 17.3137 1.70711 16.1421 2.87868L14.0202 5.00052' +
+  'L13.313 4.29332C12.9225 3.9028 12.2894 3.9028 11.8988 4.29332C11.5083 4.68385 11.5083 5.31701' +
+  ' 11.8988 5.70754L17.5557 11.3644C17.9462 11.7549 18.5794 11.7549 18.9699 11.3644C19.3604' +
+  ' 10.9739 19.3604 10.3407 18.9699 9.95018L18.2629 9.24316L20.3847 7.12132C21.5563 5.94975' +
+  ' 21.5563 4.05025 20.3847 2.87868Z" fill="currentColor"/>' +
+  '<path fill-rule="evenodd" clip-rule="evenodd" d="M11.9297 7.09116L4.1515 14.8693C3.22786' +
+  ' 15.793 3.03239 17.169 3.5651 18.2842L1.99994 19.8493L3.41415 21.2635L4.97931 19.6984C6.09444' +
+  ' 20.2311 7.4705 20.0356 8.39414 19.112L16.1723 11.3338L11.9297 7.09116ZM13.3439 11.3338' +
+  'L11.9297 9.91959L5.56571 16.2835C5.17518 16.6741 5.17518 17.3072 5.56571 17.6978C5.95623' +
+  ' 18.0883 6.5894 18.0883 6.97992 17.6978L13.3439 11.3338Z" fill="currentColor"/>';
+
+const CPICK_PALETTE =
+  '<path d="M8 1a7 7 0 1 0 0 14h1.5a1.5 1.5 0 0 0 0-3H9a1 1 0 0 1 0-2h2a4 4 0 0 0 4-4' +
+  'c0-3.3-3.1-5-7-5z" fill="none" stroke="currentColor" stroke-width="1.3"/>' +
+  '<circle cx="5" cy="7.6" r="1"/><circle cx="6.9" cy="4.8" r="1"/>' +
+  '<circle cx="10.1" cy="4.8" r="1"/><circle cx="12" cy="7.6" r="1"/>';
+
+/** An icon for a picker tool button, on whatever grid the glyph was drawn. */
+function cpickIcon(inner, viewBox = '0 0 16 16') {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'cpick__toolicon');
+  svg.setAttribute('viewBox', viewBox);
+  svg.setAttribute('fill', 'currentColor');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.innerHTML = inner;
+  return svg;
 }
 
 // ------------------------------------------------------------ the popover
@@ -173,32 +233,6 @@ function openColorPopover(anchor, value, onPick) {
   el.append(sv, hue, fields);
 
   // Optional native eyedropper, when the browser offers one.
-  if (window.EyeDropper) {
-    const eye = document.createElement('button');
-    eye.type = 'button';
-    eye.className = 'cpick__eye';
-    // Bootstrap Icons' eyedropper (MIT). There is no dependable eyedropper emoji
-    // — the placeholder before this was a pickaxe.
-    const eyesvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    eyesvg.setAttribute('class', 'cpick__eyeicon');
-    eyesvg.setAttribute('viewBox', '0 0 16 16');
-    eyesvg.setAttribute('fill', 'currentColor');
-    eyesvg.setAttribute('aria-hidden', 'true');
-    eyesvg.innerHTML =
-      '<path d="M13.354.646a1.207 1.207 0 0 0-1.708 0L8.5 3.793l-.646-.647a.5.5 0 1 0-.708.708' +
-      'L8.293 5l-7.147 7.146A.5.5 0 0 0 1 12.5v1.793l-.854.853a.5.5 0 1 0 .708.707L1.707 15H3.5' +
-      'a.5.5 0 0 0 .354-.146L11 7.707l1.146 1.147a.5.5 0 0 0 .708-.708l-.647-.646 3.147-3.146' +
-      'a1.207 1.207 0 0 0 0-1.708zM2 12.707l7-7L10.293 7l-7 7H2z"/>';
-    eye.append(eyesvg, document.createTextNode(' Pick from screen'));
-    eye.addEventListener('click', async () => {
-      try {
-        const res = await new window.EyeDropper().open();
-        const c = hexToRgb(res.sRGBHex);
-        if (c) { Object.assign(hsv, rgbToHsv(c.r, c.g, c.b)); render(); emit(true); }
-      } catch (_) { /* cancelled */ }
-    });
-    el.appendChild(eye);
-  }
 
   document.body.appendChild(el);
   cpick = { el, anchor };
@@ -274,6 +308,101 @@ function openColorPopover(anchor, value, onPick) {
     n.addEventListener('input', () => readHsl(false));
     n.addEventListener('change', () => { readHsl(true); render(); });
   });
+
+
+  // ---- Footer: three tools on one row, then the saved colours ------------
+  // All three are icon-only and the same size, so the row stays one control
+  // tall instead of stacking full-width buttons down the popover.
+  const tools = document.createElement('div');
+  tools.className = 'cpick__tools';
+
+  const tool = (title, build, onClick) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'cpick__tool';
+    b.title = title;
+    b.setAttribute('aria-label', title);
+    build(b);
+    b.addEventListener('click', onClick);
+    tools.appendChild(b);
+    return b;
+  };
+
+  if (window.EyeDropper) {
+    tool('Pick a colour from the screen', (b) => b.appendChild(cpickIcon(CPICK_EYE, CPICK_EYE_BOX)), async () => {
+      try {
+        const res = await new window.EyeDropper().open();
+        const c = hexToRgb(res.sRGBHex);
+        if (c) { Object.assign(hsv, rgbToHsv(c.r, c.g, c.b)); render(); emit(true); }
+      } catch (_) { /* cancelled */ }
+    });
+  }
+
+  // Transparent — offered on every swatch that is not a fill, and a TOGGLE: the
+  // swatch keeps the colour it had underneath, so turning transparency back off
+  // restores it rather than making you find that colour again. The popover stays
+  // open, since a toggle you cannot immediately undo is not much of a toggle.
+  if (allowsTransparent(anchor)) {
+    const t = tool('Transparent — draw nothing here (click again to restore)', (b) => {
+      const chip = document.createElement('span');
+      chip.className = 'cpick__checker';
+      chip.setAttribute('aria-hidden', 'true');
+      b.appendChild(chip);
+    }, () => {
+      const goClear = colorOf(anchor) !== TRANSPARENT;
+      onPick(goClear ? TRANSPARENT : anchor.value, true);
+      t.setAttribute('aria-pressed', String(goClear));
+    });
+    t.setAttribute('aria-pressed', String(colorOf(anchor) === TRANSPARENT));
+  }
+
+  // Keep the colour on the saved bar below.
+  tool('Save this colour', (b) => b.appendChild(cpickIcon(CPICK_PALETTE)), () => {
+    saveCustomColor(hexIn.value);
+    renderSaved();
+  });
+  el.appendChild(tools);
+
+  const saved = document.createElement('div');
+  saved.className = 'cpick__saved';
+  el.appendChild(saved);
+
+  /** The saved bar: one slot per remembered colour, the rest left empty. Clicking
+   *  a slot takes that colour. */
+  function renderSaved() {
+    saved.replaceChildren();
+    const list = (state.config && state.config.customColors) || [];
+    for (let i = 0; i < CUSTOM_COLOR_SLOTS; i++) {
+      const hex = list[i];
+      const slot = document.createElement('button');
+      slot.type = 'button';
+      slot.className = hex ? 'cpick__slot' : 'cpick__slot cpick__slot--empty';
+      if (hex) {
+        slot.style.background = hex;
+        slot.title = hex + ' — right-click to remove';
+        slot.setAttribute('aria-label', 'Use ' + hex);
+        slot.addEventListener('click', () => {
+          const c = hexToRgb(hex);
+          if (!c) return;
+          Object.assign(hsv, rgbToHsv(c.r, c.g, c.b));
+          render(); emit(true);
+        });
+        // Right-click takes a colour back off the bar. There are only five slots,
+        // so getting rid of one has to be as quick as putting it there.
+        slot.addEventListener('contextmenu', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          removeCustomColor(hex);
+          renderSaved();
+        });
+      } else {
+        slot.disabled = true;
+        slot.setAttribute('aria-label', 'Empty slot');
+      }
+      saved.appendChild(slot);
+    }
+  }
+  renderSaved();
 
   render();
   document.addEventListener('pointerdown', cpickOutside, true);

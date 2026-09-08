@@ -16,6 +16,10 @@
   --danger: #c0392b;
   --seat: #dbe7ff;
   --seat-border: #2f6feb;
+  /* Plain black/white ink, for marks that sit ON the grid and must read against
+     it rather than against a panel — the wall hover's +. */
+  --plus-ink: #000000;
+  --gear-rim: #000000;   /* the settings gear's outline — theme ink, like an outlined icon */
   --radius: 10px;
   --radius-sm: 7px;
   --toolbar-h: auto;
@@ -40,6 +44,8 @@
     --line: #3e4c59;
     --line-strong: #616e7c;
     --seat: #23405f;
+    --plus-ink: #ffffff;
+    --gear-rim: #ffffff;
     --shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
   }
 }
@@ -52,6 +58,8 @@
   --line: #3e4c59;
   --line-strong: #616e7c;
   --seat: #23405f;
+  --plus-ink: #ffffff;
+  --gear-rim: #ffffff;
   --shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
 }
 
@@ -183,7 +191,8 @@ body {
   gap: 6px 10px;
 }
 .defaults__set--icon,
-.defaults__set--table { grid-template-columns: auto; }
+.defaults__set--table,
+.defaults__set--wall { grid-template-columns: auto; }
 .defaults__rule { width: 1px; background: var(--line); }
 .defaults__item {
   display: flex;
@@ -352,6 +361,62 @@ body {
   border-bottom: 1px solid var(--line);
 }
 .selectbar__count { font-weight: 700; }
+
+/* A labelled colour field in a bar is a label stacked over a swatch, sitting
+   next to buttons that are --tap tall. Left at full size the pair is taller than
+   a button, so the label hangs above the row. Shrinking the swatch by exactly
+   the label's line and the gap above it makes label + swatch add up to a button:
+   aligned on their bottoms, their TOPS line up too. Swatches stay square. */
+.selectbar .field { --bar-label-h: 14px; }
+.selectbar .field__label { line-height: var(--bar-label-h); }
+.selectbar .field__input--color {
+  --bar-swatch: calc(var(--tap) - var(--bar-label-h) - 3px);   /* 3px = .field gap */
+  width: var(--bar-swatch);
+  height: var(--bar-swatch);
+  min-height: 0;
+  padding: 0;              /* the colour fills the whole rounded box */
+}
+
+/* A colour input paints its swatch inside its own wrapper, which carries padding
+   and a border of the browser's choosing. At bar size that inset eats most of
+   the well, so strip it: the colour fills the box right up to our own border. */
+.field__input--color::-webkit-color-swatch-wrapper { padding: 0; }
+.field__input--color::-webkit-color-swatch,
+.defaults__swatch::-webkit-color-swatch { border: 0; border-radius: calc(var(--radius-sm) - 2px); }
+.field__input--color::-moz-color-swatch,
+.defaults__swatch::-moz-color-swatch { border: 0; border-radius: calc(var(--radius-sm) - 2px); }
+
+/* Transparent: the swatch is hidden and a checkerboard shows through, the way
+   every image editor says "nothing here". */
+.field__input--color.is-transparent,
+.defaults__swatch.is-transparent {
+  background-image:
+    linear-gradient(45deg, var(--line-strong) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--line-strong) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--line-strong) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--line-strong) 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+}
+.field__input--color.is-transparent::-webkit-color-swatch,
+.defaults__swatch.is-transparent::-webkit-color-swatch { opacity: 0; }
+.field__input--color.is-transparent::-moz-color-swatch,
+.defaults__swatch.is-transparent::-moz-color-swatch { opacity: 0; }
+
+/* The checkerboard that stands for "transparent" — as the picker's tool icon. */
+.cpick__checker {
+  width: var(--cpick-icon, 22px);
+  height: var(--cpick-icon, 22px);
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  background-image:
+    linear-gradient(45deg, var(--line-strong) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--line-strong) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--line-strong) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--line-strong) 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+}
 .selectbar__actions {
   display: flex;
   flex-wrap: wrap;
@@ -431,9 +496,38 @@ body {
 .chart {
   position: relative;
   display: grid;
-  gap: 4px;
+  /* The space between squares. It is the seam — what a wall sits on, and the ONLY
+     ground the wall hover owns, since a square owns its own area — so it is also
+     exactly how big a target a wall is. Named once and read by the bar and the +
+     as well (js/grid.js keeps CELL_GAP in step); widen it and the seams, the
+     walls' ground and the hover target all widen together.
+
+     8px is about what a wall is drawn at on a default square, so a wall very
+     nearly fills its own seam rather than lapping onto the squares either side. */
+  --seam: 8px;
+  /* How wide the wall hover's bar is DRAWN. Only that: the seam is what the bar
+     answers for, whatever it is drawn at, because the ground between two squares
+     belongs to the seam and not to either of them. So this is free to be set by
+     eye without moving the boundary the pointer actually crosses.
+
+     Kept as a fraction of the seam rather than a flat width, since that is the
+     thing it is a bar for — widen the seams and the bar keeps its proportion
+     instead of turning into a thread down the middle of them. */
+  --wall-bar: calc(var(--seam) * 2 / 3);
+  /* The controls that sit ON the grid — the row/column + and x, the selection's
+     grab handle, and the wall hover's + — are one family and share one size, so
+     they read as the same kind of thing wherever they turn up. --grid-ctl is the
+     round button; --grid-icon is the mark inside it, and is the whole of the wall
+     + , which has no button around it. */
+  --grid-ctl: 24px;
+  --grid-icon: 10px;
+  /* The rule an insert guide draws. The guide is a zero-height box wearing this
+     as a border, so it is also how far the guide's padding box — which its +
+     is positioned against — sits inside the line the + has to centre on. */
+  --guide-line: 3px;
+  gap: var(--seam);
   background: var(--line);
-  padding: 4px;
+  padding: var(--seam);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   transform: scale(var(--zoom, 1));
@@ -464,6 +558,10 @@ body {
   .cell { min-width: 40px; min-height: 40px; }
 }
 .cell:not(.cell--on):hover { background: var(--surface-2); }
+/* Walls mode addresses the seams, not the squares, so a square stops offering
+   itself to the pointer while it is on. */
+.chart--walls .cell { cursor: default; }
+.chart--walls .cell:not(.cell--on):hover { background: var(--surface); }
 
 .cell--on {
   background: var(--seat);
@@ -559,6 +657,18 @@ body {
 .cell__furniture .cell__content { padding: 1px; }
 .cell__furniture .cell__icon { width: 62%; }
 .cell__server .cell__icon { width: 74%; }
+/* Stairs fill the whole square edge to edge: the square's own fill shows behind
+   the bars, but with no border — so a run reads as one continuous flight
+   (half-bars on the seams join up). The background is set inline from the fill. */
+.cell--stairs, .subcell--stairs { border-color: transparent !important; }
+.cell__stairs {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 1;
+}
 
 /* A rack of servers: the square split into one slab per label, stacked and
    turned to the facing (transform set inline). The column is only as wide as its
@@ -662,9 +772,68 @@ body {
 }
 .subcell:not(.subcell--on):hover { background: var(--surface-2); }
 .subcell--on { background: var(--seat); }
+.subcell--polyhidden { visibility: hidden; }
+.subcell-merge-overlay {
+  position: absolute; inset: 0;
+  pointer-events: none; z-index: 1;
+}
+.subcell-merge-content {
+  position: absolute;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; pointer-events: auto; cursor: pointer;
+}
+/* Printer accessory overlay — a small icon at a compass position over a square */
+.cell__printer {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+}
+.cell__printer svg {
+  width: 100%;
+  height: 100%;
+}
+.cell__printer--labels {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  overflow: hidden;
+}
+.cell__printer--labels span {
+  font-size: 7px;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
 .subcell .cell__content { padding: 1px; gap: 1px; }
 .subcell .cell__icon { width: 42%; max-width: 22px; }
 .subcell .cell__label { font-size: 9px; line-height: 1.1; }
+
+/* Dragging a square to another cell (mouse only). The ghost is a clone of the
+   square carried under the pointer; the cell it would land on is ringed. */
+.cell--dragging {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 80;
+  pointer-events: none;
+  opacity: .85;
+  box-shadow: var(--shadow);
+  transform: scale(.94);
+}
+.chart--dragging { cursor: grabbing; }
+.chart--dragging .cell { cursor: grabbing; }
+.cell--droptarget {
+  outline: 3px dashed var(--accent);
+  outline-offset: -3px;
+  background: var(--surface-2);
+}
 
 /* A merged desk spans several cells; each member cell renders blank (transparent)
    and the merge overlays (drawn by renderMerges) show the fused desk on top. */
@@ -695,6 +864,134 @@ body {
 .mergekind { display: flex; gap: 6px; }
 .mergekind .btn { flex: 1; }
 
+/* Walls, railings, doors and windows drawn on the seams (renderWalls). */
+.walls-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;   /* the walls themselves aren't interactive */
+  overflow: visible;
+  z-index: 3;
+}
+/* Hovering an existing wall does not offer the bar below — the wall itself
+   answers, the way an empty square does on hover. Light theme darkens it, dark
+   theme lifts it; the halo carries the same message for the outline-only types
+   (hollow, window), which have no fill for a brightness change to act on. */
+.wall-piece--hot { filter: brightness(.82) drop-shadow(0 0 2px rgba(0, 0, 0, .45)); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .wall-piece--hot {
+    filter: brightness(1.35) drop-shadow(0 0 2px rgba(255, 255, 255, .5));
+  }
+}
+:root[data-theme="dark"] .wall-piece--hot {
+  filter: brightness(1.35) drop-shadow(0 0 2px rgba(255, 255, 255, .5));
+}
+
+/* The strip a seam owns (updateWallHint in js/grid.js). The ELEMENT is the whole
+   band — the seam's reach either side of it — so hovering and pressing are the
+   same area and the square underneath is never lit at the same time. What is
+   DRAWN inside it is the slim bar, lying exactly where the wall would go, with a
+   + through its middle.
+
+   Over a seam that already carries a wall the strip is still there and still
+   takes the press, but draws nothing: the wall itself lights (.wall-piece--hot),
+   so exactly one of the two ever answers. */
+.wall-hint {
+  position: absolute;
+  z-index: 6;
+  cursor: pointer;
+  /* Faded as ONE piece rather than piece by piece. The bar runs under the + 's
+     stroke, so fading them separately would darken every place they overlap —
+     exactly the join that has to be invisible. Composited together, they blend
+     identically and the overlap cannot show. */
+  opacity: .75;
+}
+/* The bar is drawn down the middle of the strip at its own width (--wall-bar),
+   NOT filling it. The strip is the whole seam and stays that way — that is the
+   ground the pointer is answered on — so how heavy the bar looks and how much
+   room it answers for are separate questions. */
+.wall-hint::before {
+  content: '';
+  position: absolute;
+  border-radius: 999px;      /* a pill: the bar is as round as it is thick */
+  background: var(--accent);
+}
+.wall-hint--h::before {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--wall-bar, 6px);
+  transform: translateY(-50%);
+}
+.wall-hint--v::before {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: var(--wall-bar, 6px);
+  transform: translateX(-50%);
+}
+.wall-hint--onwall::before { display: none; }
+.wall-hint--onwall .wall-hint__add { display: none; }
+
+/* The + at the middle: a cross the theme's own black/white, outlined in the bar's
+   colour at the bar's thickness — so it reads as the bar swelling into a mark you
+   can aim at, in the same ink as everything else on the grid.
+
+   It BLEEDS over the squares either side, and that is only ever visual: the
+   squares own their own area, so the + takes no pointer of its own. Entering a
+   square drops the bar, + and all. */
+.wall-hint__add {
+  pointer-events: none;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  overflow: visible;
+  /* The one control here with no button around it, so the mark IS the icon. */
+  width: var(--grid-icon);
+  height: var(--grid-icon);
+}
+/* The + taken from the insert guides — the same character at the same weight, so
+   the two marks are the same mark. It carries no button, so it takes the ink
+   colour rather than the guides' surface/border treatment. (See WALL_PLUS_TYPED
+   in js/grid.js for the drawn alternative.) */
+.wall-hint__add--typed {
+  display: grid;
+  place-items: center;
+  font: 700 15px/1 var(--font);
+  color: var(--plus-ink);
+}
+/* The + itself, straight onto the bar — a rounded outline (roundedPolyPath), so
+   it needs no stroke of its own. It carries the theme's ink, and the bar it sits
+   on carries the fade (see .wall-hint), so the two go down as one piece. */
+.wall-hint__plus { fill: var(--plus-ink); }
+
+/* Wall-type picker in the walls bar. Each section groups the types that belong
+   together with the colours that drive them; a toolbar rule divides them. */
+.wall-types { display: flex; gap: 6px; flex-wrap: wrap; }
+/* A section lines its controls up on their BOTTOM edge, like the select bar's
+   actions: a labelled colour field is taller than a button, so aligning on the
+   bottom puts the swatches and the buttons on one line instead of leaving the
+   buttons floating above them. */
+.wall-sec { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+/* The type buttons keep their own row height inside the section. */
+.wall-sec .wall-types { align-items: flex-end; }
+
+/* A bar moved to the foot of the screen carries its rule on top instead. */
+.selectbar--bottom {
+  border-bottom: 0;
+  border-top: 1px solid var(--line);
+}
+.wall-type[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+.wall-type--erase[aria-pressed="true"] {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
 /* Split-shape option buttons (in the editor): each shows a tiny grid diagram. */
 .split-opt__svg { width: 24px; height: 24px; color: var(--ink); }
 
@@ -722,6 +1019,8 @@ body {
   overflow: hidden;
 }
 .piece-btn:hover { border-color: var(--line-strong); }
+.piece-btn--sel { outline: 2px solid var(--accent); outline-offset: -2px; }
+.piece-btn--merged { aspect-ratio: auto; }
 .piece-btn__icon { width: 40%; max-width: 26px; height: auto; aspect-ratio: 1; }
 .piece-btn__cap {
   max-width: 100%;
@@ -783,14 +1082,15 @@ body {
 .move-handle {
   position: absolute;
   z-index: 8;
-  width: 26px;
-  height: 26px;
-  margin: -13px 0 0 -13px;   /* centred on the selection's top-left corner */
+  width: var(--grid-ctl);
+  height: var(--grid-ctl);
+  /* centred on the selection's top-left corner */
+  margin: calc(var(--grid-ctl) / -2) 0 0 calc(var(--grid-ctl) / -2);
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 12px;           /* ✥ runs large; this lands it on --grid-icon */
   line-height: 1;
   color: var(--accent-ink);
   background: var(--accent);
@@ -801,7 +1101,6 @@ body {
   box-shadow: 0 1px 4px rgba(0,0,0,.35);
 }
 .move-handle:active { cursor: grabbing; }
-@media (pointer: coarse) { .move-handle { width: 32px; height: 32px; margin: -16px 0 0 -16px; } }
 
 /* Dashed landing box shown while dragging the handle */
 .move-preview {
@@ -822,13 +1121,16 @@ body {
 .line-remove {
   position: absolute;
   z-index: 3;
-  width: 24px;
-  height: 24px;
+  width: var(--grid-ctl);
+  height: var(--grid-ctl);
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  /* A ✕ is a square on its diagonals, so a box of --grid-icon would draw strokes
+     half again as long as the + 's. Sized by the STROKE instead: the box is the
+     icon over root two, which puts its diagonals on --grid-icon. */
+  font-size: 10px;
   line-height: 1;
   color: #fff;
   background: var(--danger);
@@ -839,8 +1141,12 @@ body {
 }
 .table-remove:hover,
 .line-remove:hover { filter: brightness(1.1); }
+/* Every one of them grows together for a coarse pointer, from the one token. */
 @media (pointer: coarse) {
-  .table-remove, .line-remove { width: 30px; height: 30px; font-size: 15px; }
+  .chart { --grid-ctl: 30px; --grid-icon: 13px; }
+  .table-remove, .line-remove { font-size: 13px; }   /* diagonals, as above */
+  .insert-add { font-size: 18px; }
+  .move-handle { font-size: 16px; }
 }
 
 /* Arrow buttons in the Facing segmented control */
@@ -988,6 +1294,10 @@ body {
 .erow .field__input { flex: 1; min-width: 0; }
 /* Color wells stay square; beats the flex:1 above (same specificity, later). */
 .erow .field__input--color { flex: 0 0 auto; width: var(--tap); }
+/* The label-line remove ✕ reads as a removal everywhere it appears (cell,
+   subcell, preset, printer). Panel/modal close ✕ buttons are left untouched. */
+.erow__del { color: var(--danger); }
+.erow__del:hover, .erow__del:focus-visible { background: var(--danger); color: #fff; }
 
 .seg {
   display: inline-flex;
@@ -1241,33 +1551,74 @@ body {
 .iconbtn__svg { width: 22px; height: 22px; flex: 0 0 auto; }
 
 /* Colour per action so they are told apart at a glance */
-.iconbtn--new   { color: #546e7a; }
-.iconbtn--save  { color: #2e7d32; }
+/* New wipes the chart, so it is coloured like the destructive action it is, and
+   fills in on hover the way Clear Grid's red button used to read. */
+.iconbtn--new   { color: var(--danger); }
+.iconbtn--new:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+.iconbtn--save  { color: #546e7a; }   /* slate; print keeps the blue */
 .iconbtn--open  { color: #ef6c00; }
 .iconbtn--share { color: #6a1b9a; }
 .iconbtn--print { color: #1565c0; }
-.iconbtn--ok    { color: #fff; background: #2e7d32; border-color: #2e7d32; }
+/* Paste is the one icon drawn in COLOUR rather than tinted: the clipboard's board
+   and clip carry their own brown, and only the lines of text on them take
+   currentColor — so the text follows the theme like the rest of the second row
+   (black on light, white on dark, from .iconbar--grid .iconbtn) while the board
+   keeps its colour. This is that colour's one home; the symbol reads it.
+
+   It is a STROKE now rather than a filled body, so it needs a value that reads as
+   a line on each ground — the near-black brown that worked as a solid shape all
+   but disappears on dark. Hence the pair below, gated like the palette. The dark
+   one is NOT the light one lightened: raising the lightness of that hue turns it
+   yellow, so it is shifted toward red and desaturated to stay a brown. */
+.iconbtn--paste { --paste-body: #6c4c00; }
+.iconbtn--copy { --copy-back: #00796b; }
+.iconbtn--ok   { color: #fff; background: #2e7d32; border-color: #2e7d32; }
 
 /* The second row acts on the grid rather than the file, so it takes no per-
    action colour — plain black on light, plain white on dark. */
 .iconbar--grid .iconbtn { color: #000; }
+.iconbar--grid .iconbtn--settings { color: #78909c; }
+.iconbar--grid .iconbtn--cut { --grip: #1565c0; }
+
 
 /* Toolbar icon tints for dark — gated the same way as the palette so an explicit
    Light/Dark choice from Settings overrides the media query in both directions. */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .iconbtn--new   { color: #b0bec5; }
-  :root:not([data-theme="light"]) .iconbtn--save  { color: #81c784; }
-  :root:not([data-theme="light"]) .iconbtn--open  { color: #ffb74d; }
+  :root:not([data-theme="light"]) .iconbtn--new   { color: #e57373; }
+  :root:not([data-theme="light"]) .iconbtn--save  { color: #9fb3bd; }
+  :root:not([data-theme="light"]) .iconbtn--open  { color: #ec9512; }
   :root:not([data-theme="light"]) .iconbtn--share { color: #ce93d8; }
   :root:not([data-theme="light"]) .iconbtn--print { color: #90caf9; }
+  :root:not([data-theme="light"]) .iconbtn--paste { --paste-body: #b8895f; }
+  :root:not([data-theme="light"]) .iconbtn--copy  { --copy-back: #5ab4a8; }
+  /* A hover colour must outrank the theme colour, or the icon keeps its resting
+     tint on top of the filled button. */
+  :root:not([data-theme="light"]) .iconbtn--new:hover { color: #fff; }
   :root:not([data-theme="light"]) .iconbar--grid .iconbtn { color: #fff; }
+  :root:not([data-theme="light"]) .iconbar--grid .iconbtn--settings { color: #b0bec5; }
+  :root:not([data-theme="light"]) .iconbar--grid .iconbtn--cut { color: #fff; }
+  :root:not([data-theme="light"]) .iconbar--grid .iconbtn--cut { --grip: #1565c0; }
+  :root:not([data-theme="light"]) .iconbar--grid .iconbtn--undo { --tip: rgb(0, 200, 0); }
+  :root:not([data-theme="light"]) .iconbar--grid .iconbtn--redo { --tip: rgb(200, 0, 200); }
 }
-:root[data-theme="dark"] .iconbtn--new   { color: #b0bec5; }
-:root[data-theme="dark"] .iconbtn--save  { color: #81c784; }
-:root[data-theme="dark"] .iconbtn--open  { color: #ffb74d; }
-:root[data-theme="dark"] .iconbtn--share { color: #ce93d8; }
+:root[data-theme="dark"] .iconbtn--new   { color: #e57373; }
+:root[data-theme="dark"] .iconbtn--save  { color: #9fb3bd; }
+:root[data-theme="dark"] .iconbtn--open  { color: #ec9512; }
+:root[data-theme="dark"] .iconbtn--share { color: #763f99; }
 :root[data-theme="dark"] .iconbtn--print { color: #90caf9; }
+:root[data-theme="dark"] .iconbtn--paste { --paste-body: #8f6a49; }
+:root[data-theme="dark"] .iconbtn--copy { --copy-back: #5ab4a8; }
+:root[data-theme="dark"] .iconbtn--new:hover { color: #fff; }
 :root[data-theme="dark"] .iconbar--grid .iconbtn { color: #fff; }
+:root[data-theme="dark"] .iconbar--grid .iconbtn--settings { color: #b0bec5; }
+:root[data-theme="dark"] .iconbar--grid .iconbtn--cut { --grip: #1565c0; }
+:root[data-theme="dark"] .iconbar--grid .iconbtn--cut { color: #fff; }
+ :root[data-theme="light"] .iconbar--grid .iconbtn--undo { --tip: rgb(0, 200, 0); }
+:root[data-theme="light"] .iconbar--grid .iconbtn--redo { --tip: rgb(255, 0, 255); }
 
 /* Rotate-orientation button: a broken ring with the orientation's initial in
    the middle, and the word beside it. Drawn in the text colour so it stays
@@ -1333,26 +1684,26 @@ body {
   left: 0;
   right: 0;
   height: 0;
-  border-top: 3px solid var(--line-strong);
-  transform: translateY(-1.5px);
+  border-top: var(--guide-line) solid var(--line-strong);
+  transform: translateY(calc(var(--guide-line) / -2));
 }
 .insert-guide--col {
   top: 0;
   bottom: 0;
   width: 0;
-  border-left: 3px solid var(--line-strong);
-  transform: translateX(-1.5px);
+  border-left: var(--guide-line) solid var(--line-strong);
+  transform: translateX(calc(var(--guide-line) / -2));
 }
 
 .insert-add {
   position: absolute;
-  width: 22px;
-  height: 22px;
+  width: var(--grid-ctl);
+  height: var(--grid-ctl);
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-size: 15px;           /* lands the + on --grid-icon */
   font-weight: 700;
   line-height: 1;
   color: var(--ink);
@@ -1366,14 +1717,14 @@ body {
 .insert-add:hover { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
 
 /* A guide spans the grid's edges, so pushing each + out by --line-out puts its
-   centre exactly as far off the grid as the delete x on the opposite side.
-   The extra 11px is half the button, turning an edge offset into a centre one. */
-.insert-guide--row .insert-add { top: -11px; }
-.insert-guide--row .insert-add--start { left: calc(-1 * var(--line-out, 16px) - 11px); }
-.insert-guide--row .insert-add--end { right: calc(-1 * var(--line-out, 16px) - 11px); }
-.insert-guide--col .insert-add { left: -11px; }
-.insert-guide--col .insert-add--start { top: calc(-1 * var(--line-out, 16px) - 11px); }
-.insert-guide--col .insert-add--end { bottom: calc(-1 * var(--line-out, 16px) - 11px); }
+   centre exactly as far off the grid as the delete x on the opposite side. The
+   extra half-button turns an edge offset into a centre one. */
+.insert-guide--row .insert-add { top: calc(var(--grid-ctl) / -2 - var(--guide-line) / 2); }
+.insert-guide--row .insert-add--start { left: calc(-1 * var(--line-out, 16px) - var(--grid-ctl) / 2); }
+.insert-guide--row .insert-add--end { right: calc(-1 * var(--line-out, 16px) - var(--grid-ctl) / 2); }
+.insert-guide--col .insert-add { left: calc(var(--grid-ctl) / -2 - var(--guide-line) / 2); }
+.insert-guide--col .insert-add--start { top: calc(-1 * var(--line-out, 16px) - var(--grid-ctl) / 2); }
+.insert-guide--col .insert-add--end { bottom: calc(-1 * var(--line-out, 16px) - var(--grid-ctl) / 2); }
 
 /* A line shown purely as context while its menu item is hovered carries no +,
    and takes the accent colour so it reads through the open menu beside it. */
@@ -1420,6 +1771,10 @@ body {
   color: var(--ink-soft);
 }
 .controlgroup .btn { width: 100%; }
+/* A label row inside a controlgroup (printer labels) keeps its remove ✕ compact
+   — the full-width rule above is for the group's own stacked buttons, not the
+   inline controls of a label line. */
+.controlgroup .erow .btn { width: auto; }
 
 /* The three fill buttons stand exactly as tall as the compass beside them:
    three 34px rows with the compass's own 3px gaps — 108px either way, so the
@@ -1745,24 +2100,46 @@ body {
 .cpick__num { -moz-appearance: textfield; padding: 0 2px; }
 .cpick__num::-webkit-outer-spin-button,
 .cpick__num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.cpick__eye {
+/* The picker's tools: eyedropper, transparent and save, all icon-only and the
+   same size, sharing one row so the footer stays a single control tall. */
+/* One icon size for the row, so the dropper, the checkerboard and the palette
+   all read at the same weight rather than floating in their buttons. */
+.cpick__tools { display: flex; gap: 6px; margin-top: 8px; --cpick-icon: 22px; }
+.cpick__tool {
   appearance: none;
-  height: 32px;
+  flex: 1;
+  height: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
   color: var(--ink);
   background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: 6px;
   cursor: pointer;
 }
-.cpick__eye:hover { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.cpick__eyeicon { width: 15px; height: 15px; flex: 0 0 auto; }
+.cpick__tool:hover,
+.cpick__tool[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+.cpick__tool:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cpick__toolicon { width: var(--cpick-icon); height: var(--cpick-icon); flex: 0 0 auto; }
+
+/* The saved colours: a short row of slots, filled newest-first. */
+.cpick__saved { display: flex; gap: 6px; margin-top: 6px; }
+.cpick__slot {
+  flex: 1;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  cursor: pointer;
+}
+.cpick__slot:hover { border-color: var(--accent); }
+.cpick__slot:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cpick__slot--empty { background: var(--surface-2); cursor: default; opacity: .6; }
 
 /* Eight facing directions as a compass; the middle cell stays empty. */
 .compass {

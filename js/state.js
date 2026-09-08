@@ -43,7 +43,16 @@ const DEFAULT_CONFIG = {
   favicon: null,                      // data: URI, or null to keep the built-in icon
   presets: { '1': null, '2': null },  // saved square configs, applied from the edit pane
   customIcons: [],                    // imported SVG icons: [{ id, label, viewBox, inner }]
+  // Where the mode bars (Select, Walls) sit: 'top' under the toolbar, 'bottom'
+  // at the foot of the window, or 'custom' to let each bar choose for itself.
+  barPosition: 'top',
+  barPositions: { select: 'top', walls: 'top' },
+  customColors: [],                   // saved swatches, newest first (see CUSTOM_COLOR_SLOTS)
 };
+
+/** How many colours the picker's saved bar holds. Deliberately small: it is a
+ *  shortlist of the colours this chart is built from, not a library. */
+const CUSTOM_COLOR_SLOTS = 5;
 
 const DEFAULTS = {
   fill: '#dbe7ff',
@@ -54,6 +63,13 @@ const DEFAULTS = {
   iconFill: null,           // null => new icons stay outlines
   tableColor: '#8d6e63',
   tableBorder: '#5d4037',
+  wallFill: '#909090',      // a solid wall's body
+  wallBorder: '#000000',    // the outline every wall bar is drawn with
+  windowFill: '#d8feff',    // glass, laid at half opacity so the floor shows
+  railFill: '#909090',      // a railing's body
+  railBorder: '#000000',    // a railing's outline
+  doorFill: '#6c4c00',      // a door's leaf and frame
+  doorBorder: '#392b00',    // a door's outline, hinge ring and swing leaf
   rowWeight: 1,
   colWeight: 1,
 };
@@ -61,21 +77,72 @@ const DEFAULTS = {
 /** "Furniture" squares carry a special icon that renders as a piece tucked to
  *  the edge the square faces, with labels in the empty space, rather than a
  *  full desk. A chair is a small square; a server is a half-square slab. */
-const FURNITURE_ICONS = { chair: 'chair', server: 'server' };
+const FURNITURE_ICONS = { chair: 'chair', server: 'server', stairs: 'stairs' };
 function furnitureKind(cell) {
   return cell && cell.enabled && FURNITURE_ICONS[cell.icon] ? cell.icon : null;
 }
 function isFurnitureCell(cell) { return !!furnitureKind(cell); }
 
-/** A square acts as a "chair" when its icon is the chair: furniture rather than
- *  a desk. */
 function isChairCell(cell) {
   return !!(cell && cell.enabled && cell.icon === 'chair');
 }
 function isServerCell(cell) {
   return !!(cell && cell.enabled && cell.icon === 'server');
 }
+function isStairsCell(cell) {
+  return !!(cell && cell.enabled && cell.icon === 'stairs');
+}
 function isChairAt(r, c) { return isChairCell(peekCell(r, c)); }
+function isStairsAt(r, c) { return isStairsCell(peekCell(r, c)); }
+
+/** Resolve the stair variant for a cell. When stairType is 'auto' (or absent),
+ *  look at adjacent stair cells in the facing direction to pick single/start/
+ *  middle/end. For sub-cells within a split, pass the sub-cell and its row/col
+ *  within the split plus the parent cell's (r,c). */
+function resolveStairType(data, r, c, subIndex, splitRows, splitCols) {
+  if (!isStairsCell(data)) return 'single';
+  const forced = data.stairType;
+  if (forced && forced !== 'auto') return forced;
+  const rot = data.rotation || 0;
+  const step = STAIR_STEP[rot] || STAIR_STEP[0];
+  let hasFwd, hasBwd;
+  if (subIndex != null && splitRows && splitCols) {
+    const sr = Math.floor(subIndex / splitCols), sc = subIndex % splitCols;
+    hasFwd = stairNeighborSub(r, c, sr + step[0], sc + step[1], splitRows, splitCols);
+    hasBwd = stairNeighborSub(r, c, sr - step[0], sc - step[1], splitRows, splitCols);
+  } else {
+    hasFwd = isStairsAt(r + step[0], c + step[1]);
+    hasBwd = isStairsAt(r - step[0], c - step[1]);
+  }
+  // Full-bar caps belong at the outer ends of a flight; 'middle' has half-bars
+  // both sides. The art renders flipped 180° (the descent arrow follows the
+  // facing — see the grid/export), so the step-ward extreme (a neighbour only on
+  // its rear) is the arrow end → 'end', and the rear extreme is 'start'.
+  if (hasFwd && hasBwd) return 'middle';
+  if (hasBwd) return 'end';
+  if (hasFwd) return 'start';
+  return 'single';
+}
+
+function stairNeighborSub(r, c, sr, sc, rows, cols) {
+  if (sr >= 0 && sr < rows && sc >= 0 && sc < cols) {
+    const cell = peekCell(r, c);
+    if (cell && cell.subcells) {
+      const sub = cell.subcells[sr * cols + sc];
+      return isStairsCell(sub);
+    }
+  }
+  if (sr < 0) return isStairsAt(r - 1, c);
+  if (sr >= rows) return isStairsAt(r + 1, c);
+  if (sc < 0) return isStairsAt(r, c - 1);
+  if (sc >= cols) return isStairsAt(r, c + 1);
+  return false;
+}
+
+const STAIR_STEP = {
+  0: [-1, 0], 90: [0, 1], 180: [1, 0], 270: [0, -1],
+  45: [-1, 1], 135: [1, 1], 225: [1, -1], 315: [-1, -1],
+};
 
 /** Default color for label line `index`. Line 1 has its own; line 2 and every
  *  line after it share the second colour. */
@@ -96,6 +163,7 @@ function makeCell() {
     fill: state.defaults.fill,
     border: state.defaults.border,
     split: null,                // null, or { rows, cols } — see subcells below
+    printer: null,              // null, or { color, compass, labels, size }
   };
 }
 
@@ -112,6 +180,7 @@ function makeSubcell() {
     rotation: 0,
     fill: state.defaults.fill,
     border: state.defaults.border,
+    printer: null,
   };
 }
 
@@ -128,6 +197,13 @@ const state = {
     iconFill: DEFAULTS.iconFill,
     tableColor: DEFAULTS.tableColor,
     tableBorder: DEFAULTS.tableBorder,
+    wallFill: DEFAULTS.wallFill,
+    wallBorder: DEFAULTS.wallBorder,
+    windowFill: DEFAULTS.windowFill,
+    railFill: DEFAULTS.railFill,
+    railBorder: DEFAULTS.railBorder,
+    doorFill: DEFAULTS.doorFill,
+    doorBorder: DEFAULTS.doorBorder,
   },
   grid: { cols: 6, rows: 5 },
   cells: new Map(),             // key "r,c" -> cell
@@ -136,6 +212,7 @@ const state = {
   tables: [],                   // [{ id, cellKeys:[], shape:'round'|'square', color }]
   merges: [],                   // [{ id, keys:[], kind:'poly'|'unit' }] — see merge ops
                                 //   content lives on the anchor cell (sorted keys[0])
+  walls: {},                    // edge -> type. Key "h:r,c" / "v:r,c"; see wall ops
   paper: 'letter',              // preset id or { w, h, unit }
   landscape: true,              // paper orientation; false swaps width/height
   exportBg: '#ffffff',          // page background of the exported / printed output
@@ -188,6 +265,7 @@ function setGrid(cols, rows) {
   }
   pruneTables();
   pruneMerges();
+  pruneWalls();
   pruneSelection();
   state.rowWeights.length = rows;
   state.colWeights.length = cols;
@@ -200,9 +278,9 @@ function toggleEnabled(r, c) {
   emit();
 }
 
-/** A square has content once it carries an icon or real label text. */
+/** A square has content once it carries an icon, real label text, or a printer. */
 function hasContent(cell) {
-  return !!(cell.icon || (cell.labels || []).some((l) => l.text && l.text.trim()));
+  return !!(cell.icon || cell.printer || (cell.labels || []).some((l) => l.text && l.text.trim()));
 }
 
 /** Giving an EMPTY square content implies it is a seat, so setting an icon or
@@ -234,6 +312,42 @@ function isSplit(cell) {
   return !!(cell && cell.split && Array.isArray(cell.subcells) && cell.subcells.length);
 }
 
+/** The smallest split space — as a share of a whole square — in which a special
+ *  icon still draws as its piece of furniture. Below that there is no room left
+ *  to tuck the piece against an edge, so it falls back to a plain filled square.
+ *  This is the rule for any special icon added later: give it the space its piece
+ *  needs, and anything smaller renders as a normal square.
+ *    chair  — a small tile, so it still reads even in a ninth of a square
+ *    server — IS a half-slab, and a split space is already that size or smaller,
+ *             so a split server is simply the filled space itself */
+const FURNITURE_MIN_SPACE = { chair: 1 / 9, server: 1, stairs: 1 / 9 };
+
+/** Which furniture a sub-cell draws as, given the split it belongs to — or null
+ *  when the space is too small and it should render as a plain filled square. */
+function subcellFurniture(sub, rows, cols) {
+  const kind = furnitureKind(sub);
+  if (!kind) return null;
+  const space = 1 / (Math.max(1, rows) * Math.max(1, cols));
+  return space >= (FURNITURE_MIN_SPACE[kind] ?? 1) ? kind : null;
+}
+
+/** A split square holds its content in its pieces, so `hasContent` on the cell
+ *  itself misses it. This asks the question of a square however it is built. */
+function cellHasAnyContent(cell) {
+  if (!cell) return false;
+  if (isSplit(cell)) return cell.subcells.some((s) => hasContent(s));
+  return hasContent(cell);
+}
+
+/** The data a square's content should be READ from: the square itself, or — when
+ *  it is split — its first piece that actually holds something. Lets a merged
+ *  desk show a split square's content (see mergeAnchorKey). */
+function contentDataOf(cell) {
+  if (!cell) return null;
+  if (isSplit(cell)) return cell.subcells.find((s) => hasContent(s)) || cell.subcells[0] || cell;
+  return cell;
+}
+
 /** Divide a square into rows×cols sub-cells, keeping any sub-cell content that
  *  still fits when re-splitting to a different shape. A split square is always
  *  "filled" so it claims a full unit in the output layout. */
@@ -243,9 +357,14 @@ function splitCell(r, c, rows, cols) {
   const prev = cell.subcells || [];
   const subs = [];
   for (let i = 0; i < n; i++) subs.push(prev[i] || makeSubcell());
+  // Splitting a square that already holds something keeps it: the content moves
+  // into the first space rather than vanishing. (The square's own content stays
+  // put underneath, so unsplitting brings it back.)
+  if (!prev.length && hasContent(cell)) subs[0] = cloneSubcell({ ...cell, enabled: true });
   cell.split = { rows, cols };
   cell.subcells = subs;
   cell.enabled = true;
+  pruneSubmerges(cell);
   emit();
 }
 
@@ -254,6 +373,7 @@ function unsplitCell(r, c) {
   const cell = getCell(r, c);
   cell.split = null;
   delete cell.subcells;
+  delete cell.submerges;
   emit();
 }
 
@@ -280,6 +400,149 @@ function toggleSubcell(r, c, i) {
   if (!sub) return;
   sub.enabled = !sub.enabled;
   emit();
+}
+
+// ----------------------------------------------- sub-cell merge (within a split)
+//
+// Subcells within a 2×2 or 3×3 split can merge with each other. Rectangular
+// groups use CSS grid spans; L/T/+ shapes use an SVG overlay (like grid-level
+// poly merges). The model mirrors the grid merge:
+// cell.submerges = [{ id, indices:[int], anchor:int }], where anchor is the
+// top-left subcell whose content the merged region shows.
+
+/** True when a set of subcell indices forms a complete rectangle in a rows×cols grid. */
+function isRectSubcells(indices, rows, cols) {
+  if (!indices || indices.length < 2) return false;
+  let rMin = rows, rMax = -1, cMin = cols, cMax = -1;
+  for (const i of indices) {
+    const sr = Math.floor(i / cols), sc = i % cols;
+    if (sr < rMin) rMin = sr; if (sr > rMax) rMax = sr;
+    if (sc < cMin) cMin = sc; if (sc > cMax) cMax = sc;
+  }
+  const expected = (rMax - rMin + 1) * (cMax - cMin + 1);
+  if (indices.length !== expected) return false;
+  for (let sr = rMin; sr <= rMax; sr++)
+    for (let sc = cMin; sc <= cMax; sc++)
+      if (!indices.includes(sr * cols + sc)) return false;
+  return true;
+}
+
+/** True when a set of subcell indices forms one connected group (4-way adjacency). */
+function isConnectedSubcells(indices, rows, cols) {
+  if (!indices || indices.length < 2) return false;
+  const set = new Set(indices);
+  const visited = new Set();
+  const queue = [indices[0]];
+  visited.add(indices[0]);
+  while (queue.length) {
+    const cur = queue.shift();
+    const sr = Math.floor(cur / cols), sc = cur % cols;
+    for (const [dr, dc] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+      const nr = sr + dr, nc = sc + dc;
+      if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+      const ni = nr * cols + nc;
+      if (set.has(ni) && !visited.has(ni)) { visited.add(ni); queue.push(ni); }
+    }
+  }
+  return visited.size === indices.length;
+}
+
+/** The submerge covering subcell i inside a cell, or null. */
+function submergeAt(cell, i) {
+  if (!cell || !cell.submerges) return null;
+  for (const sm of cell.submerges) if (sm.indices.includes(i)) return sm;
+  return null;
+}
+
+/** The rectangle a submerge spans in grid coordinates: { r, c, rowSpan, colSpan }. */
+function submergeRect(sm, cols) {
+  let rMin = Infinity, rMax = -1, cMin = Infinity, cMax = -1;
+  for (const i of sm.indices) {
+    const sr = Math.floor(i / cols), sc = i % cols;
+    if (sr < rMin) rMin = sr; if (sr > rMax) rMax = sr;
+    if (sc < cMin) cMin = sc; if (sc > cMax) cMax = sc;
+  }
+  return { r: rMin, c: cMin, rowSpan: rMax - rMin + 1, colSpan: cMax - cMin + 1 };
+}
+
+/** Plan for rendering a subcell merge — mirrors mergePlan for grid merges. */
+function submergePlan(sm, rows, cols) {
+  const set = new Set(sm.indices);
+  const has = (sr, sc) => set.has(sr * cols + sc);
+  const isRect = isRectSubcells(sm.indices, rows, cols);
+
+  const rect = submergeRect(sm, cols);
+  const midR = (rect.r + rect.r + rect.rowSpan - 1) / 2;
+  let labelRun = null;
+  for (let sr = rect.r; sr < rect.r + rect.rowSpan; sr++) {
+    let start = null;
+    for (let sc = rect.c; sc <= rect.c + rect.colSpan; sc++) {
+      if (sc < rect.c + rect.colSpan && has(sr, sc)) { if (start === null) start = sc; continue; }
+      if (start !== null) {
+        const len = sc - start;
+        const better = !labelRun || len > labelRun.len ||
+          (len === labelRun.len && Math.abs(sr - midR) < Math.abs(labelRun.sr - midR));
+        if (better) labelRun = { sr, scStart: start, scEnd: sc - 1, len };
+        start = null;
+      }
+    }
+  }
+
+  const runLen = (sr, sc, dr, dc) => {
+    let n = 1;
+    for (let y = sr - dr, x = sc - dc; has(y, x); y -= dr, x -= dc) n++;
+    for (let y = sr + dr, x = sc + dc; has(y, x); y += dr, x += dc) n++;
+    return n;
+  };
+  let iconCell = null, best = Infinity;
+  for (const i of sm.indices) {
+    const sr = Math.floor(i / cols), sc = i % cols;
+    const score = runLen(sr, sc, 0, 1) + runLen(sr, sc, 1, 0);
+    if (score < best) { best = score; iconCell = { sr, sc, i }; }
+  }
+
+  return { set, has, isRect, labelRun, iconCell };
+}
+
+/** Merge a set of subcell indices within a split square. Returns the new submerge
+ *  or null on failure (not connected, overlapping an existing merge). */
+function addSubmerge(r, c, indices) {
+  const cell = peekCell(r, c);
+  if (!cell || !isSplit(cell)) return null;
+  const { rows, cols } = cell.split;
+  if (!isConnectedSubcells(indices, rows, cols)) return null;
+  if (!cell.submerges) cell.submerges = [];
+  for (const i of indices) if (submergeAt(cell, i)) return null;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  const anchor = Math.min(...indices);
+  const sm = { id: `sm${Date.now().toString(36)}`, indices: [...indices].sort((a, b) => a - b), anchor };
+  cell.submerges.push(sm);
+  const anchorSub = cell.subcells[anchor];
+  if (anchorSub && !anchorSub.enabled) anchorSub.enabled = true;
+  emit();
+  return sm;
+}
+
+/** Remove a subcell merge by id. */
+function removeSubmerge(r, c, id) {
+  const cell = peekCell(r, c);
+  if (!cell || !cell.submerges) return;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  cell.submerges = cell.submerges.filter((sm) => sm.id !== id);
+  if (!cell.submerges.length) delete cell.submerges;
+  emit();
+}
+
+/** Prune submerges when the split shape changes or the cell is unsplit. */
+function pruneSubmerges(cell) {
+  if (!cell || !cell.submerges) return;
+  if (!isSplit(cell)) { delete cell.submerges; return; }
+  const n = cell.split.rows * cell.split.cols;
+  cell.submerges = cell.submerges.filter((sm) => {
+    sm.indices = sm.indices.filter((i) => i >= 0 && i < n);
+    return sm.indices.length >= 2 && isConnectedSubcells(sm.indices, cell.split.rows, cell.split.cols);
+  });
+  if (!cell.submerges.length) delete cell.submerges;
 }
 
 /** Set one label line's text on a single square, seating it if this is the
@@ -453,6 +716,47 @@ let squareClipboard = null;
 
 function hasSquareClipboard() { return !!squareClipboard; }
 
+/** Cut a square: copy it, then strip it back to nothing. The copy happens first,
+ *  so a failed cut can never lose the square. */
+function cutSquareFrom(r, c) {
+  if (!copySquareFrom(r, c)) return false;
+  resetSquares([keyOf(r, c)]);
+  return true;
+}
+
+/** Copy one PIECE of a split square onto the square clipboard, so its content can
+ *  be pasted into another piece or onto a whole square. */
+function copySubcell(r, c, i) {
+  const sub = subcellAt(r, c, i);
+  if (!sub) return false;
+  squareClipboard = {
+    enabled: sub.enabled,
+    fill: sub.fill, border: sub.border,
+    icon: sub.icon, iconColor: sub.iconColor, rotation: sub.rotation, iconFill: sub.iconFill,
+    labels: (sub.labels || []).map((l) => ({ text: l.text, color: l.color })),
+    split: null, subcells: null,
+  };
+  emit();
+  return true;
+}
+
+/** Paste the copied square INTO one piece of a split square — how content moves
+ *  from a whole square into a split space. A piece is never itself split, so the
+ *  clipboard's own split is not carried over. */
+function pasteSquareToSubcell(r, c, i) {
+  const sub = subcellAt(r, c, i);
+  if (!squareClipboard || !sub) return false;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  const f = squareClipboard;
+  Object.assign(sub, {
+    enabled: f.enabled, fill: f.fill, border: f.border,
+    icon: f.icon, iconColor: f.iconColor, rotation: f.rotation, iconFill: f.iconFill,
+    labels: f.labels.map((l) => ({ text: l.text, color: l.color })),
+  });
+  emit();
+  return true;
+}
+
 /** Copy a square: colors, icon, facing, chair size and every label line with
  *  its text and color. */
 function copySquareFrom(r, c) {
@@ -478,7 +782,7 @@ function copySquareFrom(r, c) {
  *  Missing fields fall back to the sub-cell defaults so a partial object is safe. */
 function cloneSubcell(s) {
   const base = makeSubcell();
-  return {
+  const out = {
     enabled: !!s.enabled,
     fill: s.fill || base.fill,
     border: s.border || base.border,
@@ -487,7 +791,27 @@ function cloneSubcell(s) {
     iconFill: s.iconFill || null,
     rotation: s.rotation || 0,
     labels: (s.labels || []).map((l) => ({ text: String(l.text || ''), color: l.color || DEFAULTS.labelColor })),
+    printer: clonePrinter(s.printer),
   };
+  return out;
+}
+
+function clonePrinter(p) {
+  if (!p) return null;
+  return {
+    color: !!p.color,
+    compass: p.compass || 'se',
+    labels: (p.labels || []).map((l) => ({ text: String(l.text || ''), color: l.color || DEFAULTS.labelColor })),
+    size: p.size === 'small' ? 'small' : 'max',
+  };
+}
+
+function isPrinterSecondary(data) {
+  return !!(data && data.printer && (data.icon || data.printer.size === 'small'));
+}
+
+function hasPrinter(data) {
+  return !!(data && data.printer);
 }
 
 /** Clone the copied square onto every listed square, label lines and all. The
@@ -523,53 +847,94 @@ function pasteSquareTo(keys) {
 /** Shift every selected square (and any table wholly inside the selection) by
  *  `dr, dc`. Returns false and changes nothing when the move would leave the
  *  grid, so the caller can silently ignore it and let the user try again. */
-function moveSelection(dr, dc) {
-  if (!dr && !dc) return false;
-  const keys = [...state.selection];
-  if (!keys.length) return false;
-
+/** Shift a set of squares by `dr, dc` — the cells themselves plus any table or
+ *  merge lying wholly inside the set. Returns false and changes nothing when the
+ *  move would leave the grid. `displaced`, when given, collects the cells that
+ *  were standing on the destinations, so a caller can put them somewhere rather
+ *  than let them be overwritten.
+ *
+ *  This is the one move: both the selection's move handle and a square dragged
+ *  to a new cell go through it, so they can never drift apart. Call it inside a
+ *  batch — it does not emit. */
+function shiftCells(keys, dr, dc, displaced) {
   for (const k of keys) {
     const [r, c] = parseKey(k);
     if (!inBounds(r + dr, c + dc)) return false; // off-grid: silent no-op
   }
+  const at = (k) => { const [r, c] = parseKey(k); return keyOf(r + dr, c + dc); };
 
   // Capture before deleting, so moves that overlap their own source still work.
   const moved = new Map();
   for (const k of keys) {
-    const [r, c] = parseKey(k);
     const cell = state.cells.get(k);
-    if (cell) moved.set(keyOf(r + dr, c + dc), cell);
+    if (cell) moved.set(at(k), cell);
   }
   const selected = new Set(keys);
+  if (displaced) {
+    for (const k of keys) {
+      const dest = at(k);
+      if (selected.has(dest)) continue;     // landing on ground we are vacating
+      const cell = state.cells.get(dest);
+      if (cell) displaced.set(dest, cell);
+    }
+  }
 
+  for (const k of keys) state.cells.delete(k);
+  for (const [k, cell] of moved) state.cells.set(k, cell);
+  for (const t of state.tables) {
+    if (t.cellKeys.every((k) => selected.has(k))) t.cellKeys = t.cellKeys.map(at);
+  }
+  // A table or merge travels only when its whole self is in the moved set.
+  for (const m of state.merges) {
+    if (m.keys.every((k) => selected.has(k))) {
+      m.keys = sortCellKeys(m.keys.map(at));
+      if (m.anchor) m.anchor = at(m.anchor);
+    }
+  }
+  return true;
+}
+
+/** Shift every selected square (and any table wholly inside the selection) by
+ *  `dr, dc`. Returns false and changes nothing when the move would leave the
+ *  grid, so the caller can silently ignore it and let the user try again. */
+function moveSelection(dr, dc) {
+  if (!dr && !dc) return false;
+  const keys = [...state.selection];
+  if (!keys.length) return false;
+  let ok = false;
   batch(() => {
-    for (const k of keys) state.cells.delete(k);
-    for (const [k, cell] of moved) state.cells.set(k, cell);
-    for (const t of state.tables) {
-      if (t.cellKeys.every((k) => selected.has(k))) {
-        t.cellKeys = t.cellKeys.map((k) => {
-          const [r, c] = parseKey(k);
-          return keyOf(r + dr, c + dc);
-        });
-      }
-    }
-    // A merge travels only when its whole self is in the moved selection.
-    for (const m of state.merges) {
-      if (m.keys.every((k) => selected.has(k))) {
-        m.keys = sortCellKeys(m.keys.map((k) => {
-          const [r, c] = parseKey(k);
-          return keyOf(r + dr, c + dc);
-        }));
-      }
-    }
+    ok = shiftCells(keys, dr, dc);
     // The moved squares travel with the drag; filters stay out of it, since a
     // move is as explicit a pick as a rectangle.
-    selectionReplace(keys.map((k) => {
-      const [r, c] = parseKey(k);
-      return keyOf(r + dr, c + dc);
-    }));
+    if (ok) {
+      selectionReplace(keys.map((k) => {
+        const [r, c] = parseKey(k);
+        return keyOf(r + dr, c + dc);
+      }));
+    }
   });
-  return true;
+  return ok;
+}
+
+/** Drag one square onto another — the same move as the handle's, for a single
+ *  square, and non-destructive: whatever was standing on the destination comes
+ *  back to the square being vacated, so a drop onto an occupied square trades
+ *  places instead of overwriting it. The whole cell travels, a split square and
+ *  its pieces included. The selection is left alone, since a drag outside select
+ *  mode is not a pick. */
+function moveSquare(fromKey, toKey) {
+  if (fromKey === toKey) return false;
+  const [fr, fc] = parseKey(fromKey), [tr, tc] = parseKey(toKey);
+  if (!inBounds(fr, fc) || !inBounds(tr, tc)) return false;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  let ok = false;
+  batch(() => {
+    const displaced = new Map();
+    ok = shiftCells([fromKey], tr - fr, tc - fc, displaced);
+    const other = ok && displaced.get(toKey);
+    if (other) state.cells.set(fromKey, other);
+  });
+  return ok;
 }
 
 /** Bounding box of the current selection, or null when nothing is selected. */
@@ -607,7 +972,15 @@ function insertLine(axis, index) {
     state.cells = moved;
     remapSelection(shift);
     for (const t of state.tables) t.cellKeys = t.cellKeys.map(shift);
-    for (const m of state.merges) m.keys = sortCellKeys(m.keys.map(shift));
+    for (const m of state.merges) {
+      m.keys = sortCellKeys(m.keys.map(shift));
+      if (m.anchor) m.anchor = shift(m.anchor);
+    }
+    // Walls sit on edges: a line inserted at `index` pushes every edge at or past
+    // it one step along the same axis.
+    remapWalls((o, r, c) => isRow
+      ? [r >= index ? r + 1 : r, c]
+      : [r, c >= index ? c + 1 : c]);
     const weights = isRow ? state.rowWeights : state.colWeights;
     weights.splice(index, 0, undefined);          // the new line takes the default
     if (isRow) state.grid = { ...state.grid, rows: state.grid.rows + 1 };
@@ -654,7 +1027,19 @@ function deleteLine(axis, index) {
     }
     for (const m of state.merges) {
       m.keys = sortCellKeys(m.keys.map(shift).filter((k) => k !== undefined));
+      if (m.anchor) m.anchor = shift(m.anchor);
     }
+    // Walls: the deleted line's two bounding edges collapse onto one; edges past
+    // it move back one. An edge that spanned a removed cell (v on a removed row,
+    // h on a removed column) goes with it.
+    remapWalls((o, r, c) => {
+      if (isRow) {
+        if (o === 'v' && r === index) return null;
+        return [r > index ? r - 1 : r, c];
+      }
+      if (o === 'h' && c === index) return null;
+      return [r, c > index ? c - 1 : c];
+    });
     const weights = isRow ? state.rowWeights : state.colWeights;
     weights.splice(index, 1);
     if (isRow) state.grid = { ...state.grid, rows: state.grid.rows - 1 };
@@ -663,6 +1048,7 @@ function deleteLine(axis, index) {
     state.colWeights.length = state.grid.cols;
     pruneTables();      // a table that lived entirely on that line is gone now
     pruneMerges();      // and a merge left with fewer than two cells
+    pruneWalls();       // and any edge now outside the smaller grid
     pruneSelection();
   });
   return true;
@@ -1009,7 +1395,11 @@ function addMerge(kind = 'poly') {
   const keys = sortCellKeys(state.selection);
   if (keys.length < 2) return null;
   if (typeof historyCheckpoint === 'function') historyCheckpoint();
-  const merge = { id: `m${Date.now().toString(36)}`, keys, kind };
+  // The merged desk shows ONE square's content, so keep the one that actually has
+  // some rather than whichever happens to sit top-left. A split square counts —
+  // its content lives in its pieces. With several, the first in reading order wins.
+  const anchor = keys.find((k) => cellHasAnyContent(peekCell(...parseKey(k)))) || keys[0];
+  const merge = { id: `m${Date.now().toString(36)}`, keys, kind, anchor };
   state.merges.push(merge);
   for (const k of keys) { const [r, c] = parseKey(k); getCell(r, c).enabled = true; }
   clearManualSelection();
@@ -1025,8 +1415,19 @@ function mergeAt(r, c) {
   return found;
 }
 
-/** The anchor "r,c" of a merge — where its drawn content lives. */
-function mergeAnchorKey(merge) { return merge.keys[0]; }
+/** The anchor "r,c" of a merge — the square whose content the fused desk shows.
+ *  Chosen when the merge is made (the square that had content); falls back to the
+ *  first in reading order if that square is gone. */
+function mergeAnchorKey(merge) {
+  return (merge.anchor && merge.keys.includes(merge.anchor)) ? merge.anchor : merge.keys[0];
+}
+
+/** The data a merged desk draws: the anchor square, or — when that square is
+ *  split — the piece of it that holds the content. */
+function mergeContentOf(merge) {
+  const [r, c] = parseKey(mergeAnchorKey(merge));
+  return contentDataOf(peekCell(r, c)) || {};
+}
 
 function updateMerge(id, patch) {
   const m = state.merges.find((x) => x.id === id);
@@ -1048,8 +1449,224 @@ function pruneMerges() {
   }
   // A merge needs at least two cells to mean anything.
   state.merges = state.merges.filter((m) => m.keys.length >= 2);
-  // keys[0] must stay the anchor after any pruning.
-  for (const m of state.merges) m.keys = sortCellKeys(m.keys);
+  for (const m of state.merges) {
+    m.keys = sortCellKeys(m.keys);
+    if (m.anchor && !m.keys.includes(m.anchor)) delete m.anchor;  // falls back to keys[0]
+  }
+}
+
+// ---------------------------------------------------------------- walls
+//
+// Walls, railings, doors and windows are drawn ON the seams between squares (and
+// on the grid's outer border) — not inside a square. Each lives on one cell EDGE,
+// keyed in state.walls as a plain map: "h:r,c" is the horizontal edge above row r
+// spanning column c (r in 0..rows, the top edge of cell (r,c)); "v:r,c" is the
+// vertical edge left of column c spanning row r (c in 0..cols, the left edge of
+// cell (r,c)). The value is the wall type.
+
+const WALL_TYPES = ['wall', 'hollow', 'railing', 'door', 'window'];
+
+function wallKey(o, r, c) { return `${o}:${r},${c}`; }
+
+/** True when an edge is a real grid seam or border. */
+function wallEdgeInBounds(o, r, c) {
+  const { rows, cols } = state.grid;
+  if (o === 'h') return r >= 0 && r <= rows && c >= 0 && c < cols;
+  if (o === 'v') return c >= 0 && c <= cols && r >= 0 && r < rows;
+  return false;
+}
+
+function wallAt(o, r, c) { return state.walls[wallKey(o, r, c)] || null; }
+
+/** A wall's value can be a plain type string, or (for a door, which carries an
+ *  orientation) an object { t:'door', o:0..3 }. These read either shape. */
+function wallTypeOf(v) { return v && typeof v === 'object' ? v.t : v; }
+function wallOrient(v) { return v && typeof v === 'object' ? (((v.o | 0) % 4) + 4) % 4 : 0; }
+
+/** Wall bars — the types that fuse into one continuous run. A door or a railing
+ *  is a fitting: it sits IN a wall and is drawn on its own. */
+function isWallBar(t) { return t === 'wall' || t === 'hollow' || t === 'window'; }
+
+/** What kind of piece sits where these edges meet, or null for no piece at all.
+ *
+ *  A crossing is a piece of wall in its own right rather than whatever the bars
+ *  running into it happen to leave behind, and what it is made of follows what
+ *  meets there.
+ *    hollow — nothing but hollow, which keeps a run of frame hollow throughout.
+ *    window — nothing but glass, and only TWO arms: a run carrying straight on or
+ *             turning a corner. A tee or a cross is more than a pane carries, so
+ *             the panes stop there and the point is a plain wall instead.
+ *    wall   — everything else. A wall with anything, glass into hollow, any
+ *             meeting involving a door: none of those has a piece of its own, and
+ *             a plain wall intersection is what stands in.
+ *    null   — nothing but railings, whose junctions are posts (paintRailingPost),
+ *             or a lone edge, which is a free end and not a junction at all. */
+function junctionType(arms) {
+  const types = arms.map((a) => a.type);
+  if (!types.length) return null;
+  // A door or a pane standing ALONE still ends on a wall point at each side.
+  // Neither is seamless with open air any more than with another type, so an end
+  // that meets nothing is still an end that has to be closed off.
+  if (types.length === 1) return (types[0] === 'door' || types[0] === 'window') ? 'wall' : null;
+  if (types.every((t) => t === 'railing')) return null;
+  // Two doors meeting OPENING to OPENING are one opening — a double door. The
+  // point is still there, but it is COVERED rather than drawn: the pair run
+  // together over it, and 'doorseam' is what tells the renderer to patch out the
+  // stroke that would otherwise show where their two ends abut. Every other door
+  // meeting keeps that stroke, hinge-first meetings included: a door is only ever
+  // seamless on the side it opens, and turning the door turns which side.
+  if (types.length === 2 && types.every((t) => t === 'door') && doorsMeetOpening(arms)) return 'doorseam';
+  if (types.every((t) => t === 'hollow')) return 'hollow';
+  if (types.length === 2 && types.every((t) => t === 'window')) return 'window';
+  return 'wall';
+}
+
+/** Which end of a door is its OPENING — the free edge the leaf sweeps toward,
+ *  opposite the hinge (see paintDoor, which reads the same bit). */
+function doorOpenEnd(value) { return (wallOrient(value) & 2) ? 'A' : 'B'; }
+
+/** True when two doors meet on the side each of them opens, and in a straight
+ *  line — a pair of leaves parting in the middle. A corner is never one opening. */
+function doorsMeetOpening(arms) {
+  const [a, b] = arms;
+  return a.o === b.o && doorOpenEnd(a.value) === a.end && doorOpenEnd(b.value) === b.end;
+}
+
+/** The edges meeting at grid point (R,C) and the piece that belongs there. Each
+ *  arm carries WHICH of its ends lands on the point, since a door's two ends are
+ *  not alike. */
+function junctionAt(R, C) {
+  const arms = [
+    { o: 'h', r: R, c: C - 1, end: 'B' },
+    { o: 'h', r: R, c: C, end: 'A' },
+    { o: 'v', r: R - 1, c: C, end: 'B' },
+    { o: 'v', r: R, c: C, end: 'A' },
+  ].map((a) => {
+    const value = wallAt(a.o, a.r, a.c);
+    return { ...a, value, type: wallTypeOf(value) };
+  }).filter((a) => a.type);
+  return { arms, type: junctionType(arms) };
+}
+
+/** How one end of a wall meets whatever else is at that junction:
+ *    'extend' — reach half a thickness past the seam, into the junction. Bars do
+ *               this at every joint: they are drawn as one union (see drawWalls),
+ *               so the overlap is what makes a corner, tee or cross seamless —
+ *               no line runs through the joint.
+ *    'trim'   — stop half a thickness short, against the face of whatever owns
+ *               the junction.
+ *    'plain'  — a free end, capped on the seam.
+ *  GLASS and a DOOR stop at the junction rather than running into it, because
+ *  neither is seamless with anything but itself: the junction's own outline is
+ *  then what the path terminates against. Glass keeps its seam only where the
+ *  point is glass too — a run carrying on, or a corner turning — which junctionAt
+ *  decides; at a tee or a cross the point is a plain wall and the panes stop.
+ *  Everything else reaches in, so walls and hollow frames still fuse. */
+function wallEndJoin(o, r, c, end) {
+  const type = wallTypeOf(wallAt(o, r, c));
+  // The grid point this end sits on.
+  const R = o === 'h' ? r : (end === 'A' ? r : r + 1);
+  const C = o === 'h' ? (end === 'A' ? c : c + 1) : c;
+
+  const collinear = wallTypeOf(o === 'h'
+    ? wallAt('h', R, end === 'A' ? C - 1 : C)
+    : wallAt('v', end === 'A' ? R - 1 : R, C));
+  const perp = (o === 'h'
+    ? [wallAt('v', R - 1, C), wallAt('v', R, C)]
+    : [wallAt('h', R, C - 1), wallAt('h', R, C)]).map(wallTypeOf);
+  const anyPerp = perp.some(Boolean);
+  const joint = junctionAt(R, C).type;
+
+  if (isWallBar(type)) {
+    // A door across the junction is an opening: it keeps its width, we give way.
+    if (perp.some((t) => t === 'door')) return 'trim';
+    // Glass is seamless only with glass. Where the point is anything else — a tee,
+    // a cross, or a meeting with another type — the pane stops at its face and the
+    // point's outline terminates it.
+    if (type === 'window') return joint === 'window' ? 'extend' : (joint ? 'trim' : 'plain');
+    return (collinear || anyPerp) ? 'extend' : 'plain';
+  }
+  // A door stops at whatever point it runs into, which is also what shortens it to
+  // fit BETWEEN the points either side of it. The one end that does not is the
+  // opening meeting another door's opening: those two are one door, so they run
+  // together with no cap and nothing between them.
+  if (type === 'door') return joint === 'doorseam' ? 'through' : 'trim';
+  return (collinear || anyPerp) ? 'trim' : 'plain';   // a railing always gives way
+}
+
+/** How one end of a RAILING finishes:
+ *    'post'   — a free end, which flares out into a full-thickness end post
+ *    'open'   — another railing carries straight on, so the slim shaft runs
+ *               through: no posts back to back in the middle of a run
+ *    'corner' — a railing turns here, so the shaft stops short and an octagonal
+ *               post is drawn on the junction instead (see paintRailingPost) */
+function railingJoin(o, r, c, end) {
+  const R = o === 'h' ? r : (end === 'A' ? r : r + 1);
+  const C = o === 'h' ? (end === 'A' ? c : c + 1) : c;
+  const collinear = wallTypeOf(o === 'h'
+    ? wallAt('h', R, end === 'A' ? C - 1 : C)
+    : wallAt('v', end === 'A' ? R - 1 : R, C));
+  const perp = (o === 'h'
+    ? [wallAt('v', R - 1, C), wallAt('v', R, C)]
+    : [wallAt('h', R, C - 1), wallAt('h', R, C)]).map(wallTypeOf);
+  const arms = [collinear, ...perp];
+  return {
+    // A turn, a tee or a multi-way meeting is where a railing changes direction:
+    // that junction gets the octagonal post. A straight run does not — its
+    // segments simply meet end post to end post.
+    mode: perp.some((t) => t === 'railing') ? 'corner' : 'post',
+    // Anything that is not a railing — a wall, hollow, window or door — owns the
+    // junction, and the railing stops short of it rather than running into it.
+    meetsWall: arms.some((t) => t && t !== 'railing'),
+  };
+}
+
+/** Coerce a wall value to a stored form, or null when it isn't a real wall. */
+function normalizeWallValue(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return WALL_TYPES.includes(value) ? value : null;
+  if (typeof value === 'object' && value.t === 'door') return { t: 'door', o: wallOrient(value) };
+  return null;
+}
+
+/** Place (or, with a null/unknown value, clear) the wall on one edge. `value` is
+ *  a type string, or a door object { t:'door', o } carrying its orientation. */
+function setWall(o, r, c, value) {
+  if (!wallEdgeInBounds(o, r, c)) return;
+  const key = wallKey(o, r, c);
+  const norm = normalizeWallValue(value);
+  if (norm) state.walls[key] = norm; else delete state.walls[key];
+  emit();
+}
+
+function clearWalls() {
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  state.walls = {};
+  emit();
+}
+
+function hasWalls() { return Object.keys(state.walls).length > 0; }
+
+/** Drop any wall whose edge no longer exists (after a grid resize). */
+function pruneWalls() {
+  for (const key of Object.keys(state.walls)) {
+    const [o, rc] = key.split(':');
+    const [r, c] = rc.split(',').map(Number);
+    if (!wallEdgeInBounds(o, r, c)) delete state.walls[key];
+  }
+}
+
+/** Rebuild the wall map through a shift on each edge's (o, r, c). `shift` returns
+ *  a new [r, c] or null to drop the edge. Used by row/column insert and delete. */
+function remapWalls(shift) {
+  const next = {};
+  for (const [key, type] of Object.entries(state.walls)) {
+    const [o, rc] = key.split(':');
+    const [r, c] = rc.split(',').map(Number);
+    const moved = shift(o, r, c);
+    if (moved) next[wallKey(o, moved[0], moved[1])] = type;
+  }
+  state.walls = next;
 }
 
 // ---------------------------------------------------------------- reset
@@ -1078,6 +1695,7 @@ function clearAll() {
     state.cells.clear();
     state.tables = [];
     state.merges = [];
+    state.walls = {};
     clearManualSelection();
     state.tableSelection.clear();
     state.rowWeights = [];
@@ -1099,7 +1717,8 @@ function serialize() {
     rowWeights: [...state.rowWeights],
     colWeights: [...state.colWeights],
     tables: state.tables.map((t) => ({ ...t, cellKeys: [...t.cellKeys] })),
-    merges: state.merges.map((m) => ({ id: m.id, kind: m.kind, keys: [...m.keys] })),
+    merges: state.merges.map((m) => ({ id: m.id, kind: m.kind, keys: [...m.keys], anchor: m.anchor })),
+    walls: { ...state.walls },
     paper: state.paper,
     landscape: state.landscape,
     exportBg: state.exportBg,
@@ -1122,6 +1741,13 @@ function deserialize(data) {
       iconFill: data.defaults?.iconFill || DEFAULTS.iconFill,
       tableColor: data.defaults?.tableColor || DEFAULTS.tableColor,
       tableBorder: data.defaults?.tableBorder || DEFAULTS.tableBorder,
+      wallFill: data.defaults?.wallFill || DEFAULTS.wallFill,
+      wallBorder: data.defaults?.wallBorder || DEFAULTS.wallBorder,
+      windowFill: data.defaults?.windowFill || DEFAULTS.windowFill,
+      railFill: data.defaults?.railFill || DEFAULTS.railFill,
+      railBorder: data.defaults?.railBorder || DEFAULTS.railBorder,
+      doorFill: data.defaults?.doorFill || DEFAULTS.doorFill,
+      doorBorder: data.defaults?.doorBorder || DEFAULTS.doorBorder,
     };
     state.grid = {
       cols: clampInt(data.grid?.cols, 1, 40, 6),
@@ -1139,9 +1765,23 @@ function deserialize(data) {
         cell.subcells = [];
         for (let i = 0; i < rows * cols; i++) cell.subcells.push(cloneSubcell(v.subcells[i] || {}));
         cell.enabled = true;
+        if (Array.isArray(v.submerges) && v.submerges.length) {
+          cell.submerges = v.submerges
+            .filter((sm) => sm && Array.isArray(sm.indices) && sm.indices.length >= 2)
+            .map((sm) => ({
+              id: String(sm.id || `sm${Math.random().toString(36).slice(2)}`),
+              indices: sm.indices.filter((i) => typeof i === 'number' && i >= 0 && i < rows * cols).sort((a, b) => a - b),
+              anchor: typeof sm.anchor === 'number' ? sm.anchor : Math.min(...sm.indices),
+            }))
+            .filter((sm) => sm.indices.length >= 2 && isConnectedSubcells(sm.indices, rows, cols));
+          if (!cell.submerges.length) delete cell.submerges;
+        } else {
+          delete cell.submerges;
+        }
       } else {
         cell.split = null;
         delete cell.subcells;
+        delete cell.submerges;
       }
       state.cells.set(k, cell);
     }
@@ -1160,8 +1800,18 @@ function deserialize(data) {
           .filter((m) => m && Array.isArray(m.keys) && m.keys.length >= 2)
           .map((m) => ({ id: String(m.id || `m${Math.random().toString(36).slice(2)}`),
                          kind: m.kind === 'unit' ? 'unit' : 'poly',
-                         keys: sortCellKeys(m.keys.map(String)) }))
+                         keys: sortCellKeys(m.keys.map(String)),
+                         ...(m.anchor ? { anchor: String(m.anchor) } : {}) }))
       : [];
+    state.walls = {};
+    if (data.walls && typeof data.walls === 'object') {
+      for (const [key, value] of Object.entries(data.walls)) {
+        const norm = normalizeWallValue(value);
+        if (!norm) continue;
+        const m = /^([hv]):(\d+),(\d+)$/.exec(key);
+        if (m && wallEdgeInBounds(m[1], Number(m[2]), Number(m[3]))) state.walls[key] = norm;
+      }
+    }
     state.paper = data.paper || 'letter';
     state.landscape = data.landscape !== false;
     state.exportBg = data.exportBg || '#ffffff';
@@ -1189,6 +1839,24 @@ function removeCustomPaper(id) {
   emitConfig();
 }
 
+/** Keep a colour on the picker's saved bar. Newest first, no duplicates, and the
+ *  oldest falls off the end once the slots are full. */
+function saveCustomColor(hex) {
+  if (!/^#[0-9a-f]{6}$/i.test(String(hex || ''))) return false;
+  const c = String(hex).toLowerCase();
+  state.config.customColors = [c, ...state.config.customColors.filter((x) => x !== c)]
+    .slice(0, CUSTOM_COLOR_SLOTS);
+  emitConfig();
+  return true;
+}
+
+/** Forget one saved colour — how a swatch is taken off the picker's bar. */
+function removeCustomColor(hex) {
+  const before = state.config.customColors.length;
+  state.config.customColors = state.config.customColors.filter((c) => c !== hex);
+  if (state.config.customColors.length !== before) emitConfig();
+}
+
 function addCustomIcon(icon) { state.config.customIcons.push(icon); emitConfig(); }
 function removeCustomIcon(id) {
   state.config.customIcons = state.config.customIcons.filter((c) => c.id !== id);
@@ -1206,6 +1874,9 @@ function serializeConfig() {
     favicon: state.config.favicon,
     presets: { '1': copyPreset(state.config.presets['1']), '2': copyPreset(state.config.presets['2']) },
     customIcons: state.config.customIcons.map((c) => ({ ...c })),
+    barPosition: state.config.barPosition,
+    barPositions: { ...state.config.barPositions },
+    customColors: [...state.config.customColors],
   };
 }
 
@@ -1251,6 +1922,16 @@ function applyConfig(data) {
           inner: String(c.inner),
         }))
     : [];
+  const spot = (v, fallback) => (v === 'top' || v === 'bottom' ? v : fallback);
+  cfg.barPosition = ['top', 'bottom', 'custom'].includes(data.barPosition) ? data.barPosition : 'top';
+  cfg.barPositions = {
+    select: spot(data.barPositions?.select, 'top'),
+    walls: spot(data.barPositions?.walls, 'top'),
+  };
+  cfg.customColors = (Array.isArray(data.customColors) ? data.customColors : [])
+    .filter((c) => /^#[0-9a-f]{6}$/i.test(String(c)))
+    .map((c) => String(c).toLowerCase())
+    .slice(0, CUSTOM_COLOR_SLOTS);
   emitConfig();
   return true;
 }

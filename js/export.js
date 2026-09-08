@@ -102,8 +102,7 @@ async function renderToCanvas(dpi = 300) {
   const mergeDraws = [];
   const mergeItems = [];
   for (const merge of state.merges) {
-    const [ar, ac] = parseKey(merge.keys[0]);
-    const data = peekCell(ar, ac);
+    const data = mergeContentOf(merge);
     if (!data) continue;
     const plan = mergePlan(merge);
     mergeDraws.push({ merge, data, plan });
@@ -132,7 +131,10 @@ async function renderToCanvas(dpi = 300) {
   for (const d of desks) {
     if (isChairCell(d.data)) d.geo = chairGeometry(rectOf, d);
     else if (isServerCell(d.data)) d.geo = serverGeometry(rectOf, d);
-    else {
+    else if (isStairsCell(d.data)) {
+      const { x, y, w, h } = rectOf(d.r, d.c);
+      d.geo = { cx: x + w / 2, cy: y + h / 2, w, h, rect: { x, y, w, h } };
+    } else {
       const { x, y, w, h } = rectOf(d.r, d.c);
       d.geo = { cx: x + w / 2, cy: y + h / 2, w, h };
     }
@@ -158,8 +160,20 @@ async function renderToCanvas(dpi = 300) {
   for (const d of desks) {
     if (isChairCell(d.data)) drawChair(ctx, d, imgCache, plan);
     else if (isServerCell(d.data)) (d.geo.units >= 2 ? drawServerRack : drawServer)(ctx, d, imgCache, plan);
+    else if (isStairsCell(d.data)) drawStairs(ctx, d, imgCache, plan);
     else drawDesk(ctx, rectOf, d, deskSet, imgCache, plan);
+    if (hasPrinter(d.data) && isPrinterSecondary(d.data)) {
+      const { x, y, w, h } = rectOf(d.r, d.c);
+      drawPrinterOverlay(ctx, x, y, w, h, d.data, imgCache);
+    }
   }
+
+  // 2.1) Stair seams. Each stair caps a run with a half-thickness bar on its
+  //      connecting edge, so a neighbour's half + this one make a full step bar.
+  //      Two anti-aliased halves meeting on a seam never fuse cleanly at finite
+  //      resolution, so paint one solid full-thickness bar over every internal
+  //      seam — it covers both halves exactly and reads as one continuous step.
+  for (const d of desks) if (isStairsCell(d.data)) drawStairSeams(ctx, rectOf, d);
 
   // 2.5) Split squares — a block of independent sub-cells filling the cell.
   for (const sp of splits) drawSplit(ctx, rectOf, sp, imgCache, plan);
@@ -177,7 +191,246 @@ async function renderToCanvas(dpi = 300) {
                 v.geo.clip, v.geo.tableRot);
   }
 
+  // 5) Walls, railings, doors and windows — drawn last, on the seams, on top.
+  drawWalls(ctx, rectOf);
+
   return canvas;
+}
+
+/** Canvas drawing primitives for walls — the twin of svgWallOps. */
+function canvasWallOps(ctx) {
+  return {
+    poly(points, fill, stroke, sw) {
+      ctx.beginPath();
+      points.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.closePath();
+      if (fill && fill !== 'none') { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke && stroke !== 'none') { ctx.lineJoin = 'round'; ctx.lineWidth = sw; ctx.strokeStyle = stroke; ctx.stroke(); }
+    },
+    circle(cx, cy, r, fill, stroke, sw) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      if (fill && fill !== 'none') { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke && stroke !== 'none') { ctx.lineWidth = sw; ctx.strokeStyle = stroke; ctx.stroke(); }
+    },
+    line(x1, y1, x2, y2, stroke, sw) {
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+      ctx.lineCap = 'round'; ctx.lineWidth = sw; ctx.strokeStyle = stroke; ctx.stroke();
+    },
+  };
+}
+
+/** The rectangle a wall bar covers, grown (or shrunk) by half an outline width.
+ *  Ends reach into their junctions or stop short of them per wallEndJoin; only a
+ *  free end grows, so an outline pass caps it without bleeding into a neighbour. */
+function wallBarRect(it, sign) {
+  const { seg, o } = it;
+  const u = seg.u * WALL_OUT_SCALE;    // the export's thinner wall weight
+  const half = (WALL_THICK * u) / 2;
+  const s = (WALL_STROKE * u) / 2;
+  const grow = sign * s;
+  const out = sign > 0;
+  // How far each end runs past the seam — and the two passes want different
+  // things at a junction:
+  //   outline  — claims the whole junction square (and a hair more), so at a
+  //              corner the two bars cover it between them with nothing notched
+  //   interior — reaches exactly its own half-thickness, which lands on the far
+  //              wall's interior edge: the two voids meet in a square corner,
+  //              and it stops short of that wall's OUTER outline instead of
+  //              biting a piece out of it.
+  //   trim     — the far side owns this junction: stop at its face either way.
+  //   plain    — a free end: the outline caps it, so the interior pulls back.
+  const reach = (m) => (m === 'trim' ? -half
+    : m === 'extend' ? (out ? half + s : half - s)
+    : (out ? s : -s));
+  const mA = wallEndJoin(o, it.r, it.c, 'A'), mB = wallEndJoin(o, it.r, it.c, 'B');
+  const a0 = seg.a0 - reach(mA);
+  const a1 = seg.a1 + reach(mB);
+  const t = half + grow;
+  return o === 'h'
+    ? { x: a0, y: seg.cross - t, w: a1 - a0, h: t * 2 }
+    : { x: seg.cross - t, y: a0, w: t * 2, h: a1 - a0 };
+}
+
+/** Every point on the grid where two or more edges meet, with the piece that
+ *  belongs there and where it sits. */
+function wallJunctions(rectOf) {
+  const { rows, cols } = state.grid;
+  const out = [];
+  for (let R = 0; R <= rows; R++) {
+    for (let C = 0; C <= cols; C++) {
+      const { arms, type } = junctionAt(R, C);
+      if (!type) continue;
+      const a = arms[0];
+      const seg = wallSegment(a.o, a.r, a.c, rectOf);
+      if (!seg || !Number.isFinite(seg.cross)) continue;
+      // Whichever end of that arm is the one landing on this point.
+      const atA = a.o === 'h' ? a.c === C : a.r === R;
+      const p = wallPt(seg, atA ? seg.a0 : seg.a1, 0);
+      out.push({ x: p.x, y: p.y, type, u: seg.u, o: a.o });
+    }
+  }
+  return out;
+}
+
+/** A junction's square, grown or shrunk by half an outline exactly as a bar's
+ *  rect is, so the two passes meet flush and no seam shows between them. */
+function junctionRect(j, sign) {
+  const u = j.u * WALL_OUT_SCALE;
+  const t = (WALL_THICK * u) / 2 + sign * (WALL_STROKE * u) / 2;
+  return { x: j.x - t, y: j.y - t, w: t * 2, h: t * 2 };
+}
+
+/** Draw every wall on its edge, square-ended (bevels are the editing grid's look).
+ *
+ *  All the plain bars — wall, hollow and window — are drawn as ONE union: an
+ *  outline pass slightly larger than every bar, then an interior pass slightly
+ *  smaller. Because the bars reach into their shared junctions, corners, tees and
+ *  crosses come out genuinely seamless: no line runs through a joint, a run of
+ *  hollow walls stays hollow end to end, and nothing reads as overlapping.
+ *  Doors and railings are fittings, painted on top with their own outlines. */
+function drawWalls(ctx, rectOf) {
+  const bg = state.exportBg || '#ffffff';
+  const items = [];
+  for (const [key, value] of Object.entries(state.walls)) {
+    const m = /^([hv]):(\d+),(\d+)$/.exec(key);
+    if (!m) continue;
+    const o = m[1], r = Number(m[2]), c = Number(m[3]);
+    items.push({ o, r, c, value, type: wallTypeOf(value), seg: wallSegment(o, r, c, rectOf) });
+  }
+
+  // Bars reach into each other at a junction, so where two types meet the one
+  // painted last owns the overlap. Solid walls go last: a wall crossing a hollow
+  // one reads solid through the joint, rather than by whichever came first.
+  const rank = { hollow: 0, window: 1, wall: 2 };
+  const bars = items.filter((it) => isWallBar(it.type))
+                    .sort((a, b) => rank[a.type] - rank[b.type]);
+  // Glass is translucent, so the page has to be laid under it first — a canvas
+  // fill does not blend with what a previous pass put there unless it is there.
+  const fill = (t) => (t === 'wall' ? wallFillColor() : t === 'window' ? windowFillColor() : bg);
+
+  const juncs = wallJunctions(rectOf);
+
+  ctx.fillStyle = wallInkColor();
+  for (const it of bars) {
+    const b = wallBarRect(it, 1);
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+  }
+  for (const j of juncs) {
+    if (j.type === 'doorseam') continue;   // covered after the doors, not drawn
+    const b = junctionRect(j, 1);
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+  }
+  const fillInterior = (b, type) => {
+    // Glass is see-through, and a canvas fill blends with whatever is already
+    // under it — which here is the ink of the outline pass. Lay the page down
+    // first so the glass tints the PAGE and not its own outline.
+    if (type === 'window') { ctx.fillStyle = bg; ctx.fillRect(b.x, b.y, b.w, b.h); }
+    ctx.fillStyle = fill(type);
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+  };
+  for (const it of bars) {
+    const b = wallBarRect(it, -1);
+    if (b.w <= 0 || b.h <= 0) continue;
+    fillInterior(b, it.type);
+  }
+  // The crossings go in last, so the piece AT a joint owns it rather than
+  // whichever bar happened to reach across it.
+  for (const j of juncs) {
+    if (j.type === 'doorseam') continue;
+    const b = junctionRect(j, -1);
+    if (b.w <= 0 || b.h <= 0) continue;
+    fillInterior(b, j.type);
+  }
+
+  const ops = canvasWallOps(ctx);
+  // Glass: ONE rule laid across every pane at once, clipped to the panes.
+  //
+  // Ruling them one at a time double-rules wherever two panes overlap — which is
+  // exactly what they do at a junction, since each bar reaches into it. Two 30%
+  // rules on the same spot make one 50% mark, and because each pane starts its
+  // rule from its own corner the two sets do not line up, so the doubled strokes
+  // land as a dark slash across the crossing. Drawn as one rule the spacing is
+  // shared, so a run hatches continuously and a crossing is ruled once.
+  const panes = [];
+  let paneU = 0;
+  for (const it of bars) {
+    if (it.type !== 'window') continue;
+    const b = wallBarRect(it, -1);
+    if (b.w > 0 && b.h > 0) { panes.push(b); paneU = paneU || it.seg.u * WALL_OUT_SCALE; }
+  }
+  // A glass crossing is glass too, so it is ruled with the rest of the run.
+  for (const j of juncs) {
+    if (j.type !== 'window') continue;
+    const b = junctionRect(j, -1);
+    if (b.w > 0 && b.h > 0) { panes.push(b); paneU = paneU || j.u * WALL_OUT_SCALE; }
+  }
+  if (panes.length) {
+    const box = {
+      x: Math.min(...panes.map((b) => b.x)),
+      y: Math.min(...panes.map((b) => b.y)),
+    };
+    box.w = Math.max(...panes.map((b) => b.x + b.w)) - box.x;
+    box.h = Math.max(...panes.map((b) => b.y + b.h)) - box.y;
+    ctx.save();
+    ctx.beginPath();
+    for (const b of panes) ctx.rect(b.x, b.y, b.w, b.h);
+    ctx.clip();
+    paintWindowHatch(box, paneU, ops);
+    ctx.restore();
+  }
+  // Railings: posts only at free ends, so a run's shaft passes through unbroken;
+  // where railings turn, one octagonal post is drawn on the shared junction.
+  const posts = new Map();
+  for (const it of items) {
+    if (it.type !== 'railing') continue;
+    const jA = railingJoin(it.o, it.r, it.c, 'A'), jB = railingJoin(it.o, it.r, it.c, 'B');
+    const endA = jA.mode, endB = jB.mode;
+    // Stop short of anything that is not a railing, by that wall's own half
+    // thickness, so a rail never runs into a wall or a door.
+    const wallHalf = (WALL_THICK * it.seg.u * WALL_OUT_SCALE) / 2;
+    const clipA = jA.meetsWall ? wallHalf : 0, clipB = jB.meetsWall ? wallHalf : 0;
+    for (const [end, mode] of [['A', endA], ['B', endB]]) {
+      if (mode !== 'corner') continue;
+      const along = end === 'A' ? it.seg.a0 : it.seg.a1;
+      const p = wallPt(it.seg, along, 0);
+      posts.set(`${Math.round(p.x)},${Math.round(p.y)}`, { p, u: it.seg.u });
+    }
+    paintRailing(it.seg, ops, { bevel: false, out: true, endA, endB, clipA, clipB });
+  }
+  for (const { p, u } of posts.values()) paintRailingPost(p.x, p.y, u, ops, { out: true });
+
+  for (const it of items) {
+    if (isWallBar(it.type) || it.type === 'railing') continue;
+    const opts = { bevel: false, out: true, endA: wallEndJoin(it.o, it.r, it.c, 'A'),
+                   endB: wallEndJoin(it.o, it.r, it.c, 'B') };
+    paintDoor(it.seg, wallOrient(it.value), ops, opts);
+  }
+
+  // A double door meets on ONE border, not two. The pair's leaves each end on the
+  // point, and on export each end reaches half a stroke PAST it, so what lands
+  // there is two parallel lines a stroke apart — a doubled seam. So the point's
+  // interior is painted over in the door's own fill (the frame's long edges are
+  // outside it and stay), and a single line is ruled across the seam in their
+  // place: the same one border the editing grid shows, where the two ends stop
+  // half a stroke SHORT and so already overlap into one.
+  for (const j of juncs) {
+    if (j.type !== 'doorseam') continue;
+    const b = junctionRect(j, -1);
+    if (b.w <= 0 || b.h <= 0) continue;
+    ctx.fillStyle = doorFillColor();
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    const u = j.u * WALL_OUT_SCALE;
+    const sw = WALL_STROKE * u;
+    const t = (WALL_THICK * u) / 2 + sw / 2;   // out to the frame's own outer edge
+    ctx.strokeStyle = doorInkColor();
+    ctx.lineWidth = sw;
+    ctx.beginPath();
+    // The border runs ACROSS the opening: the doors run along the arm's axis.
+    if (j.o === 'h') { ctx.moveTo(j.x, j.y - t); ctx.lineTo(j.x, j.y + t); }
+    else { ctx.moveTo(j.x - t, j.y); ctx.lineTo(j.x + t, j.y); }
+    ctx.stroke();
+  }
 }
 
 // ------------------------------------------------------- content sizing
@@ -311,18 +564,109 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan) {
   const rect = rectOf(sp.r, sp.c);
   const { rows, cols } = sp.data.split;
   const cw = rect.w / cols, ch = rect.h / rows;
+  const hidden = new Set();
+  const rectMerges = [];
+  const polyMerges = [];
+  if (sp.data.submerges) {
+    for (const sm of sp.data.submerges) {
+      const isRect = isRectSubcells(sm.indices, rows, cols);
+      if (isRect) rectMerges.push(sm);
+      else polyMerges.push(sm);
+      for (const idx of sm.indices) hidden.add(idx);
+    }
+    for (const sm of rectMerges) hidden.delete(sm.anchor);
+  }
   sp.data.subcells.forEach((sub, i) => {
-    if (!sub.enabled) return;
+    if (!sub.enabled || hidden.has(i)) return;
     const rr = Math.floor(i / cols), cc = i % cols;
-    const x = rect.x + cc * cw, y = rect.y + rr * ch;
+    const sm = rectMerges.find((m) => m.anchor === i) || null;
+    const smRect = sm ? submergeRect(sm, cols) : null;
+    const bw = smRect ? smRect.colSpan * cw : cw;
+    const bh = smRect ? smRect.rowSpan * ch : ch;
+    const box = { x: rect.x + cc * cw, y: rect.y + rr * ch, w: bw, h: bh };
+    const effRows = smRect ? rows / smRect.rowSpan : rows;
+    const effCols = smRect ? cols / smRect.colSpan : cols;
+    const scFurn = subcellFurniture(sub, effRows, effCols);
+    if (scFurn === 'stairs') {
+      drawStairs(ctx, { data: sub, r: sp.r, c: sp.c, geo: { rect: box, cx: box.x + bw / 2, cy: box.y + bh / 2, w: bw, h: bh } }, imgCache, plan, i, rows, cols);
+      return;
+    }
+    if (scFurn) {
+      drawChair(ctx, { data: sub, geo: chairInRect(box, sub, effRows, effCols) }, imgCache, plan);
+      return;
+    }
     ctx.fillStyle = sub.fill || '#dbe7ff';
-    ctx.fillRect(x, y, cw, ch);
+    ctx.fillRect(box.x, box.y, bw, bh);
     ctx.strokeStyle = sub.border || '#2f6feb';
-    ctx.lineWidth = Math.max(1, Math.min(cw, ch) * 0.04);
-    ctx.strokeRect(x, y, cw, ch);
-    drawContent(ctx, x + cw / 2, y + ch / 2, cw, ch, sub, imgCache, false, plan,
+    ctx.lineWidth = Math.max(1, Math.min(bw, bh) * 0.04);
+    ctx.strokeRect(box.x, box.y, bw, bh);
+    drawContent(ctx, box.x + bw / 2, box.y + bh / 2, bw, bh, sub, imgCache, false, plan,
                 undefined, 0, sub.fill || '#dbe7ff');
+    if (hasPrinter(sub) && isPrinterSecondary(sub)) drawPrinterOverlay(ctx, box.x, box.y, bw, bh, sub, imgCache);
   });
+  for (const sm of polyMerges) drawSubmerge(ctx, rect, sp.data, sm, cw, ch, imgCache, plan);
+}
+
+/** Draw an L/T/+ shaped subcell merge — fills each cell, outlines outer edges,
+ *  content on the widest run (mirrors drawMerge for grid-level poly merges). */
+function drawSubmerge(ctx, rect, data, sm, cw, ch, imgCache, plan) {
+  const { rows, cols } = data.split;
+  const sub = data.subcells[sm.anchor];
+  if (!sub.enabled) return;
+  const fill = sub.fill || '#dbe7ff';
+  const border = sub.border || '#2f6feb';
+  const sp = submergePlan(sm, rows, cols);
+
+  ctx.fillStyle = fill;
+  for (const i of sm.indices) {
+    const sr = Math.floor(i / cols), sc = i % cols;
+    const bx = rect.x + sc * cw, by = rect.y + sr * ch;
+    ctx.fillRect(bx - 0.5, by - 0.5, cw + 1, ch + 1);
+  }
+  ctx.strokeStyle = border;
+  ctx.lineWidth = Math.max(1, Math.min(cw, ch) * 0.04);
+  ctx.beginPath();
+  for (const i of sm.indices) {
+    const sr = Math.floor(i / cols), sc = i % cols;
+    const bx = rect.x + sc * cw, by = rect.y + sr * ch;
+    if (!sp.has(sr - 1, sc)) { ctx.moveTo(bx, by); ctx.lineTo(bx + cw, by); }
+    if (!sp.has(sr, sc + 1)) { ctx.moveTo(bx + cw, by); ctx.lineTo(bx + cw, by + ch); }
+    if (!sp.has(sr + 1, sc)) { ctx.moveTo(bx, by + ch); ctx.lineTo(bx + cw, by + ch); }
+    if (!sp.has(sr, sc - 1)) { ctx.moveTo(bx, by); ctx.lineTo(bx, by + ch); }
+  }
+  ctx.stroke();
+
+  if (sp.labelRun) {
+    const lx = rect.x + sp.labelRun.scStart * cw;
+    const ly = rect.y + sp.labelRun.sr * ch;
+    const lw = sp.labelRun.len * cw;
+    drawContent(ctx, lx + lw / 2, ly + ch / 2, lw, ch, { ...sub, icon: null },
+                imgCache, false, plan, undefined, 0, fill);
+  }
+  if (sp.iconCell && sub.icon) {
+    const ix = rect.x + sp.iconCell.sc * cw;
+    const iy = rect.y + sp.iconCell.sr * ch;
+    drawIconOnly(ctx, ix + cw / 2, iy + ch / 2, Math.min(cw, ch), sub, imgCache);
+  }
+}
+
+/** A chair sized and placed inside an arbitrary rectangle — one space of a split
+ *  square. The chair stays 1:1 and targets 50% of the full cell; the split already
+ *  shrinks the subcell, so the percentage compensates (min(50%×N, 100%) per axis),
+ *  capped to 1:1 via the smaller side. */
+function chairInRect(rect, data, rows, cols) {
+  rows = rows || 1; cols = cols || 1;
+  const f = Math.min(CHAIR_SCALE, 1 / Math.max(rows, cols));
+  const size = Math.min(f * rect.w * cols, f * rect.h * rows);
+  const inset = size * 0.04;
+  let cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;
+  const [dr, dc] = FACING_STEP[data.rotation || 0] || FACING_STEP[0];
+  if (dr < 0) cy = rect.y + size / 2 + inset;
+  if (dr > 0) cy = rect.y + rect.h - size / 2 - inset;
+  if (dc < 0) cx = rect.x + size / 2 + inset;
+  if (dc > 0) cx = rect.x + rect.w - size / 2 - inset;
+  return { cx, cy, w: size, h: size, labelBox: chairLabelBox(rect, dr, dc),
+           full: Math.min(rect.w, rect.h) };
 }
 
 /** Where a chair sits and how big it is. Split out from drawChair so the layout
@@ -387,6 +731,68 @@ function drawChair(ctx, item, imgCache, plan) {
   // The furniture carries its icon and its labels, both turned to the facing.
   drawIconOnly(ctx, cx, cy, size, item.data, imgCache);
   if (labelBox) drawLabelBox(ctx, labelBox, item.data, plan, full || Math.min(labelBox.w, labelBox.h), item.data.rotation || 0);
+}
+
+/** Stairs fill the square edge to edge — no fill, border or padding — so a run
+ *  of them reads as one flight, the half-bars on the seams merging into full
+ *  step bars. The art turns with the facing. The DOM twin is the cell--stairs
+ *  branch in grid.js. */
+function drawStairs(ctx, item, imgCache, plan, subIndex, splitRows, splitCols) {
+  const { rect } = item.geo;
+  const { x, y, w, h } = rect;
+  const variant = resolveStairType(item.data, item.r, item.c, subIndex, splitRows, splitCols);
+  const ic = item.data.iconColor || '#1f2933';
+  const fill = item.data.fill || '#dbe7ff';
+  // The square's own fill is the stair background; the bars are inked to
+  // contrast against it (white on a dark fill), matching the grid.
+  const ink = contrastLabelColor(ic, fill);
+  const diagonal = ((item.data.rotation || 0) % 90) !== 0;
+  // Diagonal: its own baked art (fan for middle; diagonal step-bars + marker for
+  // the rest), authored at facing 45° → rotate by facing − 45. Straight: +180 so
+  // the descent arrow points the way it faces.
+  const sym = diagonal ? diagStairSymbol(variant) : variant;
+  const img = imgCache.get(`stairs-${sym}|${ink}`);
+  if (!img) return;
+  // Background fill sits under the bars (axis-aligned; only the bars rotate).
+  ctx.fillStyle = fill;
+  ctx.fillRect(x, y, w, h);
+  const spin = diagonal ? (item.data.rotation || 0) - 45 : (item.data.rotation || 0) + 180;
+  ctx.save();
+  ctx.translate(x + w / 2, y + h / 2);
+  ctx.rotate((spin * Math.PI) / 180);
+  ctx.drawImage(img, -w / 2, -h / 2, w, h);
+  ctx.restore();
+}
+
+/** Paint one solid full-thickness step bar over each internal seam of a stair
+ *  run, covering the two abutting half-bars so the flight reads as continuous.
+ *  The run axis follows the facing: an upright/inverted stair (rot 0/180) joins
+ *  its up/down neighbours, a sideways one (rot 90/270) its left/right. The bar
+ *  is 35/1535 of the cell (the authored step-bar thickness), centred on the
+ *  shared edge so it lands exactly on both halves. */
+function drawStairSeams(ctx, rectOf, item) {
+  const { r, c, data } = item;
+  const rot = (((data.rotation || 0) % 360) + 360) % 360;
+  if (rot % 90 !== 0) return; // a diagonal landing owns its own hatch — no seams
+  // A straight step-run only fuses with another straight stair on the shared
+  // edge; a diagonal landing keeps its own cropped edge, so skip those neighbours.
+  const straightStairAt = (rr, cc) => {
+    const n = peekCell(rr, cc);
+    return isStairsCell(n) && ((n.rotation || 0) % 90 === 0);
+  };
+  const rect = rectOf(r, c);
+  const vertical = rot % 180 === 0;
+  ctx.fillStyle = contrastLabelColor(data.iconColor || '#1f2933', data.fill || '#dbe7ff');
+  const BAR = 35 / 1535;
+  if (vertical) {
+    const T = BAR * rect.h;
+    if (straightStairAt(r - 1, c)) ctx.fillRect(rect.x, rect.y - T / 2, rect.w, T);
+    if (straightStairAt(r + 1, c)) ctx.fillRect(rect.x, rect.y + rect.h - T / 2, rect.w, T);
+  } else {
+    const T = BAR * rect.w;
+    if (straightStairAt(r, c - 1)) ctx.fillRect(rect.x - T / 2, rect.y, T, rect.h);
+    if (straightStairAt(r, c + 1)) ctx.fillRect(rect.x + rect.w - T / 2, rect.y, T, rect.h);
+  }
 }
 
 /** Where a server sits: a half-square slab hugging the edge it faces, filling
@@ -633,8 +1039,12 @@ function coveredGeometry(rectOf, { r, c }, footprints) {
 function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, extraRot = 0, labelBg = null) {
   const labels = labelsOf(data);
   let iconId = data.icon;
-  if (!iconId && labels.length === 0 && forceChair) iconId = 'chair';
-  const hasIcon = !!iconId;
+  let printerAsIcon = false;
+  if (!iconId && hasPrinter(data) && !isPrinterSecondary(data)) {
+    printerAsIcon = true;
+  }
+  if (!iconId && !printerAsIcon && labels.length === 0 && forceChair) iconId = 'chair';
+  const hasIcon = !!(iconId || printerAsIcon);
 
   const s = Math.min(w, h);
   // Labelled squares share the chart-wide sizes; an icon on its own has the
@@ -658,8 +1068,14 @@ function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, 
 
   let cursorY = -totalH / 2;
   if (hasIcon) {
-    const img = imgCache.get(iconKey(iconId, data));
-    if (img) ctx.drawImage(img, -iconSize / 2, cursorY, iconSize, iconSize);
+    if (printerAsIcon) {
+      const pKey = printerCacheKey(data);
+      const img = imgCache.get(pKey);
+      if (img) ctx.drawImage(img, -iconSize / 2, cursorY, iconSize, iconSize);
+    } else {
+      const img = imgCache.get(iconKey(iconId, data));
+      if (img) ctx.drawImage(img, -iconSize / 2, cursorY, iconSize, iconSize);
+    }
     cursorY += iconSize;
   }
 
@@ -675,6 +1091,46 @@ function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, 
   }
 
   ctx.restore();
+}
+
+/** Draw a printer accessory overlay on a canvas rectangle. When secondary
+ *  (another icon is present or printer.size='small'), the printer is 0.3 of
+ *  the square at its compass position; when solo at max, it fills like a
+ *  normal icon. */
+function drawPrinterOverlay(ctx, x, y, w, h, data, imgCache) {
+  const p = data.printer;
+  if (!p) return;
+  const secondary = isPrinterSecondary(data);
+  const frac = secondary ? PRINTER_SIZE : 0.7;
+  const [cx, cy] = secondary ? (COMPASS_POS[p.compass] || COMPASS_POS.se) : [0.5, 0.5];
+  const pw = w * frac, ph = h * frac;
+  const px = x + Math.max(0, Math.min(w - pw, (cx - frac / 2) * w));
+  const py = y + Math.max(0, Math.min(h - ph, (cy - frac / 2) * h));
+  const pKey = printerCacheKey(data);
+  const img = imgCache.get(pKey);
+  if (img) ctx.drawImage(img, px, py, pw, ph);
+  if (secondary && p.labels && p.labels.length) {
+    const s = Math.min(pw, ph);
+    const lineH = s * 0.28;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.font = contentFont(lineH * 0.7);
+    let ly = py + ph;
+    for (const line of p.labels) {
+      if (!line.text || ly + lineH > y + h) break;
+      ctx.fillStyle = contrastLabelColor(line.color || '#1f2933', data.fill || '#dbe7ff');
+      ctx.fillText(fitText(ctx, line.text, pw * 1.5), px + pw / 2, ly);
+      ly += lineH;
+    }
+    ctx.restore();
+  }
+}
+
+function printerCacheKey(data) {
+  const p = data.printer;
+  const color = contrastLabelColor(data.iconColor || '#1f2933', data.fill || '#dbe7ff');
+  return `_printer|${p.color ? 'fill' : 'bw'}|${color}|${data.iconFill || ''}`;
 }
 
 /** Clamp into [lo, hi]; when the band is narrower than what has to go in it,
@@ -762,8 +1218,17 @@ async function preloadIcons(desks, seats, covered = [], splitItems = [], mergeIt
 
   for (const { data } of [...desks, ...covered, ...splitItems, ...mergeItems]) {
     if (data.icon) want(data.icon, data);
-    // A server rack also needs its corner icon, contrasted against the page.
     if (isServerCell(data)) needed.set(cornerIconKey(data), iconDataUrl('server', cornerIconColor(data), data.iconFill));
+    if (hasPrinter(data)) {
+      const pKey = printerCacheKey(data);
+      const pColor = contrastLabelColor(data.iconColor || '#1f2933', data.fill || '#dbe7ff');
+      needed.set(pKey, printerDataUrl(data.printer, pColor, data.iconFill || null));
+    }
+    if (isStairsCell(data)) {
+      const ink = contrastLabelColor(data.iconColor || '#1f2933', data.fill || '#dbe7ff');
+      for (const v of ['single', 'start', 'middle', 'end', 'corner', 'diagSingle', 'diagStart', 'diagEnd'])
+        needed.set(`stairs-${v}|${ink}`, stairsDataUrl(v, ink));
+    }
   }
   for (const { data } of seats) {
     if (data.icon) want(data.icon, data);

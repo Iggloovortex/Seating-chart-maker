@@ -196,14 +196,14 @@ function presetLabelRow(n, cur, line, index) {
   const color = document.createElement('input');
   color.type = 'color';
   color.className = 'field__input field__input--color erow__color';
-  color.value = line.color;
+  setColorInput(color, line.color);
   bindColorInput(color, () => {
-    const labels = cur().labels.map((l, i) => i === index ? { ...l, color: color.value } : l);
+    const labels = cur().labels.map((l, i) => i === index ? { ...l, color: colorOf(color) } : l);
     updateConfigPreset(n, { ...cur(), labels });
   });
   const del = document.createElement('button');
   del.type = 'button';
-  del.className = 'btn btn--icon btn--ghost';
+  del.className = 'btn btn--icon btn--ghost erow__del';
   del.textContent = '✕';
   del.setAttribute('aria-label', `Remove label line ${index + 1}`);
   del.addEventListener('click', () => {
@@ -294,6 +294,18 @@ function render(cell) {
   // furniture (a piece tucked to the faced edge, labels in the empty space).
   bodyEl.appendChild(specialSection(cell));
 
+  // --- Printer (accessory overlay) — options only when the printer is on ----
+  const cellPrinter = printerSection(cell, (patch) => {
+    updateCell(current.r, current.c, patch);
+    render(peekCell(current.r, current.c));
+  }, (mutate) => {
+    // Live edit: mutate the printer in place and emit, no re-render (keeps caret).
+    const c = getCell(current.r, current.c);
+    if (c && c.printer) mutate(c.printer);
+    updateCell(current.r, current.c, {});
+  });
+  if (cellPrinter) bodyEl.appendChild(cellPrinter);
+
   // --- Labels (each line has its own color) --------------------------------
   bodyEl.appendChild(group('Labels', (g) => {
     // There is always one label line to type into — blank by default. An empty
@@ -368,6 +380,9 @@ const SPECIAL_SQUARE_NOTES = {
   server: 'This square is a server rack. One label shows the server icon and a slab tucked ' +
     'to the side it faces. Add more labels and each becomes its own server slab, filling the ' +
     'square. Labels turn with the facing, like a normal square.',
+  stairs: 'This square is a staircase. It fills the full square and shows arrows for direction. ' +
+    'Adjacent stair squares automatically connect: start → middle → end. Use Facing to set the ' +
+    'direction the stairs go.',
 };
 
 /** The Special section — a permanent home for the special icons. Picking one
@@ -393,6 +408,22 @@ function specialSection(cell) {
       });
       picker.appendChild(btn);
     }
+    // Printer is an accessory, not furniture: it lives in this row too but toggles
+    // on/off (it coexists with a main icon) instead of taking over the square.
+    const pbtn = document.createElement('button');
+    pbtn.type = 'button';
+    pbtn.className = 'icon-picker__btn';
+    pbtn.title = 'Printer';
+    pbtn.setAttribute('aria-label', 'Printer');
+    pbtn.setAttribute('aria-pressed', String(hasPrinter(cell)));
+    pbtn.appendChild(printerUse({ color: false }, '', 'currentColor'));
+    pbtn.addEventListener('click', () => {
+      updateCell(current.r, current.c, {
+        printer: hasPrinter(cell) ? null : { color: false, compass: 'se', labels: [], size: 'max' },
+      });
+      render(peekCell(current.r, current.c));
+    });
+    picker.appendChild(pbtn);
     g.appendChild(picker);
 
     const text = cell && cell.icon && SPECIAL_SQUARE_NOTES[cell.icon];
@@ -402,6 +433,194 @@ function specialSection(cell) {
       note.textContent = text + ' Use Facing above to aim it.';
       g.appendChild(note);
     }
+
+    if (cell && cell.icon === 'stairs') {
+      const row = document.createElement('div');
+      row.className = 'egroup__row';
+      const lbl = document.createElement('span');
+      lbl.textContent = 'Type';
+      row.appendChild(lbl);
+      const types = ['auto', 'single', 'start', 'middle', 'end'];
+      const labels = { auto: 'Auto', single: 'Single', start: 'Start', middle: 'Middle', end: 'End' };
+      for (const t of types) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn--sm';
+        btn.textContent = labels[t];
+        const cur = cell.stairType || 'auto';
+        if (cur === t) btn.classList.add('btn--active');
+        btn.addEventListener('click', () => {
+          updateCell(current.r, current.c, { stairType: t });
+          render(peekCell(current.r, current.c));
+        });
+        row.appendChild(btn);
+      }
+      g.appendChild(row);
+    }
+  });
+}
+
+// ---------------------------------------------------------------- printer
+//
+// The Printer section lets the user toggle a printer accessory on any square.
+// When a square already has a primary icon the printer renders as a small
+// secondary overlay (0.3×0.3) at a compass position; when it is the only icon
+// it fills the square at max size (or stays small if the user picks 'small').
+
+const COMPASS_DIRS = [
+  { id: 'nw', arrow: '↖', label: 'Top left' },
+  { id: 'n',  arrow: '↑', label: 'Top' },
+  { id: 'ne', arrow: '↗', label: 'Top right' },
+  { id: 'w',  arrow: '←', label: 'Left' },
+  { id: 'c',  arrow: '·', label: 'Center' },
+  { id: 'e',  arrow: '→', label: 'Right' },
+  { id: 'sw', arrow: '↙', label: 'Bottom left' },
+  { id: 's',  arrow: '↓', label: 'Bottom' },
+  { id: 'se', arrow: '↘', label: 'Bottom right' },
+];
+
+function buildPositionCompass(chosen, onPick) {
+  const grid = document.createElement('div');
+  grid.className = 'compass';
+  for (const dir of COMPASS_DIRS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'compass__btn';
+    b.textContent = dir.arrow;
+    b.title = dir.label;
+    b.setAttribute('aria-pressed', String(chosen === dir.id));
+    b.addEventListener('click', () => onPick(dir.id));
+    grid.appendChild(b);
+  }
+  return grid;
+}
+
+// The printer's own options (B&W/Color, size, position, labels). The on/off
+// toggle lives in the Special row; this renders only while the printer is on,
+// so it returns null when there is no printer (callers skip a null).
+function printerSection(data, set, live) {
+  const p = data.printer;
+  if (!p) return null;
+  return group('Printer', (g) => {
+    const opts = document.createElement('div');
+    opts.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-top:8px;';
+
+    // B&W vs Color
+    const colorRow = document.createElement('div');
+    colorRow.className = 'erow';
+    const bwBtn = document.createElement('button');
+    bwBtn.type = 'button';
+    bwBtn.className = `btn ${!p.color ? 'btn--primary' : ''}`;
+    bwBtn.textContent = 'B&W';
+    bwBtn.addEventListener('click', () => set({ printer: { ...p, color: false } }));
+    const colorBtn = document.createElement('button');
+    colorBtn.type = 'button';
+    colorBtn.className = `btn ${p.color ? 'btn--primary' : ''}`;
+    colorBtn.textContent = 'Color';
+    colorBtn.addEventListener('click', () => set({ printer: { ...p, color: true } }));
+    colorRow.append(bwBtn, colorBtn);
+    opts.appendChild(colorRow);
+
+    // Size toggle (solo only)
+    if (!data.icon) {
+      const sizeRow = document.createElement('div');
+      sizeRow.className = 'erow';
+      const maxBtn = document.createElement('button');
+      maxBtn.type = 'button';
+      maxBtn.className = `btn ${p.size !== 'small' ? 'btn--primary' : ''}`;
+      maxBtn.textContent = 'Max';
+      maxBtn.title = 'Fill the square';
+      maxBtn.addEventListener('click', () => set({ printer: { ...p, size: 'max' } }));
+      const smallBtn = document.createElement('button');
+      smallBtn.type = 'button';
+      smallBtn.className = `btn ${p.size === 'small' ? 'btn--primary' : ''}`;
+      smallBtn.textContent = 'Small';
+      smallBtn.title = 'Stay small at compass position';
+      smallBtn.addEventListener('click', () => set({ printer: { ...p, size: 'small' } }));
+      sizeRow.append(maxBtn, smallBtn);
+      opts.appendChild(sizeRow);
+    }
+
+    // Compass positioning (secondary or solo small)
+    if (isPrinterSecondary(data)) {
+      const posGroup = controlGroup('Position');
+      posGroup.appendChild(buildPositionCompass(p.compass || 'se', (dir) => {
+        set({ printer: { ...p, compass: dir } });
+      }));
+      opts.appendChild(posGroup);
+    }
+
+    // Printer labels — the same row as a regular label: reorder grip, live text
+    // (no re-render so the caret survives), its own colour, a colour grip, and a
+    // red remove. `live` mutates the printer in place + emits; `set` re-renders.
+    const lblGroup = controlGroup('Printer labels');
+    const pLabels = p.labels && p.labels.length ? p.labels : [{ text: '', color: defaultLabelColor(0) }];
+    const applyLabels = (labels) => set({ printer: { ...p, labels } });
+    const reorder = (from, to, kind) => {
+      const labels = pLabels.map((l) => ({ ...l }));
+      if (kind === 'color') {
+        const col = labels[from].color;
+        if (from < to) for (let k = from; k < to; k++) labels[k].color = labels[k + 1].color;
+        else for (let k = from; k > to; k--) labels[k].color = labels[k - 1].color;
+        labels[to].color = col;
+      } else {
+        const [m] = labels.splice(from, 1);
+        labels.splice(to, 0, m);
+      }
+      applyLabels(labels);
+    };
+    const lblList = document.createElement('div');
+    lblList.id = 'printer-label-list';
+    pLabels.forEach((line, i) => {
+      const row = document.createElement('div');
+      row.className = 'erow';
+
+      const grip = labelGrip('Drag to reorder this line');
+      const colorGrip = labelGrip('Drag to move this color to another line');
+      colorGrip.classList.add('erow__grip--color');
+
+      const text = document.createElement('input');
+      text.type = 'text';
+      text.className = 'field__input';
+      text.value = line.text || '';
+      text.placeholder = `Label ${i + 1}`;
+      text.addEventListener('input', () => {
+        live((pr) => { if (pr.labels && pr.labels[i]) pr.labels[i].text = text.value; });
+      });
+
+      const color = document.createElement('input');
+      color.type = 'color';
+      color.className = 'field__input field__input--color erow__color';
+      setColorInput(color, line.color || DEFAULTS.labelColor);
+      bindColorInput(color, () => {
+        live((pr) => { if (pr.labels && pr.labels[i]) pr.labels[i].color = colorOf(color); });
+      });
+
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'btn btn--icon btn--ghost erow__del';
+      del.textContent = '✕';
+      del.setAttribute('aria-label', `Remove printer label ${i + 1}`);
+      del.addEventListener('click', () => applyLabels(pLabels.filter((_, j) => j !== i)));
+
+      attachLabelDrag(grip, i, 'line', { listId: 'printer-label-list', apply: reorder });
+      attachLabelDrag(colorGrip, i, 'color', { listId: 'printer-label-list', apply: reorder });
+
+      row.append(grip, text, color, colorGrip, del);
+      lblList.appendChild(row);
+    });
+    lblGroup.appendChild(lblList);
+    const addLbl = document.createElement('button');
+    addLbl.type = 'button';
+    addLbl.className = 'link-btn';
+    addLbl.textContent = '+ Add printer label';
+    addLbl.addEventListener('click', () => {
+      applyLabels([...pLabels, { text: '', color: defaultLabelColor(pLabels.length) }]);
+    });
+    lblGroup.appendChild(addLbl);
+    opts.appendChild(lblGroup);
+
+    g.appendChild(opts);
   });
 }
 
@@ -525,6 +744,8 @@ function splitOptionButton(o, active, onClick) {
   return btn;
 }
 
+let submergeSelection = new Set();
+
 /** The pane for a split square: change or clear the split, and a list of pieces,
  *  each opening its own editor with a live preview of its state. */
 function renderSplitParent(cell) {
@@ -533,15 +754,87 @@ function renderSplitParent(cell) {
 
   bodyEl.appendChild(splitSection(cell));
 
+  const canMerge = cell.split.rows * cell.split.cols >= 4;
+
   bodyEl.appendChild(group('Pieces', (g) => {
     const grid = document.createElement('div');
     grid.className = 'piece-grid';
     grid.style.gridTemplateColumns = `repeat(${cell.split.cols}, 1fr)`;
-    cell.subcells.forEach((sub, i) => grid.appendChild(pieceButton(sub, i)));
+    const hidden = new Set();
+    if (cell.submerges) {
+      for (const sm of cell.submerges)
+        for (const idx of sm.indices) if (idx !== sm.anchor) hidden.add(idx);
+    }
+    cell.subcells.forEach((sub, i) => {
+      if (hidden.has(i)) return;
+      const sm = cell.submerges && submergeAt(cell, i);
+      const btn = pieceButton(sub, i, sm);
+      if (sm) {
+        const rect = submergeRect(sm, cell.split.cols);
+        btn.style.gridColumn = `${rect.c + 1} / span ${rect.colSpan}`;
+        btn.style.gridRow = `${rect.r + 1} / span ${rect.rowSpan}`;
+      }
+      if (submergeSelection.has(i)) btn.classList.add('piece-btn--sel');
+      if (canMerge) {
+        btn.addEventListener('click', (e) => {
+          if (!submergeSelection.size && !e.shiftKey) {
+            openSubcellEditor(current.r, current.c, i);
+            return;
+          }
+          e.preventDefault();
+          if (submergeSelection.has(i)) submergeSelection.delete(i);
+          else submergeSelection.add(i);
+          renderSplitParent(peekCell(current.r, current.c));
+        });
+      }
+      grid.appendChild(btn);
+    });
     g.appendChild(grid);
+
+    if (canMerge) {
+      const bar = document.createElement('div');
+      bar.className = 'erow erow--controls';
+      bar.style.marginTop = '6px';
+      bar.style.gap = '6px';
+      const selBtn = document.createElement('button');
+      selBtn.type = 'button';
+      selBtn.className = 'btn' + (submergeSelection.size ? ' btn--seat' : '');
+      selBtn.textContent = submergeSelection.size ? `${submergeSelection.size} selected` : 'Select to merge';
+      selBtn.title = 'Hold Shift+click or click here then click pieces to select for merging';
+      selBtn.addEventListener('click', () => {
+        if (submergeSelection.size) { submergeSelection.clear(); renderSplitParent(peekCell(current.r, current.c)); }
+        else {
+          submergeSelection.add(0);
+          renderSplitParent(peekCell(current.r, current.c));
+        }
+      });
+      bar.appendChild(selBtn);
+
+      if (submergeSelection.size >= 2) {
+        const indices = [...submergeSelection];
+        const valid = isConnectedSubcells(indices, cell.split.rows, cell.split.cols)
+          && !indices.some((i) => submergeAt(cell, i));
+        const mergeBtn = document.createElement('button');
+        mergeBtn.type = 'button';
+        mergeBtn.className = 'btn btn--primary';
+        mergeBtn.textContent = 'Merge';
+        mergeBtn.disabled = !valid;
+        mergeBtn.title = valid ? 'Merge selected pieces' : 'Selection must be connected unmerged pieces';
+        mergeBtn.addEventListener('click', () => {
+          addSubmerge(current.r, current.c, indices);
+          submergeSelection.clear();
+          renderSplitParent(peekCell(current.r, current.c));
+        });
+        bar.appendChild(mergeBtn);
+      }
+      g.appendChild(bar);
+    }
+
     const note = document.createElement('p');
     note.className = 'egroup__note';
-    note.textContent = 'Click a piece to edit its fill, icon, labels and facing.';
+    note.textContent = canMerge
+      ? 'Click a piece to edit it. Shift+click to select pieces, then Merge to combine them.'
+      : 'Click a piece to edit its fill, icon, labels and facing.';
     g.appendChild(note);
   }));
 
@@ -560,7 +853,7 @@ function renderSplitParent(cell) {
 
 /** One button in the piece list: a preview of the sub-cell's fill/border with its
  *  label/icon, opening that piece's editor. */
-function pieceButton(sub, i) {
+function pieceButton(sub, i, sm) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'piece-btn';
@@ -575,10 +868,11 @@ function pieceButton(sub, i) {
   }
   const cap = document.createElement('span');
   cap.className = 'piece-btn__cap';
-  cap.textContent = text || (sub.enabled ? 'Filled' : 'Empty');
+  const label = sm ? `${text || (sub.enabled ? 'Merged' : 'Empty')}` : (text || (sub.enabled ? 'Filled' : 'Empty'));
+  cap.textContent = label;
   btn.appendChild(cap);
-  btn.setAttribute('aria-label', `Edit piece ${i + 1}${text ? `: ${text}` : ''}`);
-  btn.addEventListener('click', () => openSubcellEditor(current.r, current.c, i));
+  if (sm) btn.classList.add('piece-btn--merged');
+  btn.setAttribute('aria-label', `${sm ? 'Merged piece' : 'Edit piece'} ${i + 1}${text ? `: ${text}` : ''}`);
   return btn;
 }
 
@@ -603,15 +897,57 @@ function renderSubcellEditor() {
   const sub = subCur();
   if (!sub) { closeEditor(); return; }
   bodyEl.replaceChildren();
-  document.getElementById('editor-actions').replaceChildren();
+
+  // Copy / paste for this piece, in the header where the square pane keeps them.
+  // This is how content moves between a whole square and a split space: copy a
+  // square, open a piece, paste. Special icons travel with it.
+  const bar = document.getElementById('editor-actions');
+  bar.replaceChildren();
+  const copy = document.createElement('button');
+  copy.type = 'button';
+  copy.className = 'btn';
+  copy.textContent = 'Copy';
+  copy.title = 'Copy this piece: colors, icon, facing and every label line';
+  copy.addEventListener('click', () => { copySubcell(current.r, current.c, current.sub); renderSubcellEditor(); });
+  const paste = document.createElement('button');
+  paste.type = 'button';
+  paste.className = 'btn';
+  paste.textContent = 'Paste';
+  paste.title = 'Paste the copied square into this piece';
+  paste.disabled = !hasSquareClipboard();
+  paste.addEventListener('click', () => { pasteSquareToSubcell(current.r, current.c, current.sub); renderSubcellEditor(); });
+  bar.append(copy, paste);
 
   // Back to the whole split square.
   const back = document.createElement('button');
   back.type = 'button';
   back.className = 'link-btn';
   back.textContent = '‹ Back to split square';
-  back.addEventListener('click', () => openEditor(current.r, current.c));
+  back.addEventListener('click', () => { submergeSelection.clear(); openEditor(current.r, current.c); });
   bodyEl.appendChild(back);
+
+  // Unmerge button when this piece is in a subcell merge.
+  const cell = peekCell(current.r, current.c);
+  const sm = cell && submergeAt(cell, current.sub);
+  if (sm) {
+    bodyEl.appendChild(group('Merged piece', (g) => {
+      const note = document.createElement('p');
+      note.className = 'egroup__note';
+      note.textContent = `This piece spans ${sm.indices.length} spaces.`;
+      g.appendChild(note);
+      const ubtn = document.createElement('button');
+      ubtn.type = 'button';
+      ubtn.className = 'btn btn--empty';
+      ubtn.style.marginTop = '6px';
+      ubtn.textContent = 'Unmerge';
+      ubtn.title = 'Split this merged piece back into separate spaces';
+      ubtn.addEventListener('click', () => {
+        removeSubmerge(current.r, current.c, sm.id);
+        renderSubcellEditor();
+      });
+      g.appendChild(ubtn);
+    }));
+  }
 
   const set = (patch) => { updateSubcell(current.r, current.c, current.sub, patch); renderSubcellEditor(); };
 
@@ -681,6 +1017,67 @@ function renderSubcellEditor() {
     }
   }));
 
+  // Special icons for subcells (chair, server, stairs)
+  bodyEl.appendChild(group('Special', (g) => {
+    const picker = document.createElement('div');
+    picker.className = 'icon-picker';
+    for (const id of SPECIAL_ICON_IDS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'icon-picker__btn';
+      btn.title = ICONS[id].label;
+      btn.setAttribute('aria-label', ICONS[id].label);
+      btn.setAttribute('aria-pressed', String(sub.icon === id));
+      const svg = iconUse(id, '');
+      if (svg) btn.appendChild(svg);
+      btn.addEventListener('click', () => {
+        const next = sub.icon === id ? null : id;
+        set({ icon: next });
+      });
+      picker.appendChild(btn);
+    }
+    // Printer accessory — toggles on/off, coexists with a main icon.
+    const pbtn = document.createElement('button');
+    pbtn.type = 'button';
+    pbtn.className = 'icon-picker__btn';
+    pbtn.title = 'Printer';
+    pbtn.setAttribute('aria-label', 'Printer');
+    pbtn.setAttribute('aria-pressed', String(hasPrinter(sub)));
+    pbtn.appendChild(printerUse({ color: false }, '', 'currentColor'));
+    pbtn.addEventListener('click', () => {
+      set({ printer: hasPrinter(sub) ? null : { color: false, compass: 'se', labels: [], size: 'max' } });
+    });
+    picker.appendChild(pbtn);
+    g.appendChild(picker);
+    const text = sub.icon && SPECIAL_SQUARE_NOTES[sub.icon];
+    if (text) {
+      const note = document.createElement('p');
+      note.className = 'egroup__note';
+      note.textContent = text + ' Use Facing above to aim it.';
+      g.appendChild(note);
+    }
+    if (sub.icon === 'stairs') {
+      const row = document.createElement('div');
+      row.className = 'egroup__row';
+      const lbl = document.createElement('span');
+      lbl.textContent = 'Type';
+      row.appendChild(lbl);
+      const types = ['auto', 'single', 'start', 'middle', 'end'];
+      const labels = { auto: 'Auto', single: 'Single', start: 'Start', middle: 'Middle', end: 'End' };
+      for (const t of types) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn--sm';
+        btn.textContent = labels[t];
+        const cur = sub.stairType || 'auto';
+        if (cur === t) btn.classList.add('btn--active');
+        btn.addEventListener('click', () => set({ stairType: t }));
+        row.appendChild(btn);
+      }
+      g.appendChild(row);
+    }
+  }));
+
   // Labels — text + colour per line.
   bodyEl.appendChild(group('Labels', (g) => {
     if (sub.labels.length === 0) sub.labels.push({ text: '', color: defaultLabelColor(0) });
@@ -697,6 +1094,18 @@ function renderSubcellEditor() {
     });
     g.appendChild(add);
   }));
+
+  // Printer accessory on subcell — options only when the printer is on
+  const subPrinter = printerSection(sub, (patch) => {
+    updateSubcell(current.r, current.c, current.sub, patch);
+    renderSubcellEditor();
+  }, (mutate) => {
+    // Live edit: mutate the printer in place and emit, no re-render (keeps caret).
+    const s = subCur();
+    if (s && s.printer) mutate(s.printer);
+    updateSubcell(current.r, current.c, current.sub, {});
+  });
+  if (subPrinter) bodyEl.appendChild(subPrinter);
 
   const foot = document.createElement('div');
   foot.className = 'editor__foot';
@@ -747,14 +1156,14 @@ function subLabelRow(line, index) {
   const color = document.createElement('input');
   color.type = 'color';
   color.className = 'field__input field__input--color erow__color';
-  color.value = line.color || DEFAULTS.labelColor;
+  setColorInput(color, line.color || DEFAULTS.labelColor);
   bindColorInput(color, () => {
     const s = subCur();
-    if (s && s.labels[index]) { s.labels[index].color = color.value; updateSubcell(current.r, current.c, current.sub, {}); }
+    if (s && s.labels[index]) { s.labels[index].color = colorOf(color); updateSubcell(current.r, current.c, current.sub, {}); }
   });
   const del = document.createElement('button');
   del.type = 'button';
-  del.className = 'btn btn--icon btn--ghost';
+  del.className = 'btn btn--icon btn--ghost erow__del';
   del.textContent = '✕';
   del.setAttribute('aria-label', `Remove label line ${index + 1}`);
   del.addEventListener('click', () => {
@@ -991,11 +1400,11 @@ function bulkLabelRow(keys, index) {
   color.type = 'color';
   color.className = 'field__input field__input--color erow__color';
   color.value = seedLineColor(keys, index);
-  bindColorInput(color, () => setLineColorForCells(keys, index, color.value));
+  bindColorInput(color, () => setLineColorForCells(keys, index, colorOf(color)));
 
   const del = document.createElement('button');
   del.type = 'button';
-  del.className = 'btn btn--icon btn--ghost';
+  del.className = 'btn btn--icon btn--ghost erow__del';
   del.textContent = '✕';
   del.setAttribute('aria-label', `Remove label line ${index + 1} from all selected`);
   del.addEventListener('click', () => {
@@ -1020,11 +1429,12 @@ function labelGrip(title) {
 /** Drag a grip up or down the label list to reorder. `kind` decides what
  *  travels: the whole line, or only its colour. Same pointer-drag shape as the
  *  grid's move handle — press, track the nearest row, apply on release. */
-function attachLabelDrag(handle, index, kind) {
+function attachLabelDrag(handle, index, kind, cfg) {
   let drag = null;
+  const listId = (cfg && cfg.listId) || 'label-list';
 
   handle.addEventListener('pointerdown', (e) => {
-    const list = document.getElementById('label-list');
+    const list = document.getElementById(listId);
     const rows = list ? [...list.children] : [];
     if (rows.length < 2) return;
     e.preventDefault();
@@ -1052,7 +1462,10 @@ function attachLabelDrag(handle, index, kind) {
     drag.rows.forEach((el) =>
       el.classList.remove('erow--dragging', 'erow--dragging-color', 'erow--drop'));
     drag = null;
-    if (to === index || !current) return;
+    if (to === index) return;
+    // A caller (e.g. printer labels) can own the reorder + refresh.
+    if (cfg && cfg.apply) { cfg.apply(index, to, kind); return; }
+    if (!current) return;
     const moved = kind === 'color'
       ? moveLabelColor(current.r, current.c, index, to)
       : moveLabelLine(current.r, current.c, index, to);
@@ -1117,16 +1530,16 @@ function labelRow(line, index) {
   const color = document.createElement('input');
   color.type = 'color';
   color.className = 'field__input field__input--color erow__color';
-  color.value = line.color || DEFAULTS.labelColor;
+  setColorInput(color, line.color || DEFAULTS.labelColor);
   bindColorInput(color, () => {
     const cell = getCell(current.r, current.c);
-    cell.labels[index].color = color.value;
+    cell.labels[index].color = colorOf(color);
     updateCell(current.r, current.c, {});
   });
 
   const del = document.createElement('button');
   del.type = 'button';
-  del.className = 'btn btn--icon btn--ghost';
+  del.className = 'btn btn--icon btn--ghost erow__del';
   del.textContent = '✕';
   del.setAttribute('aria-label', 'Remove label line');
   del.addEventListener('click', () => {
@@ -1158,7 +1571,7 @@ function colorRow(label, value, onChange) {
   color.type = 'color';
   color.className = 'field__input field__input--color';
   color.value = value;
-  bindColorInput(color, () => onChange(color.value));
+  bindColorInput(color, () => onChange(colorOf(color)));
   row.append(span, color);
   return row;
 }
@@ -1382,9 +1795,12 @@ function swatch(label, value, onChange) {
   const input = document.createElement('input');
   input.type = 'color';
   input.className = 'defaults__swatch';
-  input.value = value;
+  // A FILL is the one colour that cannot be nothing — an empty square already
+  // says that — so fills opt out of the picker's Transparent choice.
+  if (/fill/i.test(label)) input.dataset.noTransparent = '1';
+  setColorInput(input, value);
   input.setAttribute('aria-label', label);
-  bindColorInput(input, () => onChange(input.value));
+  bindColorInput(input, () => onChange(colorOf(input)));
   item.append(name, input);
   return item;
 }

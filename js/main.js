@@ -39,15 +39,16 @@ const DEFAULT_COLOR_INPUTS = {
   fill: 'def-fill', border: 'def-border', iconColor: 'def-icon',
   labelColor: 'def-label', labelColor2: 'def-label2',
   tableColor: 'def-table', tableBorder: 'def-table-border',
+  wallFill: 'def-wall-fill', wallBorder: 'def-wall-border',
 };
 for (const [key, id] of Object.entries(DEFAULT_COLOR_INPUTS)) {
   const el = document.getElementById(id);
-  el.value = state.defaults[key];
-  bindColorInput(el, () => setDefault(key, el.value));
+  setColorInput(el, state.defaults[key]);
+  bindColorInput(el, () => setDefault(key, colorOf(el)));
 }
 function reflectDefaults() {
   for (const [key, id] of Object.entries(DEFAULT_COLOR_INPUTS)) {
-    document.getElementById(id).value = state.defaults[key];
+    setColorInput(document.getElementById(id), state.defaults[key]);
   }
   reflectIconFillDefault();
 }
@@ -81,6 +82,7 @@ initSettings();
 initPaperControls();
 initOrientationControls();
 initTables();
+initWalls();
 initFilters();
 initRows();
 initInsertGuides(document.getElementById('stage'));
@@ -91,11 +93,6 @@ trueSizeBtn.addEventListener('click', () => toggleTrueSizes());
 subscribe(() => trueSizeBtn.setAttribute('aria-pressed', String(state.showTrueSizes)));
 document.getElementById('btn-reset-sizes').addEventListener('click', () => resetLineSizes());
 
-// Clear Grid empties every square. Non-destructive — labels and colors stay put
-// — but it is a big sweep, so confirm first.
-document.getElementById('btn-empty-all').addEventListener('click', () => {
-  if (confirm('Empty every square on the grid? Labels and colors are kept.')) clearGrid();
-});
 
 // ---- Toolbar actions -------------------------------------------------------
 document.getElementById('btn-preview').addEventListener('click', showPreview);
