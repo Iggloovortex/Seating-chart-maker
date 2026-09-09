@@ -194,15 +194,29 @@ and push it; don't stack new work directly on `main`.
 - **2-column labels** for the KVM and Dual Monitor icons — a per-row optional 2nd
   column, activating when any row has 2nd-column content. Touches the label data
   model, editor, both renderers, and TSV. (Scoped, not started.)
-- **Table creation rework (C1–C4):** build tables from the *shape* of the
-  selected squares (`cellKeys` becomes the shape; `footprintOf` stays the bounding
-  box for handles/hit-testing); diagonal drag through the same turned-rectangle
-  test `tableCoverage` uses; wire the still-inert **Merge** button
-  (`#btn-table-merge`) to union picked tables / build from selected squares; a
-  30%-black selection underlay beneath the table with per-square tiles scaling
-  out (respect `prefers-reduced-motion`). Open question: once a table can be an
-  L/T, does "rotate 45°" turn the shape's cells or the bounding box? (Recommend
-  the shape's cells.)
+- **Table creation rework (C1–C4):**
+  - **C1 shape-based tables — DONE.** A table now takes the exact SHAPE of the
+    selection (an L/T/+), not its bounding box. `table.cellKeys` is the shape;
+    `tableCoverage` (js/layout.js) returns those cells directly (unrotated) or,
+    turned, every square whose centre falls in the turned union of member cells
+    (the turned-rectangle test generalised per-cell). `footprintOf` stays the
+    bounding box, still driving the ✕ / resize handles / seat ring. `addTable`
+    (js/state.js) seats only the shape, so the notch of an L stays a free,
+    editable square. Both renderers branch on `keysAreRect`: a full rectangle
+    draws as the old ellipse (round) / rounded-rect (square); a notched shape
+    draws its true outline — filled member cells + an outline of only the edges
+    bordering a non-member, the same recipe merges use (`buildTableShapeSvg` in
+    js/grid.js, the non-rect branch of `drawTable` in js/export.js). **Rotate**
+    turns the WHOLE shape rigidly about its bounding-box centre (it does not
+    re-grid cells) — the shape overhangs its footprint, matching the export.
+    Round vs square has no visible effect on a notched shape (it draws a
+    square-cornered outline like a merge); it only distinguishes rectangles.
+  - **C3 Merge button — DONE** (see the Merge entry above; `#btn-table-merge`).
+  - **C2 diagonal drag — not built.** Would be a new select-mode gesture (there
+    is no drag-to-select today) sweeping an angled band via the turned-rectangle
+    test. Deferred; angled tables are reachable now via the rotate control.
+  - **C4 selection underlay animation — not built.** A 30%-black underlay with
+    per-square tiles scaling out (respect `prefers-reduced-motion`).
 - **Tutorial line + cycling shortcut bar** — move the hint top-left under the
   icons plus a cycling bottom bar. **Blocked** on an edited keyboard-shortcut table.
 - **Exported background colour in Default Colors** — DONE (it lives at the top of

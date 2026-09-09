@@ -1205,32 +1205,51 @@ function renderTables() {
   const zoom = chartZoom();
 
   for (const table of state.tables) {
-    const rects = table.cellKeys
-      .map((k) => chart.querySelector(`.cell[data-key="${CSS.escape(k)}"]`))
-      .filter(Boolean)
-      .map((el) => el.getBoundingClientRect());
-    if (!rects.length) continue;
+    // Each member square's box in the chart's own layout px (the units style.left
+    // uses). We measure the SHAPE's own cells, so the bounding box is the shape's,
+    // not some larger rectangle.
+    const members = table.cellKeys.map((k) => {
+      const [r, c] = parseKey(k);
+      const el = chart.querySelector(`.cell[data-key="${CSS.escape(k)}"]`);
+      if (!el) return null;
+      const b = el.getBoundingClientRect();
+      return { r, c, x: (b.left - chartRect.left) / zoom, y: (b.top - chartRect.top) / zoom,
+               w: b.width / zoom, h: b.height / zoom };
+    }).filter(Boolean);
+    if (!members.length) continue;
 
-    const left = (Math.min(...rects.map((b) => b.left)) - chartRect.left) / zoom;
-    const top = (Math.min(...rects.map((b) => b.top)) - chartRect.top) / zoom;
-    const right = (Math.max(...rects.map((b) => b.right)) - chartRect.left) / zoom;
-    const bottom = (Math.max(...rects.map((b) => b.bottom)) - chartRect.top) / zoom;
+    const left = Math.min(...members.map((m) => m.x));
+    const top = Math.min(...members.map((m) => m.y));
+    const right = Math.max(...members.map((m) => m.x + m.w));
+    const bottom = Math.max(...members.map((m) => m.y + m.h));
+    const border = table.border || state.defaults.tableBorder;
+    const picked = state.tableSelection.has(table.id);
 
-    const inset = 6; // transparent spacing so the shape never touches borders
-    const shape = document.createElement('div');
-    shape.className = `table-shape table-shape--${table.shape}`;
-    if (state.tableSelection.has(table.id)) shape.classList.add('table-shape--picked');
-    shape.style.left = `${left + inset}px`;
-    shape.style.top = `${top + inset}px`;
-    shape.style.width = `${right - left - inset * 2}px`;
-    shape.style.height = `${bottom - top - inset * 2}px`;
-    shape.style.background = table.color;
-    shape.style.borderColor = table.border || state.defaults.tableBorder;
-    // Turned at full size, matching the output: the shape keeps its dimensions
-    // and overhangs its footprint instead of shrinking into it.
-    if (table.rotation) shape.style.transform = `rotate(${table.rotation}deg)`;
-    shape.dataset.tableId = table.id;
-    chart.appendChild(shape);
+    // A plain rectangle draws as an ellipse (round) or rounded rectangle (square)
+    // over its box, held off the borders by an inset. A shape with a notch
+    // (L/T/+) draws its true outline instead, the way a merged desk does.
+    let hL, hT, hR, hB; // where the ✕ and grips sit — inset for a rect, the box edge for a shape
+    if (keysAreRect(table.cellKeys)) {
+      const inset = 6; // transparent spacing so the shape never touches borders
+      hL = left + inset; hT = top + inset; hR = right - inset; hB = bottom - inset;
+      const shape = document.createElement('div');
+      shape.className = `table-shape table-shape--${table.shape}`;
+      if (picked) shape.classList.add('table-shape--picked');
+      shape.style.left = `${hL}px`;
+      shape.style.top = `${hT}px`;
+      shape.style.width = `${hR - hL}px`;
+      shape.style.height = `${hB - hT}px`;
+      shape.style.background = table.color;
+      shape.style.borderColor = border;
+      // Turned at full size, matching the output: the shape keeps its dimensions
+      // and overhangs its footprint instead of shrinking into it.
+      if (table.rotation) shape.style.transform = `rotate(${table.rotation}deg)`;
+      shape.dataset.tableId = table.id;
+      chart.appendChild(shape);
+    } else {
+      hL = left; hT = top; hR = right; hB = bottom;
+      chart.appendChild(buildTableShapeSvg(table, members, { left, top, right, bottom }, border, picked));
+    }
 
     // Remove button — the shape itself is pointer-events:none, so this button
     // (pointer-events:auto) is how a table gets deleted. It sits INSIDE the
@@ -1244,18 +1263,82 @@ function renderTables() {
     del.setAttribute('aria-label', 'Remove table');
     // Everything pinned to a table turns with it, so the x and the grips stay on
     // the corners they belong to rather than hanging where the shape used to be.
-    const spin = spinner(table, left + inset, top + inset, right - inset, bottom - inset);
-    const dp = spin(right - inset - TABLE_BADGE / 2 - BADGE_PAD, top + inset + TABLE_BADGE / 2 + BADGE_PAD);
+    const spin = spinner(table, hL, hT, hR, hB);
+    const dp = spin(hR - TABLE_BADGE / 2 - BADGE_PAD, hT + TABLE_BADGE / 2 + BADGE_PAD);
     del.style.left = `${dp.x - TABLE_BADGE / 2}px`;
     del.style.top = `${dp.y - TABLE_BADGE / 2}px`;
     del.addEventListener('click', (e) => { e.stopPropagation(); removeTable(table.id); });
     chart.appendChild(del);
 
     // A picked table can be re-shaped by its own edges.
-    if (state.tableSelection.has(table.id) && typeof isSelectMode === 'function' && isSelectMode()) {
-      addResizeHandles(table, left + inset, top + inset, right - inset, bottom - inset, spin);
+    if (picked && typeof isSelectMode === 'function' && isSelectMode()) {
+      addResizeHandles(table, hL, hT, hR, hB, spin);
     }
   }
+}
+
+/** A non-rectangular table (L/T/+) drawn as its true outline: every member cell
+ *  filled and the gaps between members bridged, then only the edges that border a
+ *  non-member outlined — the same recipe a merged desk uses (renderMerges). The
+ *  whole shape turns rigidly about the table's centre, matching the export. */
+function buildTableShapeSvg(table, members, bounds, border, picked) {
+  const has = new Set(members.map((m) => keyOf(m.r, m.c)));
+  const hasCell = (r, c) => has.has(keyOf(r, c));
+  const g = CELL_GAP / 2;
+  const exp = members.map((b) => ({
+    r: b.r, c: b.c,
+    x0: b.x - (hasCell(b.r, b.c - 1) ? g : 0),
+    y0: b.y - (hasCell(b.r - 1, b.c) ? g : 0),
+    x1: b.x + b.w + (hasCell(b.r, b.c + 1) ? g : 0),
+    y1: b.y + b.h + (hasCell(b.r + 1, b.c) ? g : 0),
+  }));
+  const oLeft = Math.min(...exp.map((e) => e.x0));
+  const oTop = Math.min(...exp.map((e) => e.y0));
+  const oRight = Math.max(...exp.map((e) => e.x1));
+  const oBottom = Math.max(...exp.map((e) => e.y1));
+
+  const svg = document.createElementNS(MERGE_SVGNS, 'svg');
+  svg.setAttribute('class', 'table-poly' + (picked ? ' table-shape--picked' : ''));
+  svg.dataset.tableId = table.id;
+  svg.style.left = `${oLeft}px`;
+  svg.style.top = `${oTop}px`;
+  svg.setAttribute('width', oRight - oLeft);
+  svg.setAttribute('height', oBottom - oTop);
+
+  for (const e of exp) {
+    const rect = document.createElementNS(MERGE_SVGNS, 'rect');
+    rect.setAttribute('x', e.x0 - oLeft);
+    rect.setAttribute('y', e.y0 - oTop);
+    rect.setAttribute('width', e.x1 - e.x0);
+    rect.setAttribute('height', e.y1 - e.y0);
+    rect.setAttribute('fill', table.color);
+    svg.appendChild(rect);
+  }
+  const sample = members[0];
+  const lw = Math.max(1.5, Math.min(sample.w, sample.h) * 0.03);
+  for (const e of exp) {
+    const x0 = e.x0 - oLeft, y0 = e.y0 - oTop, x1 = e.x1 - oLeft, y1 = e.y1 - oTop;
+    const seg = (a1, b1, a2, b2) => {
+      const l = document.createElementNS(MERGE_SVGNS, 'line');
+      l.setAttribute('x1', a1); l.setAttribute('y1', b1); l.setAttribute('x2', a2); l.setAttribute('y2', b2);
+      l.setAttribute('stroke', border); l.setAttribute('stroke-width', lw); l.setAttribute('stroke-linecap', 'square');
+      svg.appendChild(l);
+    };
+    if (!hasCell(e.r - 1, e.c)) seg(x0, y0, x1, y0);
+    if (!hasCell(e.r, e.c + 1)) seg(x1, y0, x1, y1);
+    if (!hasCell(e.r + 1, e.c)) seg(x0, y1, x1, y1);
+    if (!hasCell(e.r, e.c - 1)) seg(x0, y0, x0, y1);
+  }
+
+  // Spin about the shape's own centre (its cell bounding box), so the ✕ and grips
+  // — placed from the same box — stay on their corners as it turns.
+  if (table.rotation) {
+    const cx = (bounds.left + bounds.right) / 2 - oLeft;
+    const cy = (bounds.top + bounds.bottom) / 2 - oTop;
+    svg.style.transformOrigin = `${cx}px ${cy}px`;
+    svg.style.transform = `rotate(${table.rotation}deg)`;
+  }
+  return svg;
 }
 
 // ---------------------------------------------------------------- merged squares

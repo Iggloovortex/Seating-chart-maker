@@ -1157,29 +1157,56 @@ function tableRect(table, rectOf) {
 function drawTable(ctx, table, rectOf) {
   const box = tableRect(table, rectOf);
   if (!box) return;
-  const { x, y, w, h } = box;
   const rot = table.rotation || 0;
+  const fill = table.color || '#8d6e63';
+  const border = table.border || state.defaults.tableBorder;
 
   ctx.save();
   if (rot) {
-    // Spin about the table's own centre at full size — a 2x8 table turned 45
-    // degrees is still a 2x8 table, so it overhangs its footprint rather than
-    // shrinking to fit inside it.
-    ctx.translate(x + w / 2, y + h / 2);
+    // Spin about the table's own centre at full size — a shape turned 45 degrees
+    // keeps its dimensions and overhangs its footprint rather than shrinking to
+    // fit inside it. The pivot is the shape's bounding-box centre.
+    const cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+    ctx.translate(cx, cy);
     ctx.rotate((rot * Math.PI) / 180);
-    ctx.translate(-(x + w / 2), -(y + h / 2));
+    ctx.translate(-cx, -cy);
   }
-  ctx.fillStyle = table.color || '#8d6e63';
-  ctx.lineWidth = Math.max(1, Math.min(w, h) * 0.02);
-  ctx.strokeStyle = table.border || state.defaults.tableBorder;
-  if (table.shape === 'round') {
-    ctx.beginPath();
-    ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = border;
+
+  if (keysAreRect(table.cellKeys)) {
+    // A plain rectangle: an ellipse (round) or rounded rectangle (square) over
+    // the inset box.
+    const { x, y, w, h } = box;
+    ctx.lineWidth = Math.max(1, Math.min(w, h) * 0.02);
+    if (table.shape === 'round') {
+      ctx.beginPath();
+      ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      roundRect(ctx, x, y, w, h, Math.min(w, h) * 0.08);
+      ctx.fill();
+      ctx.stroke();
+    }
   } else {
-    roundRect(ctx, x, y, w, h, Math.min(w, h) * 0.08);
-    ctx.fill();
+    // A shape with a notch (L/T/+): fill every member cell (the export has no
+    // gaps, so they read as one solid desk) and outline only the edges that
+    // border a non-member — the same recipe drawMerge uses.
+    const has = new Set(table.cellKeys);
+    const hasCell = (r, c) => has.has(keyOf(r, c));
+    const rects = table.cellKeys.map((k) => { const [r, c] = parseKey(k); return rectOf(r, c); });
+    for (const b of rects) ctx.fillRect(b.x - 0.5, b.y - 0.5, b.w + 1, b.h + 1);
+    ctx.lineWidth = Math.max(1, Math.min(rects[0].w, rects[0].h) * 0.03);
+    ctx.beginPath();
+    for (const k of table.cellKeys) {
+      const [r, c] = parseKey(k);
+      const b = rectOf(r, c);
+      if (!hasCell(r - 1, c)) { ctx.moveTo(b.x, b.y); ctx.lineTo(b.x + b.w, b.y); }
+      if (!hasCell(r, c + 1)) { ctx.moveTo(b.x + b.w, b.y); ctx.lineTo(b.x + b.w, b.y + b.h); }
+      if (!hasCell(r + 1, c)) { ctx.moveTo(b.x, b.y + b.h); ctx.lineTo(b.x + b.w, b.y + b.h); }
+      if (!hasCell(r, c - 1)) { ctx.moveTo(b.x, b.y); ctx.lineTo(b.x, b.y + b.h); }
+    }
     ctx.stroke();
   }
   ctx.restore();

@@ -1076,6 +1076,15 @@ body {
 }
 .table-shape--round { border-radius: 999px; }
 .table-shape--square { border-radius: 10px; }
+/* A shaped (L/T/+) table is drawn as an SVG outline instead of a bordered box,
+   so it gets its own base rule — same see-through look as .table-shape, without
+   the CSS border (the outline is painted into the SVG). */
+.table-poly {
+  position: absolute;
+  pointer-events: none;
+  z-index: 1;
+  opacity: .8;
+}
 
 /* Corner grab handle for moving the selection. Sits above the insert guides so
    a + button at the grid corner can never swallow the drag. */

@@ -434,32 +434,41 @@ function layoutRects({ wUnits, hUnits }, unit, originX, originY) {
   return rects;
 }
 
-/** The squares a table covers. Sitting square on the grid that is simply its
- *  footprint; turned, it is every square whose centre falls inside the turned
- *  shape — the rough outline the table now occupies.
+/** True when a set of "r,c" keys exactly fills its bounding box — i.e. the shape
+ *  is a plain rectangle, not an L/T/+ with a notch. Both renderers use this to
+ *  pick the simple ellipse/rounded-rect path over the drawn-outline one. */
+function keysAreRect(cellKeys) {
+  const fp = footprintOf(cellKeys);
+  return cellKeys.length === (fp.maxR - fp.minR + 1) * (fp.maxC - fp.minC + 1);
+}
+
+/** The squares a table covers. Sitting square on the grid it is simply the
+ *  table's own SHAPE — the exact squares selected (an L/T/+ keeps its notch, so
+ *  a gap stays a free square rather than being swallowed). Turned, it is every
+ *  square whose centre falls inside the turned shape — the rough outline the
+ *  table now occupies.
  *
- *  `cellKeys` stays the table's BASE rectangle, which is what the shape is drawn
+ *  `cellKeys` stays the table's BASE shape, which is what the outline is drawn
  *  from. Coverage is derived, never stored, so rotating cannot feed its own
  *  result back in and grow the table each time. */
 function tableCoverage(table) {
-  const fp = footprintOf(table.cellKeys);
   const rot = ((table.rotation || 0) % 360 + 360) % 360;
-  const keys = [];
-  if (!rot) {
-    for (let r = fp.minR; r <= fp.maxR; r++)
-      for (let c = fp.minC; c <= fp.maxC; c++) keys.push(keyOf(r, c));
-    return keys;
-  }
+  if (!rot) return [...table.cellKeys];
 
-  // Work in cell units: the rectangle spans [minC, maxC+1] x [minR, maxR+1].
+  const fp = footprintOf(table.cellKeys);
+  const members = new Set(table.cellKeys);
+  const keys = [];
+  // Work in cell units: the base shape lives on the grid at integer cells, its
+  // bounding box spanning [minC, maxC+1] x [minR, maxR+1].
   const cx = (fp.minC + fp.maxC + 1) / 2, cy = (fp.minR + fp.maxR + 1) / 2;
   const hw = (fp.maxC + 1 - fp.minC) / 2, hh = (fp.maxR + 1 - fp.minR) / 2;
-  // Turn each square's centre BACK into the rectangle's own frame, where the
-  // test is just a pair of comparisons.
+  // Turn each square's centre BACK into the base shape's own frame, then ask
+  // which base cell it lands in — so the test is the union of the member cells,
+  // not just their bounding rectangle.
   const rad = (-rot * Math.PI) / 180;
   const cos = Math.cos(rad), sin = Math.sin(rad);
 
-  // Only squares inside the turned rectangle's bounding box can qualify.
+  // Only squares inside the turned bounding box can qualify.
   const ac = Math.abs(Math.cos((rot * Math.PI) / 180));
   const as = Math.abs(Math.sin((rot * Math.PI) / 180));
   const spanX = hw * ac + hh * as, spanY = hw * as + hh * ac;
@@ -467,9 +476,8 @@ function tableCoverage(table) {
   for (let r = lo(cy - spanY); r <= Math.ceil(cy + spanY) && r < state.grid.rows; r++) {
     for (let c = lo(cx - spanX); c <= Math.ceil(cx + spanX) && c < state.grid.cols; c++) {
       const px = c + 0.5 - cx, py = r + 0.5 - cy;
-      if (Math.abs(px * cos - py * sin) <= hw && Math.abs(px * sin + py * cos) <= hh) {
-        keys.push(keyOf(r, c));
-      }
+      const bx = (px * cos - py * sin) + cx, by = (px * sin + py * cos) + cy;
+      if (members.has(keyOf(Math.floor(by), Math.floor(bx)))) keys.push(keyOf(r, c));
     }
   }
   return keys;

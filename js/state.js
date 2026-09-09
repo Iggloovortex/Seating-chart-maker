@@ -1238,13 +1238,10 @@ function addTable(shape, color) {
                   border: state.defaults.tableBorder,
                   rotation: 0 };
   state.tables.push(table);
-  // A table seats everything under it: the shape covers its whole footprint, so
-  // every square in that block belongs to the table whether it was selected or
-  // not. Without this a gap in the selection would punch a hole in the table.
-  const fp = footprintOf(cellKeys);
-  for (let r = fp.minR; r <= fp.maxR; r++) {
-    for (let c = fp.minC; c <= fp.maxC; c++) getCell(r, c).enabled = true;
-  }
+  // A table takes the exact SHAPE of the selection, so it seats only the squares
+  // it actually covers. A gap in the selection (the notch of an L/T/+) stays a
+  // free square rather than being filled in.
+  for (const k of cellKeys) { const [r, c] = parseKey(k); getCell(r, c).enabled = true; }
   clearManualSelection();
   emit();
   return table;
