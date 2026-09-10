@@ -1383,10 +1383,15 @@ function renderMerges() {
     // NOT inset; rounding is off (rad 0) to keep its squared, fused look — the
     // tracer is shared with tables purely so both get clean borders.
     const rectOf = (r, c) => { const v = rects.get(keyOf(r, c)); return v ? { x: v.left, y: v.top, w: v.width, h: v.height } : null; };
-    const lw = Math.max(1.5, Math.min(vals[0].width, vals[0].height) * 0.03);
-    const pad = Math.ceil(lw) + 1; // room for the stroke, which straddles the edge
+    // Match a plain grid cell: a 1px border and 6px rounded corners. The half-px
+    // inset keeps the 1px stroke inside the outer edge, the way a cell's
+    // border-box border sits inside its own rect.
+    const lw = 1;
+    const rad = 6;
+    const inset = 0.5;
+    const pad = 2;
     const oLeft = left - pad, oTop = top - pad;
-    const d = roundedLoopPath(cellShapeLoops(merge.keys, rectOf, 0), 0, oLeft, oTop);
+    const d = roundedLoopPath(cellShapeLoops(merge.keys, rectOf, inset), rad, oLeft, oTop);
 
     const svg = document.createElementNS(MERGE_SVGNS, 'svg');
     svg.setAttribute('class', 'merge-shape');
@@ -1399,7 +1404,7 @@ function renderMerges() {
     path.setAttribute('fill', fill);
     path.setAttribute('stroke', border);
     path.setAttribute('stroke-width', lw);
-    path.setAttribute('stroke-linejoin', 'miter');
+    path.setAttribute('stroke-linejoin', 'round');
     path.setAttribute('fill-rule', 'evenodd');
     svg.appendChild(path);
     chart.appendChild(svg);
