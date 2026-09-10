@@ -1316,18 +1316,25 @@ function buildTableShapeSvg(table, members, bounds, border, picked) {
   }
   const sample = members[0];
   const lw = Math.max(1.5, Math.min(sample.w, sample.h) * 0.03);
-  for (const e of exp) {
-    const x0 = e.x0 - oLeft, y0 = e.y0 - oTop, x1 = e.x1 - oLeft, y1 = e.y1 - oTop;
+  // The outline extends across the FULL gap at a bridged (member-adjacent) edge —
+  // not the half-gap the fill uses — so perpendicular border runs overlap and
+  // meet exactly at concave (inner) corners instead of leaving a hook and a gap.
+  const og = CELL_GAP;
+  for (const m of members) {
+    const x0 = (m.x - (hasCell(m.r, m.c - 1) ? og : 0)) - oLeft;
+    const y0 = (m.y - (hasCell(m.r - 1, m.c) ? og : 0)) - oTop;
+    const x1 = (m.x + m.w + (hasCell(m.r, m.c + 1) ? og : 0)) - oLeft;
+    const y1 = (m.y + m.h + (hasCell(m.r + 1, m.c) ? og : 0)) - oTop;
     const seg = (a1, b1, a2, b2) => {
       const l = document.createElementNS(MERGE_SVGNS, 'line');
       l.setAttribute('x1', a1); l.setAttribute('y1', b1); l.setAttribute('x2', a2); l.setAttribute('y2', b2);
       l.setAttribute('stroke', border); l.setAttribute('stroke-width', lw); l.setAttribute('stroke-linecap', 'square');
       svg.appendChild(l);
     };
-    if (!hasCell(e.r - 1, e.c)) seg(x0, y0, x1, y0);
-    if (!hasCell(e.r, e.c + 1)) seg(x1, y0, x1, y1);
-    if (!hasCell(e.r + 1, e.c)) seg(x0, y1, x1, y1);
-    if (!hasCell(e.r, e.c - 1)) seg(x0, y0, x0, y1);
+    if (!hasCell(m.r - 1, m.c)) seg(x0, y0, x1, y0);
+    if (!hasCell(m.r, m.c + 1)) seg(x1, y0, x1, y1);
+    if (!hasCell(m.r + 1, m.c)) seg(x0, y1, x1, y1);
+    if (!hasCell(m.r, m.c - 1)) seg(x0, y0, x0, y1);
   }
 
   // Spin about the shape's own centre (its cell bounding box), so the ✕ and grips
