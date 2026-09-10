@@ -1190,23 +1190,23 @@ function drawTable(ctx, table, rectOf) {
       ctx.stroke();
     }
   } else {
-    // A shape with a notch (L/T/+): fill every member cell (the export has no
-    // gaps, so they read as one solid desk) and outline only the edges that
-    // border a non-member — the same recipe drawMerge uses.
-    const has = new Set(table.cellKeys);
-    const hasCell = (r, c) => has.has(keyOf(r, c));
-    const rects = table.cellKeys.map((k) => { const [r, c] = parseKey(k); return rectOf(r, c); });
-    for (const b of rects) ctx.fillRect(b.x - 0.5, b.y - 0.5, b.w + 1, b.h + 1);
-    ctx.lineWidth = Math.max(1, Math.min(rects[0].w, rects[0].h) * 0.03);
+    // A shape with a notch (L/T/+): one rounded outline, inset from its cells
+    // with rounded corners, matching the rectangle branch above (and the grid).
+    const sample = rectOf(...parseKey(table.cellKeys[0]));
+    const cm = Math.min(sample.w, sample.h);
+    const inset = cm * 0.06;
+    const rad = table.shape === 'round' ? cm * 0.5 : cm * 0.15;
+    ctx.lineWidth = Math.max(1, cm * 0.02);
     ctx.beginPath();
-    for (const k of table.cellKeys) {
-      const [r, c] = parseKey(k);
-      const b = rectOf(r, c);
-      if (!hasCell(r - 1, c)) { ctx.moveTo(b.x, b.y); ctx.lineTo(b.x + b.w, b.y); }
-      if (!hasCell(r, c + 1)) { ctx.moveTo(b.x + b.w, b.y); ctx.lineTo(b.x + b.w, b.y + b.h); }
-      if (!hasCell(r + 1, c)) { ctx.moveTo(b.x, b.y + b.h); ctx.lineTo(b.x + b.w, b.y + b.h); }
-      if (!hasCell(r, c - 1)) { ctx.moveTo(b.x, b.y); ctx.lineTo(b.x, b.y + b.h); }
+    for (const loop of cellShapeLoops(table.cellKeys, rectOf, inset)) {
+      emitRoundedLoop(loop, rad, {
+        move: (x, y) => ctx.moveTo(x, y),
+        line: (x, y) => ctx.lineTo(x, y),
+        quad: (cx, cy, x, y) => ctx.quadraticCurveTo(cx, cy, x, y),
+        close: () => ctx.closePath(),
+      });
     }
+    ctx.fill('evenodd');
     ctx.stroke();
   }
   ctx.restore();

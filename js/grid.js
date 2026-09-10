@@ -1277,65 +1277,36 @@ function renderTables() {
   }
 }
 
-/** A non-rectangular table (L/T/+) drawn as its true outline: every member cell
- *  filled and the gaps between members bridged, then only the edges that border a
- *  non-member outlined — the same recipe a merged desk uses (renderMerges). The
- *  whole shape turns rigidly about the table's centre, matching the export. */
+/** A non-rectangular table (L/T/+) drawn as ONE rounded outline, inset from its
+ *  cells with rounded corners and the same border weight as a plain rectangular
+ *  table — so the two read as the same object. The boundary is traced once
+ *  (cellShapeLoops) and rounded (emitRoundedLoop); the whole shape turns rigidly
+ *  about the table's centre, matching the export. */
 function buildTableShapeSvg(table, members, bounds, border, picked) {
-  const has = new Set(members.map((m) => keyOf(m.r, m.c)));
-  const hasCell = (r, c) => has.has(keyOf(r, c));
-  const g = CELL_GAP / 2;
-  const exp = members.map((b) => ({
-    r: b.r, c: b.c,
-    x0: b.x - (hasCell(b.r, b.c - 1) ? g : 0),
-    y0: b.y - (hasCell(b.r - 1, b.c) ? g : 0),
-    x1: b.x + b.w + (hasCell(b.r, b.c + 1) ? g : 0),
-    y1: b.y + b.h + (hasCell(b.r + 1, b.c) ? g : 0),
-  }));
-  const oLeft = Math.min(...exp.map((e) => e.x0));
-  const oTop = Math.min(...exp.map((e) => e.y0));
-  const oRight = Math.max(...exp.map((e) => e.x1));
-  const oBottom = Math.max(...exp.map((e) => e.y1));
+  const rectOf = tableCellRectFn(members);
+  const cw = members[0].w, ch = members[0].h;
+  const inset = 6; // breathing room, matching the .table-shape rectangle inset
+  const rad = table.shape === 'round' ? Math.min(cw, ch) * 0.5 : Math.min(cw, ch) * 0.15;
+  const oLeft = bounds.left, oTop = bounds.top;
+
+  const d = roundedLoopPath(cellShapeLoops(table.cellKeys, rectOf, inset), rad, oLeft, oTop);
 
   const svg = document.createElementNS(MERGE_SVGNS, 'svg');
   svg.setAttribute('class', 'table-poly' + (picked ? ' table-shape--picked' : ''));
   svg.dataset.tableId = table.id;
   svg.style.left = `${oLeft}px`;
   svg.style.top = `${oTop}px`;
-  svg.setAttribute('width', oRight - oLeft);
-  svg.setAttribute('height', oBottom - oTop);
+  svg.setAttribute('width', bounds.right - oLeft);
+  svg.setAttribute('height', bounds.bottom - oTop);
 
-  for (const e of exp) {
-    const rect = document.createElementNS(MERGE_SVGNS, 'rect');
-    rect.setAttribute('x', e.x0 - oLeft);
-    rect.setAttribute('y', e.y0 - oTop);
-    rect.setAttribute('width', e.x1 - e.x0);
-    rect.setAttribute('height', e.y1 - e.y0);
-    rect.setAttribute('fill', table.color);
-    svg.appendChild(rect);
-  }
-  const sample = members[0];
-  const lw = Math.max(1.5, Math.min(sample.w, sample.h) * 0.03);
-  // The outline extends across the FULL gap at a bridged (member-adjacent) edge —
-  // not the half-gap the fill uses — so perpendicular border runs overlap and
-  // meet exactly at concave (inner) corners instead of leaving a hook and a gap.
-  const og = CELL_GAP;
-  for (const m of members) {
-    const x0 = (m.x - (hasCell(m.r, m.c - 1) ? og : 0)) - oLeft;
-    const y0 = (m.y - (hasCell(m.r - 1, m.c) ? og : 0)) - oTop;
-    const x1 = (m.x + m.w + (hasCell(m.r, m.c + 1) ? og : 0)) - oLeft;
-    const y1 = (m.y + m.h + (hasCell(m.r + 1, m.c) ? og : 0)) - oTop;
-    const seg = (a1, b1, a2, b2) => {
-      const l = document.createElementNS(MERGE_SVGNS, 'line');
-      l.setAttribute('x1', a1); l.setAttribute('y1', b1); l.setAttribute('x2', a2); l.setAttribute('y2', b2);
-      l.setAttribute('stroke', border); l.setAttribute('stroke-width', lw); l.setAttribute('stroke-linecap', 'square');
-      svg.appendChild(l);
-    };
-    if (!hasCell(m.r - 1, m.c)) seg(x0, y0, x1, y0);
-    if (!hasCell(m.r, m.c + 1)) seg(x1, y0, x1, y1);
-    if (!hasCell(m.r + 1, m.c)) seg(x0, y1, x1, y1);
-    if (!hasCell(m.r, m.c - 1)) seg(x0, y0, x0, y1);
-  }
+  const path = document.createElementNS(MERGE_SVGNS, 'path');
+  path.setAttribute('d', d);
+  path.setAttribute('fill', table.color);
+  path.setAttribute('stroke', border);
+  path.setAttribute('stroke-width', 2);
+  path.setAttribute('stroke-linejoin', 'round');
+  path.setAttribute('fill-rule', 'evenodd');
+  svg.appendChild(path);
 
   // Spin about the shape's own centre (its cell bounding box), so the ✕ and grips
   // — placed from the same box — stay on their corners as it turns.
@@ -1346,6 +1317,29 @@ function buildTableShapeSvg(table, members, bounds, border, picked) {
     svg.style.transform = `rotate(${table.rotation}deg)`;
   }
   return svg;
+}
+
+/** A rectOf(r,c) over a members[] list (each {r,c,x,y,w,h}), for the shared
+ *  cellShapeLoops tracer. */
+function tableCellRectFn(members) {
+  const byKey = new Map(members.map((m) => [keyOf(m.r, m.c), m]));
+  return (r, c) => byKey.get(keyOf(r, c)) || null;
+}
+
+/** Turn cellShapeLoops output into one SVG path `d` string, rounded and shifted
+ *  into the overlay's own coordinate space (origin oLeft/oTop). */
+function roundedLoopPath(loops, rad, oLeft, oTop) {
+  let d = '';
+  const f = (n) => n.toFixed(2);
+  for (const loop of loops) {
+    emitRoundedLoop(loop.map((p) => ({ x: p.x - oLeft, y: p.y - oTop })), rad, {
+      move: (x, y) => { d += `M${f(x)} ${f(y)}`; },
+      line: (x, y) => { d += `L${f(x)} ${f(y)}`; },
+      quad: (cx, cy, x, y) => { d += `Q${f(cx)} ${f(cy)} ${f(x)} ${f(y)}`; },
+      close: () => { d += 'Z'; },
+    });
+  }
+  return d;
 }
 
 // ---------------------------------------------------------------- merged squares
@@ -1383,53 +1377,31 @@ function renderMerges() {
       continue;
     }
 
-    // Extend each cell's fill across the grid's gap toward member neighbours, so
-    // the block reads as one continuous desk (the export layout has no gaps).
-    const g = CELL_GAP / 2;
-    const exp = vals.map((b) => ({
-      r: b.r, c: b.c,
-      x0: b.left - (plan.has(b.r, b.c - 1) ? g : 0),
-      y0: b.top - (plan.has(b.r - 1, b.c) ? g : 0),
-      x1: b.left + b.width + (plan.has(b.r, b.c + 1) ? g : 0),
-      y1: b.top + b.height + (plan.has(b.r + 1, b.c) ? g : 0),
-    }));
-    const oLeft = Math.min(...exp.map((e) => e.x0));
-    const oTop = Math.min(...exp.map((e) => e.y0));
-    const oRight = Math.max(...exp.map((e) => e.x1));
-    const oBottom = Math.max(...exp.map((e) => e.y1));
+    // One continuous outline traced around the block (cellShapeLoops runs
+    // straight across the grid's gaps, so the L/T/+ reads as one connected desk
+    // and concave corners close cleanly). A merged desk fills its cells, so it is
+    // NOT inset; rounding is off (rad 0) to keep its squared, fused look — the
+    // tracer is shared with tables purely so both get clean borders.
+    const rectOf = (r, c) => { const v = rects.get(keyOf(r, c)); return v ? { x: v.left, y: v.top, w: v.width, h: v.height } : null; };
+    const lw = Math.max(1.5, Math.min(vals[0].width, vals[0].height) * 0.03);
+    const pad = Math.ceil(lw) + 1; // room for the stroke, which straddles the edge
+    const oLeft = left - pad, oTop = top - pad;
+    const d = roundedLoopPath(cellShapeLoops(merge.keys, rectOf, 0), 0, oLeft, oTop);
 
-    // Filled member rects + an outline of only the edges that border a non-member
-    // — the block's outer shape (the rule drawDesk and the export share, so an
-    // L/T/+ reads as one connected desk).
     const svg = document.createElementNS(MERGE_SVGNS, 'svg');
     svg.setAttribute('class', 'merge-shape');
     svg.style.left = `${oLeft}px`;
     svg.style.top = `${oTop}px`;
-    svg.setAttribute('width', oRight - oLeft);
-    svg.setAttribute('height', oBottom - oTop);
-    for (const e of exp) {
-      const rect = document.createElementNS(MERGE_SVGNS, 'rect');
-      rect.setAttribute('x', e.x0 - oLeft);
-      rect.setAttribute('y', e.y0 - oTop);
-      rect.setAttribute('width', e.x1 - e.x0);
-      rect.setAttribute('height', e.y1 - e.y0);
-      rect.setAttribute('fill', fill);
-      svg.appendChild(rect);
-    }
-    const lw = Math.max(1.5, Math.min(vals[0].width, vals[0].height) * 0.03);
-    for (const e of exp) {
-      const x0 = e.x0 - oLeft, y0 = e.y0 - oTop, x1 = e.x1 - oLeft, y1 = e.y1 - oTop;
-      const seg = (a1, b1, a2, b2) => {
-        const l = document.createElementNS(MERGE_SVGNS, 'line');
-        l.setAttribute('x1', a1); l.setAttribute('y1', b1); l.setAttribute('x2', a2); l.setAttribute('y2', b2);
-        l.setAttribute('stroke', border); l.setAttribute('stroke-width', lw); l.setAttribute('stroke-linecap', 'square');
-        svg.appendChild(l);
-      };
-      if (!plan.has(e.r - 1, e.c)) seg(x0, y0, x1, y0);
-      if (!plan.has(e.r, e.c + 1)) seg(x1, y0, x1, y1);
-      if (!plan.has(e.r + 1, e.c)) seg(x0, y1, x1, y1);
-      if (!plan.has(e.r, e.c - 1)) seg(x0, y0, x0, y1);
-    }
+    svg.setAttribute('width', (right - left) + pad * 2);
+    svg.setAttribute('height', (bottom - top) + pad * 2);
+    const path = document.createElementNS(MERGE_SVGNS, 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('fill', fill);
+    path.setAttribute('stroke', border);
+    path.setAttribute('stroke-width', lw);
+    path.setAttribute('stroke-linejoin', 'miter');
+    path.setAttribute('fill-rule', 'evenodd');
+    svg.appendChild(path);
     chart.appendChild(svg);
 
     // Content. A full rectangle lays out centred like a desk; an L/T/+ puts its

@@ -203,14 +203,18 @@ and push it; don't stack new work directly on `main`.
     bounding box, still driving the ✕ / resize handles / seat ring. `addTable`
     (js/state.js) seats only the shape, so the notch of an L stays a free,
     editable square. Both renderers branch on `keysAreRect`: a full rectangle
-    draws as the old ellipse (round) / rounded-rect (square); a notched shape
-    draws its true outline — filled member cells + an outline of only the edges
-    bordering a non-member, the same recipe merges use (`buildTableShapeSvg` in
-    js/grid.js, the non-rect branch of `drawTable` in js/export.js). **Rotate**
-    turns the WHOLE shape rigidly about its bounding-box centre (it does not
-    re-grid cells) — the shape overhangs its footprint, matching the export.
-    Round vs square has no visible effect on a notched shape (it draws a
-    square-cornered outline like a merge); it only distinguishes rectangles.
+    draws as the old ellipse (round) / rounded-rect (square); a notched shape is
+    traced into ONE outline by `cellShapeLoops` (js/layout.js — the shared
+    boundary tracer) and drawn as a single stroked path (`buildTableShapeSvg` in
+    js/grid.js, the non-rect branch of `drawTable` in js/export.js), so the
+    border is one even weight all the way round with no per-edge hooks or gaps at
+    concave corners. A table is inset from its cells with rounded corners
+    (`emitRoundedLoop`). **Merges share the same tracer** (`renderMerges` /
+    `drawMerge`) but draw fused edge-to-edge with square corners (inset 0,
+    radius 0) — the tracer is shared so both features get a clean, uniform
+    border. **Rotate** turns the WHOLE shape rigidly about its bounding-box
+    centre (it does not re-grid cells) — the shape overhangs its footprint,
+    matching the export.
   - **C3 Merge button — DONE** (see the Merge entry above; `#btn-table-merge`).
   - **C2 diagonal drag — not built.** Would be a new select-mode gesture (there
     is no drag-to-select today) sweeping an angled band via the turned-rectangle

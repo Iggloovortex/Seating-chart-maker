@@ -442,6 +442,100 @@ function keysAreRect(cellKeys) {
   return cellKeys.length === (fp.maxR - fp.minR + 1) * (fp.maxC - fp.minC + 1);
 }
 
+/** Trace the outer boundary of a set of "r,c" cells into ordered loops of pixel
+ *  points, inset inward from the cell edges by `inset`. `rectOf(r,c)` gives each
+ *  cell's {x,y,w,h}. Interior seams are skipped, so the loop runs straight across
+ *  the gaps between member cells — the shape reads as one connected block. Shared
+ *  by the table and merge renderers so an L/T/+ is outlined the same way in the
+ *  grid and the export. */
+function cellShapeLoops(cells, rectOf, inset = 0) {
+  const S = new Set(cells);
+  const has = (r, c) => S.has(keyOf(r, c));
+  const colX0 = {}, colX1 = {}, rowY0 = {}, rowY1 = {};
+  for (const k of cells) {
+    const [r, c] = parseKey(k); const b = rectOf(r, c);
+    if (!b) continue;
+    colX0[c] = b.x; colX1[c] = b.x + b.w; rowY0[r] = b.y; rowY1[r] = b.y + b.h;
+  }
+  // Directed boundary edges, walked clockwise around each cell; an edge shared by
+  // two members appears in both directions and cancels, leaving only the outline.
+  const edges = new Map();
+  const addOrCancel = (i, j, i2, j2) => {
+    const rev = `${i2},${j2}|${i},${j}`;
+    if (edges.has(rev)) edges.delete(rev);
+    else edges.set(`${i},${j}|${i2},${j2}`, [i2, j2]);
+  };
+  for (const k of cells) {
+    const [r, c] = parseKey(k);
+    addOrCancel(r, c, r, c + 1);
+    addOrCancel(r, c + 1, r + 1, c + 1);
+    addOrCancel(r + 1, c + 1, r + 1, c);
+    addOrCancel(r + 1, c, r, c);
+  }
+  const nextOf = new Map();
+  for (const [from, to] of edges) nextOf.set(from.split('|')[0], to);
+  // x of a vertical boundary at lattice column j (member to its right → a left
+  // edge, inset right; else a right edge, inset left); y likewise for a row.
+  const toX = (cellRow, j) => (has(cellRow, j) ? colX0[j] + inset : colX1[j - 1] - inset);
+  const toY = (i, cellCol) => (has(i, cellCol) ? rowY0[i] + inset : rowY1[i - 1] - inset);
+
+  const loops = [];
+  const seen = new Set();
+  for (const startKey of nextOf.keys()) {
+    if (seen.has(startKey)) continue;
+    let lat = [];
+    let key = startKey;
+    while (key && !seen.has(key)) {
+      seen.add(key);
+      lat.push(key.split(',').map(Number));
+      const nx = nextOf.get(key);
+      key = nx ? `${nx[0]},${nx[1]}` : null;
+    }
+    if (lat.length < 4) continue;
+    // Drop collinear lattice points, leaving only true 90° corners — each then
+    // has exactly one horizontal and one vertical incident edge.
+    lat = lat.filter(([i, j], idx) => {
+      const [pi, pj] = lat[(idx - 1 + lat.length) % lat.length];
+      const [ni, nj] = lat[(idx + 1) % lat.length];
+      return !((pi === i && ni === i) || (pj === j && nj === j));
+    });
+    const L = lat.length;
+    if (L < 4) continue;
+    const pts = lat.map(([i, j], idx) => {
+      const [pi, pj] = lat[(idx - 1 + L) % L];
+      const [ni, nj] = lat[(idx + 1) % L];
+      let x, y;
+      for (const [ai, aj] of [[pi, pj], [ni, nj]]) {
+        if (aj === j) x = toX(Math.min(ai, i), j);       // vertical edge → x
+        else y = toY(i, Math.min(aj, j));                // horizontal edge → y
+      }
+      return { x, y };
+    });
+    loops.push(pts);
+  }
+  return loops;
+}
+
+/** Emit a closed loop of points as a rounded path through `sink`
+ *  (move/line/quad/close), cutting each corner to radius `rad` (clamped to half
+ *  the shorter adjacent edge). Rounds convex and concave corners alike, so a
+ *  shaped desk reads like the rounded rectangle a plain one already is. */
+function emitRoundedLoop(pts, rad, sink) {
+  const n = pts.length;
+  if (n < 3) return;
+  const D = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const lerp = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+  for (let i = 0; i < n; i++) {
+    const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n];
+    const d01 = D(p0, p1) || 1, d12 = D(p1, p2) || 1;
+    const r = Math.min(rad, d01 / 2, d12 / 2);
+    const A = lerp(p1, p0, r / d01), B = lerp(p1, p2, r / d12);
+    if (i === 0) sink.move(A.x, A.y); else sink.line(A.x, A.y);
+    sink.quad(p1.x, p1.y, B.x, B.y);
+  }
+  sink.close();
+}
+
 /** The squares a table covers. Sitting square on the grid it is simply the
  *  table's own SHAPE — the exact squares selected (an L/T/+ keeps its notch, so
  *  a gap stays a free square rather than being swallowed). Turned, it is every
