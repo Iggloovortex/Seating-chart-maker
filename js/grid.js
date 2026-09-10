@@ -318,22 +318,24 @@ function updateInsertGuides(e) {
 
   hideInsertGuides();
 
-  // Beside the grid but NOT near a line means the pointer is level with the
-  // middle of a row or column, which is where that line's delete button sits.
-  if (inside && !row && !col) {
-    if (near(x, left, right)) {
+  // The delete x sits OUTSIDE the grid, in the margin PAST where the wall slim-bar
+  // reaches, so the two never share ground along the perimeter. It shows when the
+  // pointer is out in that band and level with the middle of a row or column.
+  if (!row && !col) {
+    const delMin = wallGapReach() - CELL_GAP / 2 + 2; // just clear of the wall bar's reach
+    const delMax = LINE_BTN_OUT + INSERT_REACH;       // ...but only out as far as the button
+    const outOf = (v, lo, hi) => (v < lo ? lo - v : v > hi ? v - hi : -1);
+    const withinLine = (v, lo, hi) => v >= lo && v <= hi;
+    const ox = outOf(x, left, right), oy = outOf(y, top, bottom);
+    if (withinLine(y, top, bottom) && ox > delMin && ox <= delMax && rowBs.length > 2) {
       const i = lineAt(rowBs, y);
-      if (i >= 0 && rowBs.length > 2) {
-        placeDelete(rowDelBtn, i,
-          x < (left + right) / 2 ? left - LINE_BTN_OUT : right + LINE_BTN_OUT,
-          (rowBs[i] + rowBs[i + 1]) / 2, 'row');
-      }
-    } else if (near(y, top, bottom)) {
+      if (i >= 0) placeDelete(rowDelBtn, i,
+        x < left ? left - LINE_BTN_OUT : right + LINE_BTN_OUT,
+        (rowBs[i] + rowBs[i + 1]) / 2, 'row');
+    } else if (withinLine(x, left, right) && oy > delMin && oy <= delMax && colBs.length > 2) {
       const i = lineAt(colBs, x);
-      if (i >= 0 && colBs.length > 2) {
-        placeDelete(colDelBtn, i, (colBs[i] + colBs[i + 1]) / 2,
-          y < (top + bottom) / 2 ? top - LINE_BTN_OUT : bottom + LINE_BTN_OUT, 'col');
-      }
+      if (i >= 0) placeDelete(colDelBtn, i, (colBs[i] + colBs[i + 1]) / 2,
+        y < top ? top - LINE_BTN_OUT : bottom + LINE_BTN_OUT, 'col');
     }
     return;
   }
@@ -509,10 +511,12 @@ function initInsertGuides(stageEl) {
     // offers, so the pointer is over it for most of the gesture and it still has
     // to hand over to the next seam along.
     updateWallHint(e);
+    updateTableHover(e);   // reveal the ✕ of whichever table the pointer is over
   });
   stageEl.addEventListener('pointerleave', () => {
     if (!cornerMenuOpen) hideInsertGuides();
     clearWallHover();
+    setHoverTable(null);
   });
   // The menu is modal-ish: anything else you click dismisses it.
   document.addEventListener('pointerdown', (e) => {
@@ -1195,6 +1199,35 @@ function ariaLabel(r, c, data) {
   return `Seat row ${r + 1}, column ${c + 1}${text ? `: ${text}` : ''}`;
 }
 
+// The table whose ✕ is currently revealed, or null. A table's remove button is
+// shown on hover only, so this tracks which one the pointer is over.
+let hoverTableId = null;
+
+/** Reveal the ✕ of the table under the pointer, hiding the rest. Cheap enough to
+ *  run on pointermove: it only toggles `hidden` when the hovered table changes. */
+function updateTableHover(e) {
+  if (!state.tables.length) { setHoverTable(null); return; }
+  // Reaching for a table's own control keeps its ✕ up rather than recomputing.
+  if (e.target.closest && e.target.closest('.table-remove, .table-handle')) return;
+  // Shapes are pointer-events:none, so the cell under the pointer is what's hit;
+  // tableAt maps that covered cell back to its table.
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const cell = el && el.closest ? el.closest('.cell') : null;
+  let id = null;
+  if (cell && cell.dataset.key) {
+    const [r, c] = parseKey(cell.dataset.key);
+    const t = typeof tableAt === 'function' ? tableAt(r, c) : null;
+    if (t) id = t.id;
+  }
+  setHoverTable(id);
+}
+
+function setHoverTable(id) {
+  if (id === hoverTableId) return;
+  hoverTableId = id;
+  chart.querySelectorAll('.table-remove').forEach((b) => { b.hidden = b.dataset.tableId !== id; });
+}
+
 /** Position table shapes over the bounding box of their member cells. */
 function renderTables() {
   if (!state.tables.length) return;
@@ -1258,9 +1291,13 @@ function renderTables() {
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'table-remove';
+    del.dataset.tableId = table.id;
     del.textContent = '✕';
     del.title = 'Remove table';
     del.setAttribute('aria-label', 'Remove table');
+    // Shown on hover only — the ✕ appears for whichever table the pointer is over
+    // (hoverTableId), so it does not clutter every table at rest.
+    del.hidden = table.id !== hoverTableId;
     // Everything pinned to a table turns with it, so the x and the grips stay on
     // the corners they belong to rather than hanging where the shape used to be.
     const spin = spinner(table, hL, hT, hR, hB);
