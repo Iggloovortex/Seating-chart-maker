@@ -86,9 +86,26 @@ async function renderToCanvas(dpi = 300) {
       if (mergeMembers.has(keyOf(r, c))) continue; // drawn by its merge
       const data = peekCell(r, c);
       if (!data) continue;
-      // A split square owns its whole cell and draws its own pieces, so it never
-      // joins a desk block, becomes a seat, or is treated as table-covered.
-      if (data.split && data.subcells) { splits.push({ r, c, data }); continue; }
+      // A split square owns its whole cell and draws its own pieces. Under a
+      // table, though, it behaves like any covered square: only its content
+      // overlays the table (each piece drawn at its spot, no piece boxes).
+      if (data.split && data.subcells) {
+        if (insideAnyFootprint(r, c)) {
+          const cell = rectOf(r, c);
+          const owner = footprints.find(({ fp }) => r >= fp.minR && r <= fp.maxR && c >= fp.minC && c <= fp.maxC);
+          const rot = owner ? (owner.t.rotation || 0) : 0;
+          const { rows: sr, cols: sc } = data.split;
+          const cw = cell.w / sc, ch = cell.h / sr;
+          data.subcells.forEach((sub, i) => {
+            if (!(sub.enabled || hasContent(sub))) return;
+            const rr = Math.floor(i / sc), cc = i % sc;
+            covered.push({ r, c, data: sub,
+              geo: { cx: cell.x + cc * cw + cw / 2, cy: cell.y + rr * ch + ch / 2, w: cw, h: ch, tableRot: rot } });
+          });
+          continue;
+        }
+        splits.push({ r, c, data }); continue;
+      }
       if (!data.enabled) continue;
       if (insideAnyFootprint(r, c)) { covered.push({ r, c, data }); continue; }
       const st = seatTableOf(r, c);
@@ -106,7 +123,10 @@ async function renderToCanvas(dpi = 300) {
     if (!data) continue;
     if (mergeIsEmpty(merge)) continue; // an emptied merge draws nothing, like an empty square
     const plan = mergePlan(merge);
-    mergeDraws.push({ merge, data, plan });
+    // A merge whose cells fall under a table is covered: like a covered square,
+    // only its content overlays the table (no desk box).
+    const coveredByTable = merge.keys.some((k) => { const [r, c] = parseKey(k); return insideAnyFootprint(r, c); });
+    mergeDraws.push({ merge, data, plan, coveredByTable });
     // A split merge lays out its own pieces (drawSplit), so it doesn't join the
     // chart-wide desk text plan.
     const [ar, ac] = parseKey(mergeAnchorKey(merge));
@@ -145,7 +165,7 @@ async function renderToCanvas(dpi = 300) {
     }
   }
   for (const s of seats) s.geo = seatGeometry(rectOf, s);
-  for (const v of covered) v.geo = coveredGeometry(rectOf, v, footprints);
+  for (const v of covered) if (!v.geo) v.geo = coveredGeometry(rectOf, v, footprints);
   // Furniture labels fill the square's empty space, so plan their size against
   // that space, not the small furniture piece: a chair/single-server uses its
   // labelBox; a multi-server rack uses one slab (full width, 1/N of the height).
@@ -504,7 +524,7 @@ function drawDesk(ctx, rectOf, { r, c, data }, deskSet, imgCache, plan) {
  *  single square centred in the block; a 'poly' merge fills the exact shape of
  *  the group (an L, T or +) with a single outline, its labels across the widest
  *  run and its icon in the slimmest cell. Content contrasts against the fill. */
-function drawMerge(ctx, rectOf, { merge, data, plan }, imgCache, out) {
+function drawMerge(ctx, rectOf, { merge, data, plan, coveredByTable }, imgCache, out) {
   const fill = data.fill || '#dbe7ff';
   const border = data.border || '#2f6feb';
   const rectFor = (k) => { const [r, c] = parseKey(k); return rectOf(r, c); };
@@ -513,6 +533,13 @@ function drawMerge(ctx, rectOf, { merge, data, plan }, imgCache, out) {
   const top = Math.min(...rects.map((b) => b.y));
   const right = Math.max(...rects.map((b) => b.x + b.w));
   const bottom = Math.max(...rects.map((b) => b.y + b.h));
+
+  // Under a table the desk is not drawn — only its content overlays the table,
+  // like any covered square.
+  if (coveredByTable) {
+    drawContent(ctx, (left + right) / 2, (top + bottom) / 2, right - left, bottom - top, data, imgCache, false, out);
+    return;
+  }
 
   // A split merge draws its sub-grid across the whole desk box (reusing drawSplit
   // on the anchor cell, with a rectOf that hands it the merge's box).
