@@ -736,11 +736,13 @@ function splitSection(cell) {
   return group('Split square', (g) => {
     const picker = document.createElement('div');
     picker.className = 'icon-picker';
+    // Exclusive toggles, no None: click a shape to split, click the active shape
+    // to un-split.
     for (const o of SPLIT_KINDS) {
-      const active = o.key === 'none' ? !isSplit(cell)
-        : isSplit(cell) && cell.split.rows === o.rows && cell.split.cols === o.cols;
+      if (o.key === 'none') continue;
+      const active = isSplit(cell) && cell.split.rows === o.rows && cell.split.cols === o.cols;
       picker.appendChild(splitOptionButton(o, active, () => {
-        if (o.key === 'none') unsplitCell(current.r, current.c);
+        if (active) unsplitCell(current.r, current.c);
         else splitCell(current.r, current.c, o.rows, o.cols);
         render(peekCell(current.r, current.c));
       }));
@@ -748,7 +750,7 @@ function splitSection(cell) {
     g.appendChild(picker);
     const note = document.createElement('p');
     note.className = 'egroup__note';
-    note.textContent = 'Divide this square into smaller squares. Tap a piece to fill it; long-press or right-click a piece to edit it.';
+    note.textContent = 'Divide this square into smaller squares. Tap a piece to fill it; long-press or right-click a piece to edit it. Tap the active shape to un-split.';
     g.appendChild(note);
   });
 }
@@ -759,11 +761,13 @@ function splitControlsCompact(cell) {
   const wrap = controlGroup('Split');
   const picker = document.createElement('div');
   picker.className = 'icon-picker icon-picker--split';
+  // No "None": each shape is an exclusive toggle — clicking the active one
+  // un-splits, and picking another switches to it.
   for (const o of SPLIT_KINDS) {
-    const active = o.key === 'none' ? !isSplit(cell)
-      : isSplit(cell) && cell.split.rows === o.rows && cell.split.cols === o.cols;
+    if (o.key === 'none') continue;
+    const active = isSplit(cell) && cell.split.rows === o.rows && cell.split.cols === o.cols;
     picker.appendChild(splitOptionButton(o, active, () => {
-      if (o.key === 'none') unsplitCell(current.r, current.c);
+      if (active) unsplitCell(current.r, current.c);
       else splitCell(current.r, current.c, o.rows, o.cols);
       render(peekCell(current.r, current.c));
     }));
