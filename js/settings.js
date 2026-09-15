@@ -279,7 +279,7 @@ function applyPreset(n, keys) {
 // app — export, its icon/title branding, appearance and paper sizes.
 let settingsTab = 'general';
 const SETTINGS_TABS = [
-  { id: 'general', label: 'General', build: () => [presetSection(), customIconsSection()] },
+  { id: 'general', label: 'General', build: () => [interfaceSection(), presetSection(), customIconsSection()] },
   { id: 'site', label: 'Site & export', build: () => [exportSection(), siteSection(), themeSection(), barsSection(), paperSection()] },
 ];
 
@@ -386,6 +386,26 @@ function exportSection() {
     'Downloads a single index.html with all styles, scripts and your current ' +
     'settings baked in — no external files.'
   ));
+  return g;
+}
+
+/** General → edit-pane options. Currently: whether the row/column Size controls
+ *  appear in the edit pane (off by default, to keep the pane compact). */
+function interfaceSection() {
+  const g = sgroup('Edit pane');
+  const seg = document.createElement('div');
+  seg.className = 'seg settings-seg';
+  for (const [val, label] of [[false, 'Hidden'], [true, 'Shown']]) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'seg__btn';
+    b.textContent = label;
+    b.setAttribute('aria-pressed', String(!!state.config.showSizeSection === val));
+    b.addEventListener('click', () => { setConfig({ showSizeSection: val }); renderSettings(); });
+    seg.appendChild(b);
+  }
+  g.appendChild(seg);
+  g.appendChild(snote('Show the row & column size controls in the edit pane.'));
   return g;
 }
 

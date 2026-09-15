@@ -46,7 +46,12 @@ design-token/theme/component baseline so new work matches the rest of the app.
   each on its own (`config.barPosition` = 'top'|'bottom'|'custom' +
   `config.barPositions`), applied by `applyBarPositions` — a bar is a sibling of
   the stage, so it is just which side of it the bar is inserted on.
-- `js/editor.js` — edit pane (single/bulk/preset).
+- `js/editor.js` — edit pane (single/bulk/preset/split-piece). Every pane shares
+  one header via `renderActions(ctx)` — Cut, Copy, Paste, Delete as icon buttons
+  (`#ui-cut/#ui-copy/#ui-paste/#ui-trash`), Delete always present (Copy/Cut grey
+  out for a multi-select). Single-square sections read Format (fill/facing/colors
+  + Split) → Content (Labels, Icon, Special, Browse under Special); the row/column
+  **Size** section is gated behind `config.showSizeSection` (Settings → General).
 
 ## Branch / state
 
@@ -73,7 +78,13 @@ and push it; don't stack new work directly on `main`.
   **Selectable + mergeable:** a tap on a split piece toggles it only when NOT
   picking; in select mode (or a Ctrl/Shift gesture) the tap selects the whole
   square (fireTap, js/interactions.js), so a split square can be gathered into a
-  selection and merged like any other.
+  selection and merged like any other. **Content moves by hand:** dragging a
+  piece (mouse) swaps CONTENT with the slot it is dropped on — piece↔piece,
+  piece↔square, square↔piece (`swapContentSlots`, js/state.js); the content drag
+  lives in js/interactions.js beside the whole-square/table drags. Mobile uses
+  cut/paste (`cutSubcell` + `pasteSquareToSubcell`) from the shared pane header.
+  Under a table a split shows only its pieces' content overlaid (no piece boxes),
+  like any covered square (js/export.js).
 - **Merge — DONE.** Two kinds, from the `#btn-table-merge` menu on a ≥2-square
   selection: `'poly'` fuses the selection into one desk of its exact shape (L/T/+,
   a single outline, labels across the widest run, icon in the slimmest cell) and
@@ -99,7 +110,11 @@ and push it; don't stack new work directly on `main`.
   `poly` merge (`mergeCanSplit`) can be **split**: the split lives on the anchor
   cell (reuses `splitCell`/`toggleSubcell`/`openSubcellEditor`) and is drawn across
   the whole desk box by `renderMergeSplit` (grid) / the split branch of `drawMerge`
-  (export), both reusing `buildSplitGrid` / `drawSplit`.
+  (export), both reusing `buildSplitGrid` / `drawSplit`. A selected merge shows
+  ONE outline over the whole object (`.merge--selected`), not a tick per member
+  (buildCell skips per-cell selection on merged cells). Walls are refused on a
+  merge's interior seams (`seamInsideMerge`, js/grid.js). Under a table a merge
+  shows only its content overlaid, no desk box (js/export.js `drawMerge`).
 - **Walls — DONE** (branch `claude/walls-tmdavo`). Edge objects on the seams
   between squares and the outer border, styled from user-supplied reference SVGs.
   Every type is a bar one cell long and `WALL_THICK` (0.0909u) thick, outlined at

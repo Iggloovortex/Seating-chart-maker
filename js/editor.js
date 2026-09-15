@@ -238,17 +238,48 @@ function render(cell) {
   bodyEl.replaceChildren();
   renderSquareActions();
 
-  // --- Fill, facing and colors share one row --------------------------------
-  // No group heading: each control carries its own label, so a fourth line of
-  // text above them only pushed the row further down the pane.
+  // === Unique: a merged desk's own controls (shown only when merged) ========
+  const merge = mergeAt(current.r, current.c);
+  if (merge) bodyEl.appendChild(mergeSection(merge));
+
+  // === Format: fill / facing / colors on one row, then Split ================
+  // No group heading on the controls row: each control carries its own label.
   bodyEl.appendChild(group(null, (g) => {
     const row = document.createElement('div');
     row.className = 'erow erow--controls';
     row.append(fillControls(cell), facingCompass(cell), squareColors(cell));
     g.appendChild(row);
   }));
+  // Split lives in Format now (a merged square splits from its own section).
+  if (!merge) bodyEl.appendChild(splitSection(cell));
 
-  // --- Icon ---------------------------------------------------------------
+  // === Content: Labels, then Icon and Special (Browse under Special) ========
+  bodyEl.appendChild(group('Labels', (g) => {
+    // There is always one label line to type into — blank by default. An empty
+    // line is excluded from the grid, the output and content checks, so a
+    // never-filled default line costs nothing.
+    if (cell.labels.length === 0) cell.labels.push({ text: '', color: defaultLabelColor(0) });
+    const list = document.createElement('div');
+    list.id = 'label-list';
+    cell.labels.forEach((line, i) => list.appendChild(labelRow(line, i)));
+    g.appendChild(list);
+
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'link-btn';
+    add.textContent = '+ Add label line';
+    add.addEventListener('click', () => {
+      const c = getCell(current.r, current.c);
+      c.labels.push({ text: '', color: defaultLabelColor(c.labels.length) });
+      updateCell(current.r, current.c, {}); // emit
+      render(peekCell(current.r, current.c));
+      const inputs = bodyEl.querySelectorAll('#label-list .field__input');
+      inputs[inputs.length - 1]?.focus();
+    });
+    g.appendChild(add);
+  }));
+
+  // Icon picker (Browse moves under Special, below).
   bodyEl.appendChild(group('Icon', (g) => {
     const picker = document.createElement('div');
     picker.className = 'icon-picker';
@@ -274,86 +305,51 @@ function render(cell) {
       picker.appendChild(btn);
     }
     g.appendChild(picker);
-
-    // Browse the bundled icon library and apply the pick straight to this square.
-    if (typeof iconLibraryAvailable === 'function' && iconLibraryAvailable()) {
-      const browse = document.createElement('button');
-      browse.type = 'button';
-      browse.className = 'link-btn';
-      browse.textContent = '+ Browse icon library';
-      browse.addEventListener('click', () => openIconLibrary((id) => {
-        updateCell(current.r, current.c, { icon: id });
-        render(peekCell(current.r, current.c));
-      }));
-      g.appendChild(browse);
-    }
   }));
 
-  // --- Special --------------------------------------------------------------
-  // A permanent home for the special icons — the ones that turn the square into
-  // furniture (a piece tucked to the faced edge, labels in the empty space).
+  // Special icons, kept right under Icon — and the Browse-library button under it.
   bodyEl.appendChild(specialSection(cell));
+  if (typeof iconLibraryAvailable === 'function' && iconLibraryAvailable()) {
+    const browse = document.createElement('button');
+    browse.type = 'button';
+    browse.className = 'link-btn';
+    browse.style.marginTop = '4px';
+    browse.textContent = '+ Browse icon library';
+    browse.addEventListener('click', () => openIconLibrary((id) => {
+      updateCell(current.r, current.c, { icon: id });
+      render(peekCell(current.r, current.c));
+    }));
+    bodyEl.appendChild(browse);
+  }
 
-  // --- Printer (accessory overlay) — options only when the printer is on ----
+  // Printer (accessory overlay) — options only when the printer is on.
   const cellPrinter = printerSection(cell, (patch) => {
     updateCell(current.r, current.c, patch);
     render(peekCell(current.r, current.c));
   }, (mutate) => {
-    // Live edit: mutate the printer in place and emit, no re-render (keeps caret).
     const c = getCell(current.r, current.c);
     if (c && c.printer) mutate(c.printer);
     updateCell(current.r, current.c, {});
   });
   if (cellPrinter) bodyEl.appendChild(cellPrinter);
 
-  // --- Labels (each line has its own color) --------------------------------
-  bodyEl.appendChild(group('Labels', (g) => {
-    // There is always one label line to type into — blank by default. An empty
-    // line is excluded from the grid, the output and content checks, so a
-    // never-filled default line costs nothing.
-    if (cell.labels.length === 0) cell.labels.push({ text: '', color: defaultLabelColor(0) });
-    const list = document.createElement('div');
-    list.id = 'label-list';
-    cell.labels.forEach((line, i) => list.appendChild(labelRow(line, i)));
-    g.appendChild(list);
-
-    const add = document.createElement('button');
-    add.type = 'button';
-    add.className = 'link-btn';
-    add.textContent = '+ Add label line';
-    add.addEventListener('click', () => {
-      const c = getCell(current.r, current.c);
-      c.labels.push({ text: '', color: defaultLabelColor(c.labels.length) });
-      updateCell(current.r, current.c, {}); // emit
-      render(peekCell(current.r, current.c));
-      // focus the newly added input
-      const inputs = bodyEl.querySelectorAll('#label-list .field__input');
-      inputs[inputs.length - 1]?.focus();
-    });
-    g.appendChild(add);
-  }));
-
-  // --- Merge / Split -------------------------------------------------------
-  // A merged desk's anchor gets merge controls (shape vs centred, unmerge); an
-  // ordinary square gets the split options. A square can't be both.
-  const merge = mergeAt(current.r, current.c);
-  bodyEl.appendChild(merge ? mergeSection(merge) : splitSection(cell));
-
-  // --- Row / column size (empty row & column height) ----------------------
-  bodyEl.appendChild(group('Size (this row & column)', (g) => {
-    const row = document.createElement('div');
-    row.className = 'erow erow--size';
-    row.append(
-      sizeEntry('Row ×', rowWeight(current.r), (v) => setRowWeight(current.r, v)),
-      sizeEntry('Col ×', colWeight(current.c), (v) => setColWeight(current.c, v)),
-    );
-    g.appendChild(row);
-    const note = document.createElement('p');
-    note.className = 'egroup__note';
-    note.style.marginTop = '6px';
-    note.textContent = 'In the output, this resizes only the empty spaces in this row/column — filled squares stay full size, which offsets them. The editing grid stays uniform.';
-    g.appendChild(note);
-  }));
+  // === Size (row & column) — shown only when enabled in Settings ============
+  if (state.config.showSizeSection) {
+    bodyEl.appendChild(group('Size (this row & column)', (g) => {
+      const row = document.createElement('div');
+      row.className = 'erow erow--size';
+      row.append(
+        sizeEntry('Row ×', rowWeight(current.r), (v) => setRowWeight(current.r, v)),
+        sizeEntry('Col ×', colWeight(current.c), (v) => setColWeight(current.c, v)),
+      );
+      g.appendChild(row);
+      const note = document.createElement('p');
+      note.className = 'egroup__note';
+      note.style.marginTop = '6px';
+      note.textContent = 'In the output, this resizes only the empty spaces in this row/column — filled squares stay full size, which offsets them. The editing grid stays uniform.';
+      g.appendChild(note);
+    }));
+  }
 
   // --- Footer -------------------------------------------------------------
   const foot = document.createElement('div');
@@ -923,25 +919,15 @@ function renderSubcellEditor() {
   if (!sub) { closeEditor(); return; }
   bodyEl.replaceChildren();
 
-  // Copy / paste for this piece, in the header where the square pane keeps them.
-  // This is how content moves between a whole square and a split space: copy a
-  // square, open a piece, paste. Special icons travel with it.
-  const bar = document.getElementById('editor-actions');
-  bar.replaceChildren();
-  const copy = document.createElement('button');
-  copy.type = 'button';
-  copy.className = 'btn';
-  copy.textContent = 'Copy';
-  copy.title = 'Copy this piece: colors, icon, facing and every label line';
-  copy.addEventListener('click', () => { copySubcell(current.r, current.c, current.sub); renderSubcellEditor(); });
-  const paste = document.createElement('button');
-  paste.type = 'button';
-  paste.className = 'btn';
-  paste.textContent = 'Paste';
-  paste.title = 'Paste the copied square into this piece';
-  paste.disabled = !hasSquareClipboard();
-  paste.addEventListener('click', () => { pasteSquareToSubcell(current.r, current.c, current.sub); renderSubcellEditor(); });
-  bar.append(copy, paste);
+  // The same shared header as every pane — cut/copy/paste this PIECE, delete
+  // (clear) it. Copy a square, open a piece, paste is how content moves between a
+  // whole square and a split space (special icons travel with it).
+  renderActions({
+    onCut: () => { cutSubcell(current.r, current.c, current.sub); renderSubcellEditor(); },
+    onCopy: () => { copySubcell(current.r, current.c, current.sub); renderSubcellEditor(); },
+    onPaste: () => { pasteSquareToSubcell(current.r, current.c, current.sub); renderSubcellEditor(); },
+    onDelete: () => { clearSubcell(current.r, current.c, current.sub); renderSubcellEditor(); },
+  });
 
   // Back to the whole split square.
   const back = document.createElement('button');
@@ -1222,10 +1208,18 @@ function sizeEntry(label, value, onChange) {
 
 function renderBulk(keys) {
   bodyEl.replaceChildren();
-  renderSquareActions();      // empties the header bar; bulk has no single square
+  // The shared header: Copy/Cut act on ONE square, so they are greyed for a
+  // multi-select; Paste applies the clipboard to all, and Delete acts on the
+  // whole selection.
+  const [sr, sc] = keys[0].split(',').map(Number);
+  renderActions({
+    onCut: null,
+    onCopy: null,
+    onPaste: () => { pasteSquareTo(keys); renderBulk(keys); },
+    onDelete: (e) => openDeleteAt(e, [...keys], { r: sr, c: sc }),
+  });
 
   // Seed color/rotation controls from the first selected cell.
-  const [sr, sc] = keys[0].split(',').map(Number);
   const first = getCell(sr, sc);
 
   // --- Fill, facing and colors, laid out exactly as the single pane ---------
@@ -1840,36 +1834,64 @@ function controlGroup(title) {
   return el;
 }
 
-/** Copy / paste / delete live in the pane's header, under the title, so they are
- *  reached before any scrolling. */
-function renderSquareActions() {
+// ------------------------------------------------------- shared pane header
+//
+// Every pane (single, multi, split, piece, preset) shows the SAME header row:
+// Cut, Copy, Paste, Delete as icons, so the base actions are universal and change
+// in one place. Delete is always present. A `ctx` supplies the handlers; a null
+// handler greys its button out (e.g. Copy/Cut make no sense for a multi-select).
+
+const ACTION_SVGNS = 'http://www.w3.org/2000/svg';
+
+function actionIcon(iconId, label, onClick, { danger = false, enabled = true } = {}) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'iconbtn editor-action' + (danger ? ' editor-action--danger' : '');
+  b.title = label;
+  b.setAttribute('aria-label', label);
+  b.disabled = !enabled || !onClick;
+  const svg = document.createElementNS(ACTION_SVGNS, 'svg');
+  svg.setAttribute('class', 'iconbtn__svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  const use = document.createElementNS(ACTION_SVGNS, 'use');
+  use.setAttribute('href', iconId);
+  svg.appendChild(use);
+  b.appendChild(svg);
+  if (!b.disabled) b.addEventListener('click', onClick);
+  return b;
+}
+
+/** Render the shared header. `ctx`: { onCut, onCopy, onPaste, onDelete,
+ *  pasteEnabled }. onDelete is required (Delete is always present); a missing
+ *  onCut/onCopy/onPaste greys that button. */
+function renderActions(ctx) {
   const bar = document.getElementById('editor-actions');
   bar.replaceChildren();
-  if (!current) return;
+  bar.append(
+    actionIcon('#ui-cut', 'Cut', ctx.onCut),
+    actionIcon('#ui-copy', 'Copy', ctx.onCopy),
+    actionIcon('#ui-paste', 'Paste', ctx.onPaste,
+      { enabled: ctx.pasteEnabled !== undefined ? ctx.pasteEnabled : hasSquareClipboard() }),
+    actionIcon('#ui-trash', 'Delete', ctx.onDelete, { danger: true }),
+  );
+}
 
-  const copy = document.createElement('button');
-  copy.type = 'button';
-  copy.className = 'btn';
-  copy.textContent = 'Copy';
-  copy.title = 'Copy this square: colors, icon, facing and every label line';
-  copy.addEventListener('click', () => {
-    copySquareFrom(current.r, current.c);
-    render(peekCell(current.r, current.c));
+/** The single-square (and split-parent) header: cut/copy/paste/delete the whole
+ *  square at current.r/current.c. */
+function renderSquareActions() {
+  if (!current) { document.getElementById('editor-actions').replaceChildren(); return; }
+  const re = () => render(peekCell(current.r, current.c));
+  renderActions({
+    onCut: () => { cutSquareFrom(current.r, current.c); re(); },
+    onCopy: () => { copySquareFrom(current.r, current.c); re(); },
+    onPaste: () => { pasteSquareTo([keyOf(current.r, current.c)]); re(); },
+    onDelete: (e) => openDeleteAt(e, [keyOf(current.r, current.c)], { r: current.r, c: current.c }),
   });
+}
 
-  const paste = document.createElement('button');
-  paste.type = 'button';
-  paste.className = 'btn';
-  paste.textContent = 'Paste';
-  paste.title = 'Clone the copied square onto this one, label text included';
-  paste.disabled = !hasSquareClipboard();
-  paste.addEventListener('click', () => {
-    pasteSquareTo([keyOf(current.r, current.c)]);
-    render(peekCell(current.r, current.c));
-  });
-
-  const del = deleteButton(() => [keyOf(current.r, current.c)],
-                           () => ({ r: current.r, c: current.c }));
-  del.style.marginRight = '';
-  bar.append(copy, paste, del);
+/** Open the delete menu anchored under the header button that raised it. */
+function openDeleteAt(e, keys, at) {
+  const box = e.currentTarget.getBoundingClientRect();
+  openDeleteMenu(box.left, box.bottom + 6, { keys, ...at });
 }

@@ -1289,9 +1289,15 @@ body {
   justify-content: space-between;
   gap: 12px;
 }
-.editor__actions { display: flex; gap: 8px; }
+.editor__actions { display: flex; gap: 8px; align-items: center; }
 .editor__actions:empty { display: none; }
 .editor__actions .btn { flex: 1; }
+/* Shared pane header: Cut / Copy / Paste / Delete as icon buttons. Delete sits
+   apart on the right and is tinted as the destructive action. */
+.editor-action .iconbtn__svg { width: 20px; height: 20px; }
+.editor-action:disabled { opacity: .4; cursor: default; }
+.editor-action--danger { color: var(--danger); margin-left: auto; }
+.editor-action--danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
 .editor__title,
 .modal__title { margin: 0; font-size: 17px; }
 

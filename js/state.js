@@ -48,6 +48,7 @@ const DEFAULT_CONFIG = {
   barPosition: 'top',
   barPositions: { select: 'top', walls: 'top' },
   customColors: [],                   // saved swatches, newest first (see CUSTOM_COLOR_SLOTS)
+  showSizeSection: false,             // show the row/column size controls in the edit pane
 };
 
 /** How many colours the picker's saved bar holds. Deliberately small: it is a
@@ -760,6 +761,16 @@ function pasteSquareToSubcell(r, c, i) {
 /** Cut one piece of a split square: copy it, then clear the piece. */
 function cutSubcell(r, c, i) {
   if (!copySubcell(r, c, i)) return false;
+  const sub = subcellAt(r, c, i);
+  if (!sub) return false;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  Object.assign(sub, makeSubcell());
+  emit();
+  return true;
+}
+
+/** Clear one piece of a split square back to empty (the piece Delete action). */
+function clearSubcell(r, c, i) {
   const sub = subcellAt(r, c, i);
   if (!sub) return false;
   if (typeof historyCheckpoint === 'function') historyCheckpoint();
@@ -1984,6 +1995,7 @@ function serializeConfig() {
     barPosition: state.config.barPosition,
     barPositions: { ...state.config.barPositions },
     customColors: [...state.config.customColors],
+    showSizeSection: !!state.config.showSizeSection,
   };
 }
 
@@ -2039,6 +2051,7 @@ function applyConfig(data) {
     .filter((c) => /^#[0-9a-f]{6}$/i.test(String(c)))
     .map((c) => String(c).toLowerCase())
     .slice(0, CUSTOM_COLOR_SLOTS);
+  cfg.showSizeSection = !!data.showSizeSection;
   emitConfig();
   return true;
 }
