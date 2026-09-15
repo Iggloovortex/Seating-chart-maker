@@ -248,10 +248,11 @@ function render(cell) {
     const row = document.createElement('div');
     row.className = 'erow erow--controls';
     row.append(fillControls(cell), facingCompass(cell), squareColors(cell));
+    // Split sits as a compact column right of Colors (a merged square splits from
+    // its own section instead).
+    if (!merge) row.append(splitControlsCompact(cell));
     g.appendChild(row);
   }));
-  // Split lives in Format now (a merged square splits from its own section).
-  if (!merge) bodyEl.appendChild(splitSection(cell));
 
   // === Content: Labels, then Icon and Special (Browse under Special) ========
   bodyEl.appendChild(group('Labels', (g) => {
@@ -750,6 +751,25 @@ function splitSection(cell) {
     note.textContent = 'Divide this square into smaller squares. Tap a piece to fill it; long-press or right-click a piece to edit it.';
     g.appendChild(note);
   });
+}
+
+/** A compact Split control that sits as a column in the Format row, right of
+ *  Colors — the same options as splitSection, shrunk to fit. */
+function splitControlsCompact(cell) {
+  const wrap = controlGroup('Split');
+  const picker = document.createElement('div');
+  picker.className = 'icon-picker icon-picker--split';
+  for (const o of SPLIT_KINDS) {
+    const active = o.key === 'none' ? !isSplit(cell)
+      : isSplit(cell) && cell.split.rows === o.rows && cell.split.cols === o.cols;
+    picker.appendChild(splitOptionButton(o, active, () => {
+      if (o.key === 'none') unsplitCell(current.r, current.c);
+      else splitCell(current.r, current.c, o.rows, o.cols);
+      render(peekCell(current.r, current.c));
+    }));
+  }
+  wrap.appendChild(picker);
+  return wrap;
 }
 
 function splitOptionButton(o, active, onClick) {
@@ -1841,39 +1861,30 @@ function controlGroup(title) {
 // in one place. Delete is always present. A `ctx` supplies the handlers; a null
 // handler greys its button out (e.g. Copy/Cut make no sense for a multi-select).
 
-const ACTION_SVGNS = 'http://www.w3.org/2000/svg';
-
-function actionIcon(iconId, label, onClick, { danger = false, enabled = true } = {}) {
+function actionButton(label, onClick, { danger = false, enabled = true } = {}) {
   const b = document.createElement('button');
   b.type = 'button';
-  b.className = 'iconbtn editor-action' + (danger ? ' editor-action--danger' : '');
+  b.className = 'btn editor-action' + (danger ? ' editor-action--danger' : '');
+  b.textContent = label;
   b.title = label;
-  b.setAttribute('aria-label', label);
   b.disabled = !enabled || !onClick;
-  const svg = document.createElementNS(ACTION_SVGNS, 'svg');
-  svg.setAttribute('class', 'iconbtn__svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('aria-hidden', 'true');
-  const use = document.createElementNS(ACTION_SVGNS, 'use');
-  use.setAttribute('href', iconId);
-  svg.appendChild(use);
-  b.appendChild(svg);
   if (!b.disabled) b.addEventListener('click', onClick);
   return b;
 }
 
-/** Render the shared header. `ctx`: { onCut, onCopy, onPaste, onDelete,
- *  pasteEnabled }. onDelete is required (Delete is always present); a missing
- *  onCut/onCopy/onPaste greys that button. */
+/** Render the shared header — Cut, Copy, Paste on the left, Delete apart on the
+ *  right. `ctx`: { onCut, onCopy, onPaste, onDelete, pasteEnabled }. onDelete is
+ *  required (Delete is always present); a missing onCut/onCopy/onPaste greys that
+ *  button. */
 function renderActions(ctx) {
   const bar = document.getElementById('editor-actions');
   bar.replaceChildren();
   bar.append(
-    actionIcon('#ui-cut', 'Cut', ctx.onCut),
-    actionIcon('#ui-copy', 'Copy', ctx.onCopy),
-    actionIcon('#ui-paste', 'Paste', ctx.onPaste,
+    actionButton('Cut', ctx.onCut),
+    actionButton('Copy', ctx.onCopy),
+    actionButton('Paste', ctx.onPaste,
       { enabled: ctx.pasteEnabled !== undefined ? ctx.pasteEnabled : hasSquareClipboard() }),
-    actionIcon('#ui-trash', 'Delete', ctx.onDelete, { danger: true }),
+    actionButton('Delete', ctx.onDelete, { danger: true }),
   );
 }
 

@@ -1291,10 +1291,10 @@ body {
 }
 .editor__actions { display: flex; gap: 8px; align-items: center; }
 .editor__actions:empty { display: none; }
-.editor__actions .btn { flex: 1; }
-/* Shared pane header: Cut / Copy / Paste / Delete as icon buttons. Delete sits
-   apart on the right and is tinted as the destructive action. */
-.editor-action .iconbtn__svg { width: 20px; height: 20px; }
+/* Shared pane header: Cut / Copy / Paste on the left, Delete apart on the right,
+   tinted as the destructive action. Auto-width so they group left rather than
+   each stretching to fill the row. */
+.editor-action { flex: 0 0 auto; }
 .editor-action:disabled { opacity: .4; cursor: default; }
 .editor-action--danger { color: var(--danger); margin-left: auto; }
 .editor-action--danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
@@ -1408,6 +1408,10 @@ body {
   outline-offset: -1px;
 }
 .icon-picker__btn--none { font-size: 11px; font-weight: 600; color: var(--ink-soft); }
+/* Compact split picker that rides in the Format row, right of Colors. */
+.icon-picker--split { grid-template-columns: repeat(3, 26px); gap: 4px; }
+.icon-picker--split .split-opt__svg { width: 18px; height: 18px; }
+.icon-picker--split .icon-picker__btn--none { font-size: 9px; }
 
 .link-btn {
   background: none;
