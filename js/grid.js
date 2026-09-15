@@ -2065,9 +2065,22 @@ function wallEdgeNear(clientX, clientY) {
   // Out on BOTH axes means the diagonal space off a corner — the junction's, not
   // either seam's.
   if (dx > 0 && dy > 0) return null;
-  if (dy > 0) return { o: 'h', r: py < y0 ? r : r + 1, c };
-  if (dx > 0) return { o: 'v', r, c: px < x0 ? c : c + 1 };
-  return null;
+  let edge = null;
+  if (dy > 0) edge = { o: 'h', r: py < y0 ? r : r + 1, c };
+  else if (dx > 0) edge = { o: 'v', r, c: px < x0 ? c : c + 1 };
+  // A seam INSIDE a merged desk (both cells it divides belong to the same merge)
+  // takes no wall — a merge is one object, so there is nothing to wall between.
+  if (edge && seamInsideMerge(edge.o, edge.r, edge.c)) return null;
+  return edge;
+}
+
+/** True when a seam sits between two cells of the SAME merge (an interior seam).
+ *  `h:r,c` divides (r-1,c) and (r,c); `v:r,c` divides (r,c-1) and (r,c). */
+function seamInsideMerge(o, r, c) {
+  if (typeof mergeAt !== 'function') return false;
+  const a = o === 'h' ? mergeAt(r - 1, c) : mergeAt(r, c - 1);
+  const b = mergeAt(r, c);
+  return !!(a && b && a.id === b.id);
 }
 
 /** How much of a seam each end gives up to its junction: the point's own
