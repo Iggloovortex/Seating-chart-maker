@@ -1408,10 +1408,11 @@ body {
   outline-offset: -1px;
 }
 .icon-picker__btn--none { font-size: 11px; font-weight: 600; color: var(--ink-soft); }
-/* Compact split picker that rides in the Format row, right of Colors. */
-.icon-picker--split { grid-template-columns: repeat(3, 26px); gap: 4px; }
-.icon-picker--split .split-opt__svg { width: 18px; height: 18px; }
-.icon-picker--split .icon-picker__btn--none { font-size: 9px; }
+/* Compact split picker that rides in the Format row, right of Colors — a narrow
+   2-wide grid so the four columns fit on one line without wrapping. */
+.icon-picker--split { grid-template-columns: repeat(2, 22px); gap: 4px; }
+.icon-picker--split .split-opt__svg { width: 15px; height: 15px; }
+.icon-picker--split .icon-picker__btn--none { font-size: 8px; }
 
 .link-btn {
   background: none;
@@ -1824,7 +1825,7 @@ body {
 .erow--controls {
   align-items: flex-start;
   justify-content: center;   /* the row sits centred in the pane */
-  gap: 14px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 /* A heading-less section: the controls inside carry their own labels. */

@@ -46,7 +46,7 @@ async function renderToCanvas(dpi = 300) {
   // See js/layout.js — the grid's "true sizes" preview uses the very same rules,
   // so what is shown there is what prints here.
   const rules = layoutRules();
-  const { insideAnyFootprint, seatTableOf, footprints } = rules;
+  const { insideAnyFootprint, footprints } = rules;
 
   // Fit to the page using the widest row and the tallest column (in units).
   const extent = layoutExtent(rules);
@@ -108,9 +108,9 @@ async function renderToCanvas(dpi = 300) {
       }
       if (!data.enabled) continue;
       if (insideAnyFootprint(r, c)) { covered.push({ r, c, data }); continue; }
-      const st = seatTableOf(r, c);
-      if (st) seats.push({ r, c, data, fp: st.fp });
-      else desks.push({ r, c, data });
+      // A filled square beside a table is just a normal desk — it is NOT turned
+      // into a seat/chair pulled toward the table.
+      desks.push({ r, c, data });
     }
   }
 
