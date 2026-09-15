@@ -1215,8 +1215,8 @@ let hoverTableId = null;
  *  run on pointermove: it only toggles `hidden` when the hovered table changes. */
 function updateTableHover(e) {
   if (!state.tables.length) { setHoverTable(null); return; }
-  // Reaching for a table's own control keeps its ✕ up rather than recomputing.
-  if (e.target.closest && e.target.closest('.table-remove, .table-handle')) return;
+  // Reaching for a table's own control keeps its controls up rather than recomputing.
+  if (e.target.closest && e.target.closest('.table-remove, .table-move, .table-handle')) return;
   // Shapes are pointer-events:none, so the cell under the pointer is what's hit;
   // tableAt maps that covered cell back to its table.
   const el = document.elementFromPoint(e.clientX, e.clientY);
@@ -1233,7 +1233,7 @@ function updateTableHover(e) {
 function setHoverTable(id) {
   if (id === hoverTableId) return;
   hoverTableId = id;
-  chart.querySelectorAll('.table-remove').forEach((b) => { b.hidden = b.dataset.tableId !== id; });
+  chart.querySelectorAll('.table-remove, .table-move').forEach((b) => { b.hidden = b.dataset.tableId !== id; });
 }
 
 // The merge currently lit by a hover, so hovering any member cell highlights the
@@ -1337,14 +1337,137 @@ function renderTables() {
     const dp = spin(hR - TABLE_BADGE / 2 - BADGE_PAD, hT + TABLE_BADGE / 2 + BADGE_PAD);
     del.style.left = `${dp.x - TABLE_BADGE / 2}px`;
     del.style.top = `${dp.y - TABLE_BADGE / 2}px`;
-    del.addEventListener('click', (e) => { e.stopPropagation(); removeTable(table.id); });
+    // Deleting a table keeps the data: it empties the squares underneath and
+    // leaves them selected, so a second delete can clear the content (removeTable).
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeTable(table.id);
+      if (typeof enterSelectMode === 'function') enterSelectMode();
+    });
     chart.appendChild(del);
+
+    // Move grip — drag to relocate the whole table by whole cells. Shown on hover
+    // like the ✕; sits in the shape's top-left corner.
+    const grip = document.createElement('button');
+    grip.type = 'button';
+    grip.className = 'table-move';
+    grip.dataset.tableId = table.id;
+    grip.textContent = '✥';
+    grip.title = 'Drag to move the table';
+    grip.setAttribute('aria-label', 'Move table');
+    grip.hidden = table.id !== hoverTableId;
+    const gp = spin(hL + TABLE_BADGE / 2 + BADGE_PAD, hT + TABLE_BADGE / 2 + BADGE_PAD);
+    grip.style.left = `${gp.x - TABLE_BADGE / 2}px`;
+    grip.style.top = `${gp.y - TABLE_BADGE / 2}px`;
+    attachTableMoveDrag(grip, table, { left, top, right, bottom,
+                                       cellW: members[0].w, cellH: members[0].h });
+    chart.appendChild(grip);
 
     // A picked table can be re-shaped by its own edges.
     if (picked && typeof isSelectMode === 'function' && isSelectMode()) {
       addResizeHandles(table, hL, hT, hR, hB, spin);
     }
   }
+}
+
+/** Drag a table's move grip to shift it by whole cells: a dashed preview follows
+ *  the pointer, snapped to the grid, and the move applies on release (silently
+ *  ignored when it would leave the grid or land on occupied ground). Mirrors the
+ *  selection's attachMoveDrag. */
+function attachTableMoveDrag(handle, table, geo) {
+  let drag = null;
+  const gap = parseFloat(getComputedStyle(chart).gap) || 0;
+  const stepX = geo.cellW + gap, stepY = geo.cellH + gap;
+
+  handle.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    hideInsertGuides();
+    handle.setPointerCapture(e.pointerId);
+    drag = { x: e.clientX, y: e.clientY, dr: 0, dc: 0, zoom: chartZoom() };
+    const preview = document.createElement('div');
+    preview.className = 'move-preview';
+    preview.style.left = `${geo.left}px`;
+    preview.style.top = `${geo.top}px`;
+    preview.style.width = `${geo.right - geo.left}px`;
+    preview.style.height = `${geo.bottom - geo.top}px`;
+    chart.appendChild(preview);
+    drag.preview = preview;
+    movingSelection = true; // reuse the flag that stands the insert guides down
+  });
+
+  handle.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    drag.dc = Math.round((e.clientX - drag.x) / drag.zoom / stepX);
+    drag.dr = Math.round((e.clientY - drag.y) / drag.zoom / stepY);
+    drag.preview.style.left = `${geo.left + drag.dc * stepX}px`;
+    drag.preview.style.top = `${geo.top + drag.dr * stepY}px`;
+    const fp = footprintOf(table.cellKeys);
+    const fits = fp.minR + drag.dr >= 0 && fp.minC + drag.dc >= 0 &&
+                 fp.maxR + drag.dr < state.grid.rows && fp.maxC + drag.dc < state.grid.cols;
+    drag.preview.classList.toggle('move-preview--blocked', !fits);
+  });
+
+  const finish = () => {
+    if (!drag) return;
+    const { dr, dc } = drag;
+    drag.preview.remove();
+    drag = null;
+    movingSelection = false;
+    moveTable(table.id, dr, dc); // no-op when off-grid or blocked by occupied cells
+  };
+  handle.addEventListener('pointerup', finish);
+  handle.addEventListener('pointercancel', finish);
+}
+
+/** Drag a table by its BODY (a covered square), the table analogue of dragging a
+ *  square. Started from interactions.js once the press has travelled far enough;
+ *  follows the window so it keeps tracking past the grid's edge, shows the same
+ *  snapped preview, and relocates via moveTable on release. */
+function startTableBodyDrag(table, startEvent) {
+  const rects = table.cellKeys.map((k) => { const [r, c] = parseKey(k); return cellLocalRect(r, c); }).filter(Boolean);
+  if (!rects.length) return;
+  const left = Math.min(...rects.map((b) => b.left));
+  const top = Math.min(...rects.map((b) => b.top));
+  const right = Math.max(...rects.map((b) => b.left + b.width));
+  const bottom = Math.max(...rects.map((b) => b.top + b.height));
+  const gap = parseFloat(getComputedStyle(chart).gap) || 0;
+  const stepX = rects[0].width + gap, stepY = rects[0].height + gap;
+  const zoom = chartZoom();
+  const sx = startEvent.clientX, sy = startEvent.clientY;
+  let dr = 0, dc = 0;
+
+  const preview = document.createElement('div');
+  preview.className = 'move-preview';
+  preview.style.left = `${left}px`;
+  preview.style.top = `${top}px`;
+  preview.style.width = `${right - left}px`;
+  preview.style.height = `${bottom - top}px`;
+  chart.appendChild(preview);
+  movingSelection = true;
+
+  const move = (ev) => {
+    dc = Math.round((ev.clientX - sx) / zoom / stepX);
+    dr = Math.round((ev.clientY - sy) / zoom / stepY);
+    preview.style.left = `${left + dc * stepX}px`;
+    preview.style.top = `${top + dr * stepY}px`;
+    const fp = footprintOf(table.cellKeys);
+    const fits = fp.minR + dr >= 0 && fp.minC + dc >= 0 &&
+                 fp.maxR + dr < state.grid.rows && fp.maxC + dc < state.grid.cols;
+    preview.classList.toggle('move-preview--blocked', !fits);
+  };
+  const up = () => {
+    preview.remove();
+    movingSelection = false;
+    window.removeEventListener('pointermove', move, true);
+    window.removeEventListener('pointerup', up, true);
+    window.removeEventListener('pointercancel', up, true);
+    moveTable(table.id, dr, dc); // no-op off-grid or onto occupied cells
+  };
+  window.addEventListener('pointermove', move, true);
+  window.addEventListener('pointerup', up, true);
+  window.addEventListener('pointercancel', up, true);
+  move(startEvent);
 }
 
 /** A non-rectangular table (L/T/+) drawn as ONE rounded outline, inset from its
@@ -2104,7 +2227,7 @@ function showResizePreview({ preview, next }) {
 
 /** Re-measure table overlays after layout changes (zoom, resize). */
 function refreshTables() {
-  chart.querySelectorAll('.table-shape, .table-remove, .table-handle, .move-handle, .merge-shape, .merge-content, .merge-unit, .walls-layer')
+  chart.querySelectorAll('.table-shape, .table-poly, .table-remove, .table-move, .table-handle, .move-handle, .merge-shape, .merge-content, .merge-unit, .walls-layer')
     .forEach((n) => n.remove());
   renderTables();
   renderMerges();

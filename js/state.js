@@ -1246,11 +1246,42 @@ function addTable(shape, color) {
   emit();
   return table;
 }
+/** Delete a table but KEEP the data underneath: the squares it covered are
+ *  emptied (unseated) rather than cleared, and left selected so a second delete
+ *  can clear their content if wanted. */
 function removeTable(id) {
+  const t = state.tables.find((x) => x.id === id);
   if (typeof historyCheckpoint === 'function') historyCheckpoint(); // undo: record before remove table
-  state.tables = state.tables.filter((t) => t.id !== id);
-  state.tableSelection.delete(id);
-  emit();
+  const keys = t ? tableCoverage(t) : [];
+  batch(() => {
+    state.tables = state.tables.filter((x) => x.id !== id);
+    state.tableSelection.delete(id);
+    for (const k of keys) { const cell = state.cells.get(k); if (cell) cell.enabled = false; }
+    if (keys.length) selectionReplace(keys);
+  });
+}
+
+/** Shift a table by whole cells, taking its cells (content and all) with it.
+ *  Refuses a move that would leave the grid or land on occupied ground outside
+ *  the table itself, so it never overwrites another square. */
+function moveTable(id, dr, dc) {
+  if (!dr && !dc) return false;
+  const t = state.tables.find((x) => x.id === id);
+  if (!t) return false;
+  const members = new Set(t.cellKeys);
+  for (const k of t.cellKeys) {
+    const [r, c] = parseKey(k);
+    const nr = r + dr, nc = c + dc;
+    if (!inBounds(nr, nc)) return false;
+    const dest = keyOf(nr, nc);
+    if (members.has(dest)) continue;
+    const cell = peekCell(nr, nc);
+    if ((cell && (cell.enabled || cellHasAnyContent(cell))) || isUnderTable(nr, nc) || mergeAt(nr, nc)) return false;
+  }
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  let ok = false;
+  batch(() => { ok = shiftCells(t.cellKeys, dr, dc); });
+  return ok;
 }
 
 // ------------------------------------------------- table selection (table mode)

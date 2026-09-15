@@ -1163,6 +1163,27 @@ body {
 }
 .table-remove:hover,
 .line-remove:hover { filter: brightness(1.1); }
+/* Move grip on each table — drag to relocate it (shown on hover, like the ✕). */
+.table-move {
+  position: absolute;
+  z-index: 3;
+  width: var(--grid-ctl);
+  height: var(--grid-ctl);
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  cursor: grab;
+  touch-action: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,.35);
+}
+.table-move:active { cursor: grabbing; }
 /* Every one of them grows together for a coarse pointer, from the one token. */
 @media (pointer: coarse) {
   .chart { --grid-ctl: 30px; --grid-icon: 13px; }

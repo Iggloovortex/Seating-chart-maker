@@ -25,6 +25,9 @@ function onRequestBulkEdit(fn) { bulkEditHandler = fn; }
 // lets the UI turn select mode on so the select bar appears.
 let enterSelectHandler = () => {};
 function onEnterSelect(fn) { enterSelectHandler = fn; }
+/** Turn select mode on from anywhere (e.g. after a table delete leaves squares
+ *  selected), through the same hook Ctrl+click uses. */
+function enterSelectMode() { enterSelectHandler(); }
 
 // The same shortcut landing on a TABLE picks the table, so one gesture reaches
 // whichever thing is actually under the pointer.
@@ -94,7 +97,14 @@ function initInteractions(chartEl) {
       // another one. Touch keeps the old meaning — the travel is a scroll — so
       // dragging is desktop-only for now.
       if (canDragSquare(pointer)) startSquareDrag(pointer, e);
-      else cancelPointer();
+      else {
+        const table = canDragTable(pointer);
+        if (table && typeof startTableBodyDrag === 'function') {
+          window.clearTimeout(pointer.timer);
+          startTableBodyDrag(table, e);
+          pointer = null;               // the window drag owns the gesture now
+        } else cancelPointer();
+      }
     }
   });
 
@@ -135,6 +145,19 @@ function initInteractions(chartEl) {
     if (typeof tableAt === 'function' && tableAt(r, c)) return false;
     const cell = peekCell(r, c);
     return !!(cell && (cell.enabled || cellHasAnyContent(cell)));
+  }
+
+  /** A plain mouse drag off a table's body moves the whole table, the way a
+   *  square drag moves a square. Only outside select mode (which has the grip and
+   *  handles) and only when the pressed cell is actually under a table. */
+  function canDragTable(p) {
+    if (p.additive || p.shift || p.longFired) return null;
+    if (p.pointerType !== 'mouse') return null;
+    if (selectMode) return null;
+    if (typeof isWallsMode === 'function' && isWallsMode()) return null;
+    const [r, c] = parseKey(p.cell.dataset.key);
+    if (typeof mergeAt === 'function' && mergeAt(r, c)) return null;
+    return typeof tableAt === 'function' ? tableAt(r, c) : null;
   }
 
   function startSquareDrag(p, e) {
