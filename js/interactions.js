@@ -248,8 +248,11 @@ function fireTap(cell, mods = {}) {
   const { additive, shift, sub } = mods;
 
   // A tap on a piece of a split square fills or empties just that piece — it is
-  // its own little square, edited through long-press / right-click.
-  if (sub != null) {
+  // its own little square, edited through long-press / right-click. But only when
+  // we are NOT picking: in select mode (or a Ctrl/Shift gesture) a tap must select
+  // the whole square, so a split square can be gathered into a selection and
+  // merged like any other.
+  if (sub != null && !selectMode && !additive && !shift) {
     const data = peekCell(r, c);
     if (data && isSplit(data)) { toggleSubcell(r, c, sub); return; }
   }
