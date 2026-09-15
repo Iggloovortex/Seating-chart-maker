@@ -1835,7 +1835,7 @@ function serialize() {
     rowWeights: [...state.rowWeights],
     colWeights: [...state.colWeights],
     tables: state.tables.map((t) => ({ ...t, cellKeys: [...t.cellKeys] })),
-    merges: state.merges.map((m) => ({ id: m.id, kind: m.kind, keys: [...m.keys], anchor: m.anchor })),
+    merges: state.merges.map((m) => ({ id: m.id, kind: m.kind, keys: [...m.keys], anchor: m.anchor, ...(m.deskSplit ? { deskSplit: true } : {}) })),
     walls: { ...state.walls },
     paper: state.paper,
     landscape: state.landscape,
@@ -1919,7 +1919,8 @@ function deserialize(data) {
           .map((m) => ({ id: String(m.id || `m${Math.random().toString(36).slice(2)}`),
                          kind: m.kind === 'unit' ? 'unit' : 'poly',
                          keys: sortCellKeys(m.keys.map(String)),
-                         ...(m.anchor ? { anchor: String(m.anchor) } : {}) }))
+                         ...(m.anchor ? { anchor: String(m.anchor) } : {}),
+                         ...(m.deskSplit ? { deskSplit: true } : {}) }))
       : [];
     state.walls = {};
     if (data.walls && typeof data.walls === 'object') {

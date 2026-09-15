@@ -110,11 +110,20 @@ and push it; don't stack new work directly on `main`.
   `poly` merge (`mergeCanSplit`) can be **split**: the split lives on the anchor
   cell (reuses `splitCell`/`toggleSubcell`/`openSubcellEditor`) and is drawn across
   the whole desk box by `renderMergeSplit` (grid) / the split branch of `drawMerge`
-  (export), both reusing `buildSplitGrid` / `drawSplit`. A selected merge shows
+  (export), both reusing `buildSplitGrid` / `drawSplit`. This desk-split render is
+  gated on a deliberate `merge.deskSplit` flag (set only by the merge pane's "Split
+  this desk" picker), so **merging a square that is ALREADY split does NOT stretch
+  its pieces across the desk** — it uses large-square merge rules, showing the
+  anchor's content (`mergeContentOf`) as one desk; the split data is kept and
+  editable via the split-parent pane. Under a table a desk-split merge overlays
+  EVERY piece's content (no boxes); a plain merge overlays its single content.
+  A selected merge shows
   ONE outline over the whole object (`.merge--selected`), not a tick per member
   (buildCell skips per-cell selection on merged cells). Walls are refused on a
   merge's interior seams (`seamInsideMerge`, js/grid.js). Under a table a merge
-  shows only its content overlaid, no desk box (js/export.js `drawMerge`).
+  shows only its content overlaid, no desk box (js/export.js `drawMerge`). The
+  **Unmerge** control lives in the shared pane header (`renderActions`), not the
+  Merged-square section, so it is reachable from every pane a merge can open.
 - **Walls — DONE** (branch `claude/walls-tmdavo`). Edge objects on the seams
   between squares and the outer border, styled from user-supplied reference SVGs.
   Every type is a bar one cell long and `WALL_THICK` (0.0909u) thick, outlined at

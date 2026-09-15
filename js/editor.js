@@ -656,12 +656,16 @@ function mergeSection(merge) {
       const picker = document.createElement('div');
       picker.className = 'icon-picker';
       picker.style.marginTop = '8px';
+      // A desk is "split" only when the user deliberately divides it here — the
+      // deskSplit flag. (A pre-split square pulled into a merge keeps its pieces in
+      // data but renders as one large desk until split on purpose.)
+      const deskSplit = !!merge.deskSplit && isSplit(cellNow);
       for (const o of SPLIT_KINDS) {
-        const active = o.key === 'none' ? !isSplit(cellNow)
-          : isSplit(cellNow) && cellNow.split.rows === o.rows && cellNow.split.cols === o.cols;
+        const active = o.key === 'none' ? !deskSplit
+          : deskSplit && cellNow.split.rows === o.rows && cellNow.split.cols === o.cols;
         picker.appendChild(splitOptionButton(o, active, () => {
-          if (o.key === 'none') unsplitCell(current.r, current.c);
-          else splitCell(current.r, current.c, o.rows, o.cols);
+          if (o.key === 'none') { unsplitCell(current.r, current.c); updateMerge(merge.id, { deskSplit: false }); }
+          else { splitCell(current.r, current.c, o.rows, o.cols); updateMerge(merge.id, { deskSplit: true }); }
           render(peekCell(current.r, current.c));
         }));
       }
@@ -671,18 +675,6 @@ function mergeSection(merge) {
       g.appendChild(slabel);
       g.appendChild(picker);
     }
-
-    const unmerge = document.createElement('button');
-    unmerge.type = 'button';
-    unmerge.className = 'btn btn--empty';
-    unmerge.style.marginTop = '8px';
-    unmerge.textContent = 'Unmerge';
-    unmerge.title = 'Split the merged desk back into its separate squares';
-    unmerge.addEventListener('click', () => {
-      removeMerge(merge.id);
-      render(peekCell(current.r, current.c));
-    });
-    g.appendChild(unmerge);
 
     const note = document.createElement('p');
     note.className = 'egroup__note';
@@ -1876,10 +1868,11 @@ function actionButton(label, onClick, { danger = false, enabled = true } = {}) {
   return b;
 }
 
-/** Render the shared header — Cut, Copy, Paste on the left, Delete apart on the
- *  right. `ctx`: { onCut, onCopy, onPaste, onDelete, pasteEnabled }. onDelete is
- *  required (Delete is always present); a missing onCut/onCopy/onPaste greys that
- *  button. */
+/** Render the shared header — Cut, Copy, Paste on the left, Unmerge (only when
+ *  the item is merged) and Delete apart on the right. `ctx`: { onCut, onCopy,
+ *  onPaste, onDelete, onUnmerge, pasteEnabled }. onDelete is required (Delete is
+ *  always present); a missing onCut/onCopy/onPaste greys that button; onUnmerge is
+ *  omitted for a non-merged item. */
 function renderActions(ctx) {
   const bar = document.getElementById('editor-actions');
   bar.replaceChildren();
@@ -1888,8 +1881,13 @@ function renderActions(ctx) {
     actionButton('Copy', ctx.onCopy),
     actionButton('Paste', ctx.onPaste,
       { enabled: ctx.pasteEnabled !== undefined ? ctx.pasteEnabled : hasSquareClipboard() }),
-    actionButton('Delete', ctx.onDelete, { danger: true }),
   );
+  if (ctx.onUnmerge) {
+    const u = actionButton('Unmerge', ctx.onUnmerge);
+    u.classList.add('editor-action--pushright'); // sits at the right, before Delete
+    bar.append(u);
+  }
+  bar.append(actionButton('Delete', ctx.onDelete, { danger: true }));
 }
 
 /** The single-square (and split-parent) header: cut/copy/paste/delete the whole
@@ -1897,10 +1895,12 @@ function renderActions(ctx) {
 function renderSquareActions() {
   if (!current) { document.getElementById('editor-actions').replaceChildren(); return; }
   const re = () => render(peekCell(current.r, current.c));
+  const merge = mergeAt(current.r, current.c);
   renderActions({
     onCut: () => { cutSquareFrom(current.r, current.c); re(); },
     onCopy: () => { copySquareFrom(current.r, current.c); re(); },
     onPaste: () => { pasteSquareTo([keyOf(current.r, current.c)]); re(); },
+    onUnmerge: merge ? () => { removeMerge(merge.id); re(); } : null,
     onDelete: (e) => openDeleteAt(e, [keyOf(current.r, current.c)], { r: current.r, c: current.c }),
   });
 }

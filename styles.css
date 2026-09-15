@@ -1296,6 +1296,8 @@ body {
    each stretching to fill the row. */
 .editor-action { flex: 0 0 auto; }
 .editor-action:disabled { opacity: .4; cursor: default; }
+.editor-action--pushright { margin-left: auto; } /* first right-aligned action (Unmerge) */
+.editor-action--pushright + .editor-action--danger { margin-left: 0; } /* Delete follows it, no extra gap */
 .editor-action--danger { color: var(--danger); margin-left: auto; }
 .editor-action--danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
 .editor__title,

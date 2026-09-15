@@ -1577,7 +1577,7 @@ function renderMerges() {
     // desk, reusing the ordinary split renderer on the anchor cell.
     const [ar, ac] = parseKey(mergeAnchorKey(merge));
     const anchorCell = peekCell(ar, ac);
-    if (!empty && mergeCanSplit(merge) && isSplit(anchorCell)) {
+    if (!empty && merge.deskSplit && mergeCanSplit(merge) && isSplit(anchorCell)) {
       let box;
       if (merge.kind === 'unit') {
         const size = Math.min(vals[0].width, vals[0].height);

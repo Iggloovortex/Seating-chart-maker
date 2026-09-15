@@ -130,7 +130,7 @@ async function renderToCanvas(dpi = 300) {
     // A split merge lays out its own pieces (drawSplit), so it doesn't join the
     // chart-wide desk text plan.
     const [ar, ac] = parseKey(mergeAnchorKey(merge));
-    if (mergeCanSplit(merge) && isSplit(peekCell(ar, ac))) continue;
+    if (merge.deskSplit && mergeCanSplit(merge) && isSplit(peekCell(ar, ac))) continue;
     let w = 0, h = 0;
     if (plan.isRect) { const a = rectOf(plan.bbox.minR, plan.bbox.minC); const z = rectOf(plan.bbox.maxR, plan.bbox.maxC); w = z.x + z.w - a.x; h = z.y + z.h - a.y; }
     else if (plan.labelRun) { const a = rectOf(plan.labelRun.r, plan.labelRun.cStart); const z = rectOf(plan.labelRun.r, plan.labelRun.cEnd); w = z.x + z.w - a.x; h = a.h; }
@@ -534,18 +534,31 @@ function drawMerge(ctx, rectOf, { merge, data, plan, coveredByTable }, imgCache,
   const right = Math.max(...rects.map((b) => b.x + b.w));
   const bottom = Math.max(...rects.map((b) => b.y + b.h));
 
+  const [ar, ac] = parseKey(mergeAnchorKey(merge));
+  const anchorCell = peekCell(ar, ac);
+  const deskSplit = merge.deskSplit && mergeCanSplit(merge) && isSplit(anchorCell);
+
   // Under a table the desk is not drawn — only its content overlays the table,
-  // like any covered square.
+  // like any covered square. A desk-split merge overlays EVERY piece's content
+  // (each at its spot in the desk box), not just the anchor's.
   if (coveredByTable) {
-    drawContent(ctx, (left + right) / 2, (top + bottom) / 2, right - left, bottom - top, data, imgCache, false, out);
+    if (deskSplit) {
+      const { rows: sr, cols: sc } = anchorCell.split;
+      const bw = (right - left) / sc, bh = (bottom - top) / sr;
+      anchorCell.subcells.forEach((sub, i) => {
+        if (!(sub.enabled || hasContent(sub))) return;
+        const rr = Math.floor(i / sc), cc = i % sc;
+        drawContent(ctx, left + cc * bw + bw / 2, top + rr * bh + bh / 2, bw, bh, sub, imgCache, false, out);
+      });
+    } else {
+      drawContent(ctx, (left + right) / 2, (top + bottom) / 2, right - left, bottom - top, data, imgCache, false, out);
+    }
     return;
   }
 
   // A split merge draws its sub-grid across the whole desk box (reusing drawSplit
   // on the anchor cell, with a rectOf that hands it the merge's box).
-  const [ar, ac] = parseKey(mergeAnchorKey(merge));
-  const anchorCell = peekCell(ar, ac);
-  if (mergeCanSplit(merge) && isSplit(anchorCell)) {
+  if (deskSplit) {
     let box;
     if (merge.kind === 'unit') {
       const s = Math.min(rects[0].w, rects[0].h);
