@@ -757,6 +757,42 @@ function pasteSquareToSubcell(r, c, i) {
   return true;
 }
 
+/** Cut one piece of a split square: copy it, then clear the piece. */
+function cutSubcell(r, c, i) {
+  if (!copySubcell(r, c, i)) return false;
+  const sub = subcellAt(r, c, i);
+  if (!sub) return false;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  Object.assign(sub, makeSubcell());
+  emit();
+  return true;
+}
+
+/** The content slot at a location: a whole cell, or one piece of a split square. */
+function contentSlotAt(loc) {
+  return loc.sub != null ? subcellAt(loc.r, loc.c, loc.sub) : getCell(loc.r, loc.c);
+}
+
+/** Swap the CONTENT between two slots (piece↔piece, piece↔square, square↔piece).
+ *  Only the content fields move — never a split structure — so it is how content
+ *  is rearranged among split pieces and whole squares by drag or cut/paste. */
+function swapContentSlots(a, b) {
+  const sa = contentSlotAt(a), sb = contentSlotAt(b);
+  if (!sa || !sb || sa === sb) return false;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  const grab = (s) => ({
+    enabled: s.enabled, fill: s.fill, border: s.border,
+    icon: s.icon, iconColor: s.iconColor, iconFill: s.iconFill, rotation: s.rotation,
+    labels: (s.labels || []).map((l) => ({ text: l.text, color: l.color })),
+    printer: clonePrinter(s.printer),
+  });
+  const A = grab(sa), B = grab(sb);
+  Object.assign(sa, B);
+  Object.assign(sb, A);
+  emit();
+  return true;
+}
+
 /** Copy a square: colors, icon, facing, chair size and every label line with
  *  its text and color. */
 function copySquareFrom(r, c) {

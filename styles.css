@@ -834,6 +834,11 @@ body {
   outline-offset: -3px;
   background: var(--surface-2);
 }
+/* A split piece as a content-drag landing spot. */
+.subcell--droptarget {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
 
 /* A merged desk spans several cells; each member cell renders blank (transparent)
    and the merge overlays (drawn by renderMerges) show the fused desk on top. */

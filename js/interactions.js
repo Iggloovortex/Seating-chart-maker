@@ -96,7 +96,8 @@ function initInteractions(chartEl) {
       // On a mouse, pulling a square off its cell picks it up and carries it to
       // another one. Touch keeps the old meaning — the travel is a scroll — so
       // dragging is desktop-only for now.
-      if (canDragSquare(pointer)) startSquareDrag(pointer, e);
+      const src = dragSourceOf(pointer);
+      if (src) startContentDrag(src, pointer, e);
       else {
         const table = canDragTable(pointer);
         if (table && typeof startTableBodyDrag === 'function') {
@@ -124,27 +125,33 @@ function initInteractions(chartEl) {
     pointer = null;
   }
 
-  // ---------------------------------------------------------------- drag a square
+  // ---------------------------------------------------------------- drag content
   //
-  // Press a square and pull: it lifts off and follows the pointer, and the cell
-  // under it is outlined as the landing spot. Letting go swaps the two squares —
-  // an empty target simply receives it, an occupied one trades places — so a drag
-  // can rearrange a chart without ever destroying anything. The WHOLE square
-  // travels, a split square and all of its pieces included.
+  // Press and pull: the thing under the pointer lifts off and follows it, and the
+  // landing spot is outlined. A whole square dragged onto another whole square
+  // trades places (moveSquare); anything involving a split PIECE swaps CONTENT
+  // between the two slots — so content moves piece↔piece, piece↔square and
+  // square↔piece. Mouse only; touch keeps its scroll meaning (cut/paste covers it).
 
-  /** Only a plain mouse drag off a square that actually holds something, and only
-   *  while no other mode owns the gesture. A merged square is skipped: it is one
-   *  desk spanning several cells, so moving a single cell of it is meaningless. */
-  function canDragSquare(p) {
-    if (p.additive || p.shift || p.longFired) return false;
-    if (p.pointerType !== 'mouse') return false;
-    if (selectMode) return false;                    // select mode has its own move handle
-    if (typeof isWallsMode === 'function' && isWallsMode()) return false;
+  /** What a press would drag: a split PIECE (when it has content), or a whole
+   *  non-split square (when it does), or null when nothing/mode owns the gesture.
+   *  A merged or table-covered cell is not a content drag (handled elsewhere). */
+  function dragSourceOf(p) {
+    if (p.additive || p.shift || p.longFired) return null;
+    if (p.pointerType !== 'mouse') return null;
+    if (selectMode) return null;                     // select mode has its own move handle
+    if (typeof isWallsMode === 'function' && isWallsMode()) return null;
     const [r, c] = parseKey(p.cell.dataset.key);
-    if (typeof mergeAt === 'function' && mergeAt(r, c)) return false;
-    if (typeof tableAt === 'function' && tableAt(r, c)) return false;
+    if (typeof mergeAt === 'function' && mergeAt(r, c)) return null;
+    if (typeof tableAt === 'function' && tableAt(r, c)) return null;
     const cell = peekCell(r, c);
-    return !!(cell && (cell.enabled || cellHasAnyContent(cell)));
+    if (!cell) return null;
+    if (isSplit(cell)) {
+      if (p.sub == null) return null;                // a whole split moves via select mode
+      const sub = subcellAt(r, c, p.sub);
+      return sub && (sub.enabled || hasContent(sub)) ? { r, c, sub: p.sub } : null;
+    }
+    return (cell.enabled || cellHasAnyContent(cell)) ? { r, c, sub: null } : null;
   }
 
   /** A plain mouse drag off a table's body moves the whole table, the way a
@@ -160,66 +167,89 @@ function initInteractions(chartEl) {
     return typeof tableAt === 'function' ? tableAt(r, c) : null;
   }
 
-  function startSquareDrag(p, e) {
+  function startContentDrag(src, p, e) {
     window.clearTimeout(p.timer);
-    const rect = p.cell.getBoundingClientRect();
-    const ghost = p.cell.cloneNode(true);
+    const srcEl = (src.sub != null
+      ? p.cell.querySelector(`.subcell[data-sub="${src.sub}"]`) : p.cell) || p.cell;
+    const rect = srcEl.getBoundingClientRect();
+    const ghost = srcEl.cloneNode(true);
     ghost.classList.add('cell--dragging');
     ghost.removeAttribute('data-key');
     ghost.style.width = `${rect.width}px`;
     ghost.style.height = `${rect.height}px`;
     document.body.appendChild(ghost);
-    drag = { from: p.cell.dataset.key, ghost, target: null,
+    drag = { src, ghost, target: null, tkey: null,
              dx: e.clientX - rect.left, dy: e.clientY - rect.top };
     chartEl.classList.add('chart--dragging');
-    // The square can be carried anywhere on the page, so the drag follows the
-    // WINDOW rather than the chart — it keeps tracking past the grid's edge and
-    // still finishes if the pointer is released outside it.
-    window.addEventListener('pointermove', trackSquareDrag, true);
-    window.addEventListener('pointerup', dropSquareDrag, true);
-    window.addEventListener('pointercancel', cancelSquareDrag, true);
-    trackSquareDrag(e);
+    // Follows the WINDOW so it keeps tracking past the grid's edge and still
+    // finishes if released outside it.
+    window.addEventListener('pointermove', trackContentDrag, true);
+    window.addEventListener('pointerup', dropContentDrag, true);
+    window.addEventListener('pointercancel', cancelContentDrag, true);
+    trackContentDrag(e);
     pointer = null;
   }
 
-  function trackSquareDrag(e) {
+  /** The slot under the pointer — a split piece if one is there, else the cell.
+   *  A merged cell is not a drop target. */
+  function slotUnder(clientX, clientY) {
+    const under = document.elementFromPoint(clientX, clientY);
+    if (!under || !under.closest) return null;
+    const cell = under.closest('.cell');
+    if (!cell || !cell.dataset.key) return null;
+    const [r, c] = parseKey(cell.dataset.key);
+    if (typeof mergeAt === 'function' && mergeAt(r, c)) return null;
+    const subEl = under.closest('.subcell');
+    const sub = subEl && subEl.dataset.sub != null ? Number(subEl.dataset.sub) : null;
+    return { key: cell.dataset.key, r, c, sub };
+  }
+
+  function trackContentDrag(e) {
     if (!drag) return;
     drag.ghost.style.left = `${e.clientX - drag.dx}px`;
     drag.ghost.style.top = `${e.clientY - drag.dy}px`;
-    // The ghost sits under the pointer, so ask what is beneath IT, not the event.
     drag.ghost.style.visibility = 'hidden';
-    const under = document.elementFromPoint(e.clientX, e.clientY);
+    const t = slotUnder(e.clientX, e.clientY);
     drag.ghost.style.visibility = '';
-    const cell = under && under.closest ? under.closest('.cell') : null;
-    const key = cell && cell.dataset.key !== drag.from ? cell.dataset.key : null;
-    if (key === drag.target) return;
-    markDropTarget(drag.target, false);
-    drag.target = key;
-    markDropTarget(key, true);
+    const same = t && t.r === drag.src.r && t.c === drag.src.c &&
+                 (t.sub == null ? null : t.sub) === (drag.src.sub == null ? null : drag.src.sub);
+    const next = same ? null : t;
+    const nextKey = next ? `${next.key}#${next.sub == null ? '' : next.sub}` : null;
+    if (nextKey === drag.tkey) return;
+    markSlot(drag.target, false);
+    drag.target = next;
+    drag.tkey = nextKey;
+    markSlot(next, true);
   }
 
-  function markDropTarget(key, on = true) {
-    if (!key) return;
-    const el = chartEl.querySelector(`.cell[data-key="${CSS.escape(key)}"]`);
-    if (el) el.classList.toggle('cell--droptarget', on);
+  function markSlot(t, on) {
+    if (!t) return;
+    const el = t.sub != null
+      ? chartEl.querySelector(`.cell[data-key="${CSS.escape(t.key)}"] .subcell[data-sub="${t.sub}"]`)
+      : chartEl.querySelector(`.cell[data-key="${CSS.escape(t.key)}"]`);
+    if (el) el.classList.toggle(t.sub != null ? 'subcell--droptarget' : 'cell--droptarget', on);
   }
 
-  function dropSquareDrag() {
+  function dropContentDrag() {
     if (!drag) return;
-    const { from, target } = drag;
-    cancelSquareDrag();
-    if (target) moveSquare(from, target);
+    const { src, target } = drag;
+    cancelContentDrag();
+    if (!target) return;
+    // Two whole squares trade places (non-destructive, split and all); anything
+    // involving a piece swaps CONTENT between the two slots.
+    if (src.sub == null && target.sub == null) moveSquare(keyOf(src.r, src.c), target.key);
+    else swapContentSlots(src, { r: target.r, c: target.c, sub: target.sub });
   }
 
-  function cancelSquareDrag() {
+  function cancelContentDrag() {
     if (!drag) return;
-    markDropTarget(drag.target, false);
+    markSlot(drag.target, false);
     drag.ghost.remove();
     chartEl.classList.remove('chart--dragging');
     drag = null;
-    window.removeEventListener('pointermove', trackSquareDrag, true);
-    window.removeEventListener('pointerup', dropSquareDrag, true);
-    window.removeEventListener('pointercancel', cancelSquareDrag, true);
+    window.removeEventListener('pointermove', trackContentDrag, true);
+    window.removeEventListener('pointerup', dropContentDrag, true);
+    window.removeEventListener('pointercancel', cancelContentDrag, true);
   }
 
   // Desktop right-click => edit. Shift+right-click => the delete menu instead,
