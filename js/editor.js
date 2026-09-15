@@ -164,7 +164,7 @@ function renderPresetEditor(n) {
 
 function presetIconFillSwatch(n, cur) {
   const on = !!cur().iconFill;
-  const item = swatch('Icon fill', cur().iconFill || cur().fill,
+  const item = swatch('Infill', cur().iconFill || cur().fill,
                       (v) => updateConfigPreset(n, { ...cur(), iconFill: v }));
   const input = item.querySelector('input');
   input.disabled = !on;
@@ -1155,7 +1155,7 @@ function renderSubcellEditor() {
 
 function subIconFillSwatch(sub) {
   const on = !!sub.iconFill;
-  const item = swatch('Icon fill', sub.iconFill || sub.fill,
+  const item = swatch('Infill', sub.iconFill || sub.fill,
                       (v) => updateSubcell(current.r, current.c, current.sub, { iconFill: v }));
   const input = item.querySelector('input');
   input.disabled = !on;
@@ -1405,7 +1405,7 @@ function bulkColors(keys, first) {
 function bulkIconFillSwatch(keys, first) {
   const shared = agreedAcross(keys, (c) => c.iconFill);
   const on = !!shared;
-  const item = swatch('Icon fill', shared || first.fill,
+  const item = swatch('Infill', shared || first.fill,
                       (v) => updateCells(keys, { iconFill: v }));
   const input = item.querySelector('input');
   input.disabled = !on;
@@ -1809,7 +1809,7 @@ function squareColors(cell) {
 
 function iconFillSwatch(cell) {
   const on = !!cell.iconFill;
-  const item = swatch('Icon fill', cell.iconFill || cell.fill,
+  const item = swatch('Infill', cell.iconFill || cell.fill,
                       (v) => updateCell(current.r, current.c, { iconFill: v }));
   const input = item.querySelector('input');
   input.disabled = !on;
