@@ -1411,7 +1411,7 @@ body {
 /* Compact split picker that rides in the Format row, right of Colors — a narrow
    2-wide grid so the four columns fit on one line without wrapping. Four shape
    toggles (no None); a bigger preview icon inside each. */
-.icon-picker--split { grid-template-columns: 34px; gap: 4px; }
+.icon-picker--split { grid-template-columns: repeat(2, 34px); gap: 3px; }
 .icon-picker--split .split-opt { width: 34px; height: 34px; padding: 2px; }
 .icon-picker--split .split-opt__svg { width: 30px; height: 30px; }
 
