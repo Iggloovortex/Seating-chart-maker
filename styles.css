@@ -863,6 +863,16 @@ body {
    no content — theme-aware, so it swaps with light/dark. */
 .merge-unit--empty { background: var(--surface); border-color: var(--line); }
 .merge-shape--empty path { fill: var(--surface); stroke: var(--line); }
+/* A split merge: the desk box holding the anchor's sub-grid across the whole
+   footprint. The inner .cell__split (position:absolute; inset:0) fills it. */
+.merge-split {
+  position: absolute;
+  z-index: 1;
+  box-sizing: border-box;
+  border: 1px solid var(--seat-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
 /* Hovering any member cell lights the WHOLE fused desk, so a merge reads as one
    unit rather than a stack of squares. The member cells are transparent, so kill
    their own single-cell hover — the overlay is what answers the pointer. */

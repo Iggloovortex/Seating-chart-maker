@@ -650,6 +650,31 @@ function mergeSection(merge) {
     );
     g.appendChild(seg);
 
+    // A unit or rectangular merge can be split into sub-cells, drawn across the
+    // whole desk. The split lives on the anchor cell (current.r/current.c), so it
+    // reuses the ordinary split picker; once split, editing shows the split-parent
+    // pane (where 'None' un-splits it).
+    if (typeof mergeCanSplit === 'function' && mergeCanSplit(merge)) {
+      const cellNow = peekCell(current.r, current.c);
+      const picker = document.createElement('div');
+      picker.className = 'icon-picker';
+      picker.style.marginTop = '8px';
+      for (const o of SPLIT_KINDS) {
+        const active = o.key === 'none' ? !isSplit(cellNow)
+          : isSplit(cellNow) && cellNow.split.rows === o.rows && cellNow.split.cols === o.cols;
+        picker.appendChild(splitOptionButton(o, active, () => {
+          if (o.key === 'none') unsplitCell(current.r, current.c);
+          else splitCell(current.r, current.c, o.rows, o.cols);
+          render(peekCell(current.r, current.c));
+        }));
+      }
+      const slabel = document.createElement('p');
+      slabel.className = 'egroup__note';
+      slabel.textContent = 'Split this desk into pieces (tap a piece on the grid to fill it):';
+      g.appendChild(slabel);
+      g.appendChild(picker);
+    }
+
     const unmerge = document.createElement('button');
     unmerge.type = 'button';
     unmerge.className = 'btn btn--empty';

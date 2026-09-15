@@ -1473,6 +1473,13 @@ function removeMerge(id) {
   emit();
 }
 
+/** Which merges can be split into sub-cells: a centred 'unit' (one square) or a
+ *  rectangular 'poly' block. An L/T/+ has no clean sub-grid, so it can't. The
+ *  split lives on the anchor cell and is drawn across the whole merge. */
+function mergeCanSplit(merge) {
+  return merge.kind === 'unit' || keysAreRect(merge.keys);
+}
+
 /** A merged desk reads EMPTY when none of its member cells are seated — the same
  *  thing an empty square is. A merge is filled when made; emptying it clears the
  *  desk without unmerging, so it can be filled again. */

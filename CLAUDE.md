@@ -70,6 +70,10 @@ and push it; don't stack new work directly on `main`.
   half-slab, so a split space is already that size or less and it renders as the
   plain filled space. Any special icon added later gets an entry — give it the
   space its piece needs, and anything smaller acts like a normal square.
+  **Selectable + mergeable:** a tap on a split piece toggles it only when NOT
+  picking; in select mode (or a Ctrl/Shift gesture) the tap selects the whole
+  square (fireTap, js/interactions.js), so a split square can be gathered into a
+  selection and merged like any other.
 - **Merge — DONE.** Two kinds, from the `#btn-table-merge` menu on a ≥2-square
   selection: `'poly'` fuses the selection into one desk of its exact shape (L/T/+,
   a single outline, labels across the widest run, icon in the slimmest cell) and
@@ -84,6 +88,18 @@ and push it; don't stack new work directly on `main`.
   (SVG fill+outline, gaps bridged) and export `drawMerge` keep parity. Tap a
   merged cell to edit the anchor; the pane's Merged-square section switches
   kind / unmerges.
+  **Grid-level behaviour** (a merge acts as one unit, not just an overlay): a
+  select-mode / Ctrl tap gathers the WHOLE merge (`toggleMergeSelection`), not the
+  cell under it; `addMerge` refuses cells already in a merge (no stacking);
+  deleting any member expands to the whole merge and clears it (the delete menu +
+  `deleteMerge`); a plain tap seats/empties the desk like a square
+  (`toggleMergeFilled` / `mergeIsEmpty` — an emptied merge renders as one empty
+  region in the grid and draws nothing in the export, content kept); hovering any
+  member lights the whole desk (`.merge--hot`). A `unit` merge or a rectangular
+  `poly` merge (`mergeCanSplit`) can be **split**: the split lives on the anchor
+  cell (reuses `splitCell`/`toggleSubcell`/`openSubcellEditor`) and is drawn across
+  the whole desk box by `renderMergeSplit` (grid) / the split branch of `drawMerge`
+  (export), both reusing `buildSplitGrid` / `drawSplit`.
 - **Walls — DONE** (branch `claude/walls-tmdavo`). Edge objects on the seams
   between squares and the outer border, styled from user-supplied reference SVGs.
   Every type is a bar one cell long and `WALL_THICK` (0.0909u) thick, outlined at
@@ -191,6 +207,14 @@ and push it; don't stack new work directly on `main`.
   The whole cell travels, a split square and its pieces included. Lives in
   `js/interactions.js` (window-level listeners while dragging, so it keeps
   tracking past the grid's edge). Merged and table-covered squares are skipped.
+- **Move a table — DONE.** A table moves like a square: drag its body, or its
+  move grip (✥, shown on hover beside the ✕). `moveTable` shifts it by whole cells
+  via `shiftCells`, refusing off-grid or occupied destinations; the grip reuses the
+  snapped preview (`attachTableMoveDrag`) and the body drag runs through
+  `startTableBodyDrag` (js/grid.js) started from js/interactions.js. **Deleting a
+  table keeps the data:** `removeTable` (the ✕) empties the covered squares
+  (unseats them, content intact) and leaves them selected in select mode, so a
+  second delete clears the content.
 - **2-column labels** for the KVM and Dual Monitor icons — a per-row optional 2nd
   column, activating when any row has 2nd-column content. Touches the label data
   model, editor, both renderers, and TSV. (Scoped, not started.)

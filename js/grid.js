@@ -1256,7 +1256,7 @@ function updateMergeHover(e) {
 function setHoverMerge(id) {
   if (id === hoverMergeId) return;
   hoverMergeId = id;
-  chart.querySelectorAll('.merge-shape, .merge-unit').forEach((el) => {
+  chart.querySelectorAll('.merge-shape, .merge-unit, .merge-split').forEach((el) => {
     el.classList.toggle('merge--hot', el.dataset.mergeId === id && id != null);
   });
 }
@@ -1567,6 +1567,22 @@ function renderMerges() {
     const right = Math.max(...vals.map((b) => b.left + b.width));
     const bottom = Math.max(...vals.map((b) => b.top + b.height));
 
+    // A split merge (unit or rectangular) draws its sub-grid across the whole
+    // desk, reusing the ordinary split renderer on the anchor cell.
+    const [ar, ac] = parseKey(mergeAnchorKey(merge));
+    const anchorCell = peekCell(ar, ac);
+    if (!empty && mergeCanSplit(merge) && isSplit(anchorCell)) {
+      let box;
+      if (merge.kind === 'unit') {
+        const size = Math.min(vals[0].width, vals[0].height);
+        box = { left: (left + right) / 2 - size / 2, top: (top + bottom) / 2 - size / 2, w: size, h: size };
+      } else {
+        box = { left, top, w: right - left, h: bottom - top };
+      }
+      renderMergeSplit(merge, box, ar, ac, anchorCell, border);
+      continue;
+    }
+
     const plan = mergePlan(merge);
     if (merge.kind === 'unit') {
       renderMergeUnit(data, fill, border, { left, top, right, bottom }, vals[0], empty, merge.id);
@@ -1651,6 +1667,40 @@ function renderMergeUnit(data, fill, border, box, sample, empty, mergeId) {
     div.appendChild(mergeContentInner(data, fill, 'both'));
   }
   chart.appendChild(div);
+}
+
+/** A split merge: the anchor cell's sub-grid drawn across the whole desk box
+ *  (the centred square for a unit, the footprint for a rectangle). Reuses
+ *  buildSplitGrid; a tap on a piece fills it and right-click edits it — but in
+ *  select mode the container lets the pointer through so the whole merge is
+ *  picked as one unit. */
+function renderMergeSplit(merge, box, ar, ac, anchorCell, border) {
+  const container = document.createElement('div');
+  container.className = 'merge-split';
+  container.dataset.mergeId = merge.id;
+  container.style.left = `${box.left}px`;
+  container.style.top = `${box.top}px`;
+  container.style.width = `${box.w}px`;
+  container.style.height = `${box.h}px`;
+  container.style.borderColor = border;
+  const selecting = typeof isSelectMode === 'function' && isSelectMode();
+  container.style.pointerEvents = selecting ? 'none' : 'auto';
+  container.appendChild(buildSplitGrid(ar, ac, anchorCell));
+  if (!selecting) {
+    container.addEventListener('click', (e) => {
+      const sc = e.target.closest && e.target.closest('.subcell');
+      if (!sc || sc.dataset.sub == null) return;
+      e.stopPropagation();
+      toggleSubcell(ar, ac, Number(sc.dataset.sub));
+    });
+    container.addEventListener('contextmenu', (e) => {
+      const sc = e.target.closest && e.target.closest('.subcell');
+      if (!sc || sc.dataset.sub == null) return;
+      e.preventDefault(); e.stopPropagation();
+      openSubcellEditor(ar, ac, Number(sc.dataset.sub));
+    });
+  }
+  chart.appendChild(container);
 }
 
 /** The icon/label stack for a merged desk, contrast-corrected against its fill. */
@@ -2227,7 +2277,7 @@ function showResizePreview({ preview, next }) {
 
 /** Re-measure table overlays after layout changes (zoom, resize). */
 function refreshTables() {
-  chart.querySelectorAll('.table-shape, .table-poly, .table-remove, .table-move, .table-handle, .move-handle, .merge-shape, .merge-content, .merge-unit, .walls-layer')
+  chart.querySelectorAll('.table-shape, .table-poly, .table-remove, .table-move, .table-handle, .move-handle, .merge-shape, .merge-content, .merge-unit, .merge-split, .walls-layer')
     .forEach((n) => n.remove());
   renderTables();
   renderMerges();
