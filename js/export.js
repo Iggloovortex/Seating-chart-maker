@@ -104,6 +104,7 @@ async function renderToCanvas(dpi = 300) {
   for (const merge of state.merges) {
     const data = mergeContentOf(merge);
     if (!data) continue;
+    if (mergeIsEmpty(merge)) continue; // an emptied merge draws nothing, like an empty square
     const plan = mergePlan(merge);
     mergeDraws.push({ merge, data, plan });
     let w = 0, h = 0;

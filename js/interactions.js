@@ -257,15 +257,28 @@ function fireTap(cell, mods = {}) {
     if (data && isSplit(data)) { toggleSubcell(r, c, sub); return; }
   }
 
-  // A merged desk is one object: a plain tap opens its editor (there is no single
-  // square to fill/empty). In select mode a tap still picks the cell, so a
-  // rectangle can gather the whole group to move or delete it.
+  // A merged desk is one grid-level unit: a plain tap seats or empties the whole
+  // desk, just like tapping a square. Editing it is long-press / right-click,
+  // which addresses the anchor (see fireEdit).
   if (!selectMode && !shift && !additive) {
     const merge = mergeAt(r, c);
-    if (merge) { const [ar, ac] = parseKey(mergeAnchorKey(merge)); openEditor(ar, ac); return; }
+    if (merge) { toggleMergeFilled(merge); return; }
   }
 
   const picking = selectMode;
+
+  // A pick gathers the WHOLE merge, not the single cell under the pointer, so a
+  // merge is selected (and then moved or deleted) as one unit. Shift keeps its
+  // rectangle meaning; that is how a merge is swept up alongside other squares.
+  if ((picking || additive) && !shift) {
+    const merge = mergeAt(r, c);
+    if (merge) {
+      if (!picking) enterSelectHandler();
+      toggleMergeSelection(merge);
+      if (state.selection.size === 0) selectionEmptiedHandler();
+      return;
+    }
+  }
 
   // A click that lands on a table picks the TABLE, not the square hiding under
   // it — the table is what you can see there, so it is what a click should mean.

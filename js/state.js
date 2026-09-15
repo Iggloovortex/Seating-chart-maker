@@ -1391,6 +1391,8 @@ function sortCellKeys(keys) {
 function addMerge(kind = 'poly') {
   const keys = sortCellKeys(state.selection);
   if (keys.length < 2) return null;
+  // No stacking: a cell already fused into a merge can't join a second one.
+  if (keys.some((k) => { const [r, c] = parseKey(k); return mergeAt(r, c); })) return null;
   if (typeof historyCheckpoint === 'function') historyCheckpoint();
   // The merged desk shows ONE square's content, so keep the one that actually has
   // some rather than whichever happens to sit top-left. A split square counts —
@@ -1438,6 +1440,40 @@ function removeMerge(id) {
   if (typeof historyCheckpoint === 'function') historyCheckpoint();
   state.merges = state.merges.filter((m) => m.id !== id);
   emit();
+}
+
+/** A merged desk reads EMPTY when none of its member cells are seated — the same
+ *  thing an empty square is. A merge is filled when made; emptying it clears the
+ *  desk without unmerging, so it can be filled again. */
+function mergeIsEmpty(merge) {
+  return merge.keys.every((k) => { const [r, c] = parseKey(k); return !isEnabled(r, c); });
+}
+
+/** Toggle a merged desk between filled and empty — the grid-level equivalent of
+ *  tapping a square to seat/empty it. Content (labels/icons/colours) is kept, so
+ *  filling it again brings the desk back. */
+function toggleMergeFilled(merge) {
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  const on = mergeIsEmpty(merge); // empty -> fill; otherwise empty it
+  batch(() => { for (const k of merge.keys) { const [r, c] = parseKey(k); getCell(r, c).enabled = on; } });
+}
+
+/** Pick or drop a whole merge as one unit: a merged desk is one thing, so a tap
+ *  in select mode gathers (or releases) all of its cells together. */
+function toggleMergeSelection(merge) {
+  const allIn = merge.keys.every((k) => state.selection.has(k));
+  if (allIn) selectionDrop(merge.keys); else selectionAdd(merge.keys);
+  emit();
+}
+
+/** Delete a merged desk and everything it held: remove the merge and reset every
+ *  member cell, so no formerly-merged square is left behind still active. */
+function deleteMerge(merge) {
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  batch(() => {
+    state.merges = state.merges.filter((m) => m.id !== merge.id);
+    resetSquares(merge.keys);
+  });
 }
 
 function pruneMerges() {

@@ -859,6 +859,19 @@ body {
   border-radius: 6px;
   overflow: hidden;
 }
+/* An emptied merge reads like an empty square: surface fill, a plain line border,
+   no content — theme-aware, so it swaps with light/dark. */
+.merge-unit--empty { background: var(--surface); border-color: var(--line); }
+.merge-shape--empty path { fill: var(--surface); stroke: var(--line); }
+/* Hovering any member cell lights the WHOLE fused desk, so a merge reads as one
+   unit rather than a stack of squares. The member cells are transparent, so kill
+   their own single-cell hover — the overlay is what answers the pointer. */
+.cell--merged:hover { background: transparent; }
+.merge--hot { filter: brightness(0.9); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .merge--hot { filter: brightness(1.25); }
+}
+:root[data-theme="dark"] .merge--hot { filter: brightness(1.25); }
 
 /* Merge-kind toggle in the editor (Shape vs Centered). */
 .mergekind { display: flex; gap: 6px; }

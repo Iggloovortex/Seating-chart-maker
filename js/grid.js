@@ -462,8 +462,14 @@ function openDeleteMenu(x, y, { keys, r, c }) {
     const filled = keys.some((k) => { const [rr, cc] = parseKey(k); return isEnabled(rr, cc); });
     if ((filled || tables.length) &&
         !confirm(`Delete ${what}? Labels, icons and colors go with them.`)) return;
+    // A merged cell belongs to a whole desk: expand to every cell of any merge
+    // touched, and drop those merges, so no formerly-merged square is left active.
+    const merges = [...new Set(keys.map((k) => { const [rr, cc] = parseKey(k); return mergeAt(rr, cc); }).filter(Boolean))];
+    const allKeys = new Set(keys);
+    for (const m of merges) m.keys.forEach((k) => allKeys.add(k));
     batch(() => {
-      resetSquares(keys);
+      resetSquares([...allKeys]);
+      for (const m of merges) removeMerge(m.id);
       if (tables.length) removeTables(tables);
     });
   });
@@ -512,11 +518,13 @@ function initInsertGuides(stageEl) {
     // to hand over to the next seam along.
     updateWallHint(e);
     updateTableHover(e);   // reveal the ✕ of whichever table the pointer is over
+    updateMergeHover(e);   // light the whole merged desk the pointer is over
   });
   stageEl.addEventListener('pointerleave', () => {
     if (!cornerMenuOpen) hideInsertGuides();
     clearWallHover();
     setHoverTable(null);
+    setHoverMerge(null);
   });
   // The menu is modal-ish: anything else you click dismisses it.
   document.addEventListener('pointerdown', (e) => {
@@ -1228,6 +1236,31 @@ function setHoverTable(id) {
   chart.querySelectorAll('.table-remove').forEach((b) => { b.hidden = b.dataset.tableId !== id; });
 }
 
+// The merge currently lit by a hover, so hovering any member cell highlights the
+// WHOLE fused desk rather than the single square under the pointer.
+let hoverMergeId = null;
+
+function updateMergeHover(e) {
+  if (!state.merges.length) { setHoverMerge(null); return; }
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const cell = el && el.closest ? el.closest('.cell') : null;
+  let id = null;
+  if (cell && cell.dataset.key) {
+    const [r, c] = parseKey(cell.dataset.key);
+    const m = typeof mergeAt === 'function' ? mergeAt(r, c) : null;
+    if (m) id = m.id;
+  }
+  setHoverMerge(id);
+}
+
+function setHoverMerge(id) {
+  if (id === hoverMergeId) return;
+  hoverMergeId = id;
+  chart.querySelectorAll('.merge-shape, .merge-unit').forEach((el) => {
+    el.classList.toggle('merge--hot', el.dataset.mergeId === id && id != null);
+  });
+}
+
 /** Position table shapes over the bounding box of their member cells. */
 function renderTables() {
   if (!state.tables.length) return;
@@ -1393,6 +1426,9 @@ function renderMerges() {
     const data = mergeContentOf(merge);
     const fill = data.fill || '#dbe7ff';
     const border = data.border || '#2f6feb';
+    // An emptied merge reads like an empty square: no desk fill, no content, just
+    // the fused region's outline (styled from CSS, theme-aware).
+    const empty = mergeIsEmpty(merge);
 
     // Each member cell's box in the chart's own layout px.
     const rects = new Map();
@@ -1410,7 +1446,7 @@ function renderMerges() {
 
     const plan = mergePlan(merge);
     if (merge.kind === 'unit') {
-      renderMergeUnit(data, fill, border, { left, top, right, bottom }, vals[0]);
+      renderMergeUnit(data, fill, border, { left, top, right, bottom }, vals[0], empty, merge.id);
       continue;
     }
 
@@ -1432,19 +1468,26 @@ function renderMerges() {
 
     const svg = document.createElementNS(MERGE_SVGNS, 'svg');
     svg.setAttribute('class', 'merge-shape');
+    svg.dataset.mergeId = merge.id;
     svg.style.left = `${oLeft}px`;
     svg.style.top = `${oTop}px`;
     svg.setAttribute('width', (right - left) + pad * 2);
     svg.setAttribute('height', (bottom - top) + pad * 2);
     const path = document.createElementNS(MERGE_SVGNS, 'path');
     path.setAttribute('d', d);
-    path.setAttribute('fill', fill);
-    path.setAttribute('stroke', border);
+    if (empty) {
+      svg.classList.add('merge-shape--empty');   // fill/stroke come from CSS (theme-aware)
+    } else {
+      path.setAttribute('fill', fill);
+      path.setAttribute('stroke', border);
+    }
     path.setAttribute('stroke-width', lw);
     path.setAttribute('stroke-linejoin', 'round');
     path.setAttribute('fill-rule', 'evenodd');
     svg.appendChild(path);
     chart.appendChild(svg);
+
+    if (empty) continue;   // an emptied merge shows only its outline
 
     // Content. A full rectangle lays out centred like a desk; an L/T/+ puts its
     // labels across the widest run and its icon in the slimmest cell.
@@ -1467,18 +1510,23 @@ function renderMerges() {
 
 /** One 'unit' merge: a single square (one cell in size) centred in the block, so
  *  a desk can straddle the seam between cells while staying square. */
-function renderMergeUnit(data, fill, border, box, sample) {
+function renderMergeUnit(data, fill, border, box, sample, empty, mergeId) {
   const size = Math.min(sample.width, sample.height);
   const cx = (box.left + box.right) / 2, cy = (box.top + box.bottom) / 2;
   const div = document.createElement('div');
-  div.className = 'merge-unit';
+  div.className = empty ? 'merge-unit merge-unit--empty' : 'merge-unit';
+  if (mergeId != null) div.dataset.mergeId = mergeId;
   div.style.left = `${cx - size / 2}px`;
   div.style.top = `${cy - size / 2}px`;
   div.style.width = `${size}px`;
   div.style.height = `${size}px`;
-  div.style.background = fill;
-  div.style.borderColor = border;
-  div.appendChild(mergeContentInner(data, fill, 'both'));
+  // An emptied unit shows only the surface + border (from CSS); a filled one draws
+  // its desk colours and content.
+  if (!empty) {
+    div.style.background = fill;
+    div.style.borderColor = border;
+    div.appendChild(mergeContentInner(data, fill, 'both'));
+  }
   chart.appendChild(div);
 }
 
