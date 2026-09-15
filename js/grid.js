@@ -1030,7 +1030,10 @@ function buildCell(r, c, rects) {
     el.style.height = `${Math.max(2, box.h - CELL_GAP)}px`;
   }
 
-  if (state.selection.has(key)) {
+  // A merged cell never shows its own selection tick: the whole merge is one
+  // object, so its selection is drawn once on the merge overlay (renderMerges),
+  // not as a grid of checkmarks over every member.
+  if (state.selection.has(key) && !mergeAt(r, c)) {
     el.classList.add('cell--selected');
     el.appendChild(checkBadge());
   }
@@ -1552,6 +1555,9 @@ function renderMerges() {
     // An emptied merge reads like an empty square: no desk fill, no content, just
     // the fused region's outline (styled from CSS, theme-aware).
     const empty = mergeIsEmpty(merge);
+    // The whole merge is one object, so it shows ONE selection outline (not a tick
+    // on every member) — drawn on the overlay when all its cells are selected.
+    const selected = merge.keys.length > 0 && merge.keys.every((k) => state.selection.has(k));
 
     // Each member cell's box in the chart's own layout px.
     const rects = new Map();
@@ -1579,13 +1585,13 @@ function renderMerges() {
       } else {
         box = { left, top, w: right - left, h: bottom - top };
       }
-      renderMergeSplit(merge, box, ar, ac, anchorCell, border);
+      renderMergeSplit(merge, box, ar, ac, anchorCell, border, selected);
       continue;
     }
 
     const plan = mergePlan(merge);
     if (merge.kind === 'unit') {
-      renderMergeUnit(data, fill, border, { left, top, right, bottom }, vals[0], empty, merge.id);
+      renderMergeUnit(data, fill, border, { left, top, right, bottom }, vals[0], empty, merge.id, selected);
       continue;
     }
 
@@ -1606,7 +1612,7 @@ function renderMerges() {
     const d = roundedLoopPath(cellShapeLoops(merge.keys, rectOf, inset), rad, oLeft, oTop);
 
     const svg = document.createElementNS(MERGE_SVGNS, 'svg');
-    svg.setAttribute('class', 'merge-shape');
+    svg.setAttribute('class', 'merge-shape' + (selected ? ' merge--selected' : ''));
     svg.dataset.mergeId = merge.id;
     svg.style.left = `${oLeft}px`;
     svg.style.top = `${oTop}px`;
@@ -1649,11 +1655,11 @@ function renderMerges() {
 
 /** One 'unit' merge: a single square (one cell in size) centred in the block, so
  *  a desk can straddle the seam between cells while staying square. */
-function renderMergeUnit(data, fill, border, box, sample, empty, mergeId) {
+function renderMergeUnit(data, fill, border, box, sample, empty, mergeId, selected) {
   const size = Math.min(sample.width, sample.height);
   const cx = (box.left + box.right) / 2, cy = (box.top + box.bottom) / 2;
   const div = document.createElement('div');
-  div.className = empty ? 'merge-unit merge-unit--empty' : 'merge-unit';
+  div.className = 'merge-unit' + (empty ? ' merge-unit--empty' : '') + (selected ? ' merge--selected' : '');
   if (mergeId != null) div.dataset.mergeId = mergeId;
   div.style.left = `${cx - size / 2}px`;
   div.style.top = `${cy - size / 2}px`;
@@ -1674,9 +1680,9 @@ function renderMergeUnit(data, fill, border, box, sample, empty, mergeId) {
  *  buildSplitGrid; a tap on a piece fills it and right-click edits it — but in
  *  select mode the container lets the pointer through so the whole merge is
  *  picked as one unit. */
-function renderMergeSplit(merge, box, ar, ac, anchorCell, border) {
+function renderMergeSplit(merge, box, ar, ac, anchorCell, border, selected) {
   const container = document.createElement('div');
-  container.className = 'merge-split';
+  container.className = 'merge-split' + (selected ? ' merge--selected' : '');
   container.dataset.mergeId = merge.id;
   container.style.left = `${box.left}px`;
   container.style.top = `${box.top}px`;
