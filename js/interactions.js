@@ -63,7 +63,9 @@ function initInteractions(chartEl) {
   let pointer = null; // { id, x, y, cell, timer, longFired }
   let drag = null;    // a square being carried to another cell (mouse only)
 
-  const cellFrom = (target) => target.closest?.('.cell');
+  // A unit (centred) merge's member cells are inert; its centred overlay is the
+  // live target and carries the anchor's data-key, so resolve it like a cell.
+  const cellFrom = (target) => target.closest?.('.cell') || target.closest?.('.merge-unit');
   // Which sub-cell of a split square the pointer is over, or null.
   const subFrom = (target) => {
     const el = target.closest?.('.subcell');

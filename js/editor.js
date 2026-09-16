@@ -230,16 +230,36 @@ function refreshEditor() {
 }
 
 function render(cell) {
-  // A split square is a container for its pieces — its own fill/labels/icon are
-  // not drawn — so it gets a dedicated pane (the split picker + a piece list)
-  // rather than the desk controls.
+  const merge = mergeAt(current.r, current.c);
+
+  // A desk-split merge stays in the universal pane: the shared header (with
+  // Unmerge), the merge controls (Shape/Centered + desk-split picker) and the
+  // Pieces list — so Shape/Centered never vanishes once the desk is split.
+  if (merge && isSplit(cell)) {
+    bodyEl.replaceChildren();
+    renderSquareActions();
+    bodyEl.appendChild(mergeSection(merge));
+    bodyEl.appendChild(piecesGroup(cell, () => render(peekCell(current.r, current.c))));
+    const foot = document.createElement('div');
+    foot.className = 'editor__foot';
+    const done = document.createElement('button');
+    done.type = 'button';
+    done.className = 'btn btn--primary';
+    done.textContent = 'Done';
+    done.addEventListener('click', closeEditor);
+    foot.appendChild(done);
+    bodyEl.appendChild(foot);
+    return;
+  }
+
+  // A (non-merged) split square is a container for its pieces — its own
+  // fill/labels/icon are not drawn — so it gets the dedicated split-parent pane.
   if (isSplit(cell)) { renderSplitParent(cell); return; }
 
   bodyEl.replaceChildren();
   renderSquareActions();
 
   // === Unique: a merged desk's own controls (shown only when merged) ========
-  const merge = mergeAt(current.r, current.c);
   if (merge) bodyEl.appendChild(mergeSection(merge));
 
   // === Format: fill / facing / colors on one row, then Split ================
@@ -728,13 +748,13 @@ function splitSection(cell) {
   return group('Split square', (g) => {
     const picker = document.createElement('div');
     picker.className = 'icon-picker';
-    // Exclusive toggles, no None: click a shape to split, click the active shape
-    // to un-split.
+    // Big buttons here, so keep an explicit None to un-split (the compact
+    // Format-row picker drops it and toggles instead).
     for (const o of SPLIT_KINDS) {
-      if (o.key === 'none') continue;
-      const active = isSplit(cell) && cell.split.rows === o.rows && cell.split.cols === o.cols;
+      const active = o.key === 'none' ? !isSplit(cell)
+        : isSplit(cell) && cell.split.rows === o.rows && cell.split.cols === o.cols;
       picker.appendChild(splitOptionButton(o, active, () => {
-        if (active) unsplitCell(current.r, current.c);
+        if (o.key === 'none') unsplitCell(current.r, current.c);
         else splitCell(current.r, current.c, o.rows, o.cols);
         render(peekCell(current.r, current.c));
       }));
@@ -742,7 +762,7 @@ function splitSection(cell) {
     g.appendChild(picker);
     const note = document.createElement('p');
     note.className = 'egroup__note';
-    note.textContent = 'Divide this square into smaller squares. Tap a piece to fill it; long-press or right-click a piece to edit it. Tap the active shape to un-split.';
+    note.textContent = 'Divide this square into smaller squares. Tap a piece to fill it; long-press or right-click a piece to edit it.';
     g.appendChild(note);
   });
 }
@@ -783,17 +803,12 @@ function splitOptionButton(o, active, onClick) {
 
 let submergeSelection = new Set();
 
-/** The pane for a split square: change or clear the split, and a list of pieces,
- *  each opening its own editor with a live preview of its state. */
-function renderSplitParent(cell) {
-  bodyEl.replaceChildren();
-  renderSquareActions();
-
-  bodyEl.appendChild(splitSection(cell));
-
+/** The Pieces list for a split square (also shown inside the merge pane when a
+ *  desk is split). `rerender` re-draws whichever pane hosts it, so the submerge
+ *  selection reflects live. */
+function piecesGroup(cell, rerender) {
   const canMerge = cell.split.rows * cell.split.cols >= 4;
-
-  bodyEl.appendChild(group('Pieces', (g) => {
+  return group('Pieces', (g) => {
     const grid = document.createElement('div');
     grid.className = 'piece-grid';
     grid.style.gridTemplateColumns = `repeat(${cell.split.cols}, 1fr)`;
@@ -821,7 +836,7 @@ function renderSplitParent(cell) {
           e.preventDefault();
           if (submergeSelection.has(i)) submergeSelection.delete(i);
           else submergeSelection.add(i);
-          renderSplitParent(peekCell(current.r, current.c));
+          rerender();
         });
       }
       grid.appendChild(btn);
@@ -839,11 +854,9 @@ function renderSplitParent(cell) {
       selBtn.textContent = submergeSelection.size ? `${submergeSelection.size} selected` : 'Select to merge';
       selBtn.title = 'Hold Shift+click or click here then click pieces to select for merging';
       selBtn.addEventListener('click', () => {
-        if (submergeSelection.size) { submergeSelection.clear(); renderSplitParent(peekCell(current.r, current.c)); }
-        else {
-          submergeSelection.add(0);
-          renderSplitParent(peekCell(current.r, current.c));
-        }
+        if (submergeSelection.size) submergeSelection.clear();
+        else submergeSelection.add(0);
+        rerender();
       });
       bar.appendChild(selBtn);
 
@@ -860,7 +873,7 @@ function renderSplitParent(cell) {
         mergeBtn.addEventListener('click', () => {
           addSubmerge(current.r, current.c, indices);
           submergeSelection.clear();
-          renderSplitParent(peekCell(current.r, current.c));
+          rerender();
         });
         bar.appendChild(mergeBtn);
       }
@@ -873,7 +886,17 @@ function renderSplitParent(cell) {
       ? 'Click a piece to edit it. Shift+click to select pieces, then Merge to combine them.'
       : 'Click a piece to edit its fill, icon, labels and facing.';
     g.appendChild(note);
-  }));
+  });
+}
+
+/** The pane for a split square: change or clear the split, and a list of pieces,
+ *  each opening its own editor with a live preview of its state. */
+function renderSplitParent(cell) {
+  bodyEl.replaceChildren();
+  renderSquareActions();
+
+  bodyEl.appendChild(splitSection(cell));
+  bodyEl.appendChild(piecesGroup(cell, () => renderSplitParent(peekCell(current.r, current.c))));
 
   const foot = document.createElement('div');
   foot.className = 'editor__foot';

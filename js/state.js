@@ -867,8 +867,20 @@ function pasteSquareTo(keys) {
   if (!squareClipboard || !keys.length) return false;
   if (typeof historyCheckpoint === 'function') historyCheckpoint(); // undo: record before paste
   const f = squareClipboard;
+  // A merged desk is one object: any target that belongs to a merge collapses to
+  // that merge's anchor, so the clipboard lands ONCE on the desk's content instead
+  // of shattering the member cells (which would fill them under the overlay and
+  // de-centre a unit merge). The whole desk's fill/empty state follows the paste.
+  const mergesToFill = new Map(); // merge id -> merge
+  const targets = new Set();
+  for (const k of keys) {
+    const [r, c] = parseKey(k);
+    const m = mergeAt(r, c);
+    if (m) { targets.add(mergeAnchorKey(m)); mergesToFill.set(m.id, m); }
+    else targets.add(k);
+  }
   batch(() => {
-    for (const k of keys) {
+    for (const k of targets) {
       const [r, c] = parseKey(k);
       const cell = getCell(r, c);
       cell.enabled = f.enabled;   // pasting a seated square fills an empty one
@@ -884,6 +896,13 @@ function pasteSquareTo(keys) {
       // never share sub-cell instances.
       if (f.split) { cell.split = { ...f.split }; cell.subcells = (f.subcells || []).map(cloneSubcell); }
       else { cell.split = null; delete cell.subcells; }
+    }
+    // Match every member of an affected merge to the pasted fill/empty state, so
+    // the desk reads as one and mergeIsEmpty stays consistent (content stays on
+    // the anchor only).
+    for (const m of mergesToFill.values()) {
+      for (const k of m.keys) { const [r, c] = parseKey(k); getCell(r, c).enabled = f.enabled; }
+      if (!f.deskSplit) m.deskSplit = false; // a pasted plain square is not a desk-split
     }
   });
   return true;

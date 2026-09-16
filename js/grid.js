@@ -1044,8 +1044,13 @@ function buildCell(r, c, rects) {
   // A merged square draws as one desk over the whole group (renderMerges), so its
   // member cells render blank here and let that overlay show through. Merge wins
   // over a split — a split cell can be pulled into a merge.
-  if (mergeAt(r, c)) {
+  const mergeHere = mergeAt(r, c);
+  if (mergeHere) {
     el.classList.add('cell--merged');
+    // A unit (centred) merge fills only its centred square; the surrounding
+    // member-cell area is dead, so only the centred overlay (its own live target)
+    // responds to hover/tap/edit.
+    if (mergeHere.kind === 'unit') el.classList.add('cell--merged-inert');
     el.setAttribute('aria-label', `Merged square, row ${r + 1}, column ${c + 1}`);
     return el;
   }
@@ -1246,12 +1251,16 @@ let hoverMergeId = null;
 function updateMergeHover(e) {
   if (!state.merges.length) { setHoverMerge(null); return; }
   const el = document.elementFromPoint(e.clientX, e.clientY);
-  const cell = el && el.closest ? el.closest('.cell') : null;
   let id = null;
+  const cell = el && el.closest ? el.closest('.cell') : null;
   if (cell && cell.dataset.key) {
     const [r, c] = parseKey(cell.dataset.key);
     const m = typeof mergeAt === 'function' ? mergeAt(r, c) : null;
     if (m) id = m.id;
+  } else {
+    // A unit merge's centred overlay is the live target (member cells are inert).
+    const unit = el && el.closest ? el.closest('.merge-unit') : null;
+    if (unit && unit.dataset.mergeId) id = unit.dataset.mergeId;
   }
   setHoverMerge(id);
 }
@@ -1591,7 +1600,7 @@ function renderMerges() {
 
     const plan = mergePlan(merge);
     if (merge.kind === 'unit') {
-      renderMergeUnit(data, fill, border, { left, top, right, bottom }, vals[0], empty, merge.id, selected);
+      renderMergeUnit(data, fill, border, { left, top, right, bottom }, vals[0], empty, merge.id, selected, mergeAnchorKey(merge));
       continue;
     }
 
@@ -1632,22 +1641,21 @@ function renderMerges() {
     svg.appendChild(path);
     chart.appendChild(svg);
 
-    if (empty) continue;   // an emptied merge shows only its outline
-
     // Content. A full rectangle lays out centred like a desk; an L/T/+ puts its
-    // labels across the widest run and its icon in the slimmest cell.
+    // labels across the widest run and its icon in the slimmest cell. An emptied
+    // merge keeps a faded ghost of the same content, so it stays recognisable.
     if (plan.isRect) {
-      placeMergeContent(data, fill, { left, top, w: right - left, h: bottom - top }, 'both');
+      placeMergeContent(data, fill, { left, top, w: right - left, h: bottom - top }, 'both', empty);
     } else {
       if (plan.labelRun) {
         const a = rects.get(keyOf(plan.labelRun.r, plan.labelRun.cStart));
         const z = rects.get(keyOf(plan.labelRun.r, plan.labelRun.cEnd));
         if (a && z) placeMergeContent(data, fill,
-          { left: a.left, top: a.top, w: (z.left + z.width) - a.left, h: a.height }, 'labels');
+          { left: a.left, top: a.top, w: (z.left + z.width) - a.left, h: a.height }, 'labels', empty);
       }
       if (plan.iconCell && data.icon) {
         const ic = rects.get(keyOf(plan.iconCell.r, plan.iconCell.c));
-        if (ic) placeMergeContent(data, fill, { left: ic.left, top: ic.top, w: ic.width, h: ic.height }, 'icon');
+        if (ic) placeMergeContent(data, fill, { left: ic.left, top: ic.top, w: ic.width, h: ic.height }, 'icon', empty);
       }
     }
   }
@@ -1655,22 +1663,27 @@ function renderMerges() {
 
 /** One 'unit' merge: a single square (one cell in size) centred in the block, so
  *  a desk can straddle the seam between cells while staying square. */
-function renderMergeUnit(data, fill, border, box, sample, empty, mergeId, selected) {
+function renderMergeUnit(data, fill, border, box, sample, empty, mergeId, selected, anchorKey) {
   const size = Math.min(sample.width, sample.height);
   const cx = (box.left + box.right) / 2, cy = (box.top + box.bottom) / 2;
   const div = document.createElement('div');
   div.className = 'merge-unit' + (empty ? ' merge-unit--empty' : '') + (selected ? ' merge--selected' : '');
   if (mergeId != null) div.dataset.mergeId = mergeId;
+  // The centred overlay is the unit merge's live target (its member cells are
+  // inert), so it carries the anchor's key for the pointer system.
+  if (anchorKey != null) div.dataset.key = anchorKey;
   div.style.left = `${cx - size / 2}px`;
   div.style.top = `${cy - size / 2}px`;
   div.style.width = `${size}px`;
   div.style.height = `${size}px`;
-  // An emptied unit shows only the surface + border (from CSS); a filled one draws
-  // its desk colours and content.
   if (!empty) {
     div.style.background = fill;
     div.style.borderColor = border;
     div.appendChild(mergeContentInner(data, fill, 'both'));
+  } else {
+    // An emptied unit shows only the surface + border (from CSS) but keeps a faded
+    // ghost of its content, so it stays recognisable and re-fillable.
+    div.appendChild(mergeContentInner(data, fill, 'both', true));
   }
   chart.appendChild(div);
 }
@@ -1710,13 +1723,16 @@ function renderMergeSplit(merge, box, ar, ac, anchorCell, border, selected) {
 }
 
 /** The icon/label stack for a merged desk, contrast-corrected against its fill. */
-function mergeContentInner(data, fill, which) {
+function mergeContentInner(data, fill, which, ghost = false) {
   const inner = document.createElement('div');
-  inner.className = 'cell__content';
+  inner.className = ghost ? 'cell__content cell__content--ghost' : 'cell__content';
   inner.style.setProperty('--rot', `${data.rotation || 0}deg`);
+  // A ghost sits on the bare surface, so ink it against that (like an emptied
+  // square); a filled desk inks against its own fill.
+  const ink = (base) => ghost ? surfaceLabelColor(base) : contrastLabelColor(base, fill);
   if (data.icon && (which === 'both' || which === 'icon')) {
-    const svg = iconUse(data.icon, 'cell__icon', data.iconFill);
-    if (svg) { svg.style.color = contrastLabelColor(data.iconColor || '#1f2933', fill); inner.appendChild(svg); }
+    const svg = iconUse(data.icon, 'cell__icon', ghost ? null : data.iconFill);
+    if (svg) { svg.style.color = ink(data.iconColor || '#1f2933'); inner.appendChild(svg); }
   }
   if ((which === 'both' || which === 'labels') && (data.labels || []).some((l) => l.text)) {
     const labels = document.createElement('div');
@@ -1726,7 +1742,7 @@ function mergeContentInner(data, fill, which) {
       const span = document.createElement('span');
       span.className = 'cell__label';
       span.textContent = line.text;
-      span.style.color = contrastLabelColor(line.color, fill);
+      span.style.color = ink(line.color);
       labels.appendChild(span);
     }
     inner.appendChild(labels);
@@ -1735,14 +1751,14 @@ function mergeContentInner(data, fill, which) {
 }
 
 /** An absolutely-positioned content stack over one region of a merged desk. */
-function placeMergeContent(data, fill, box, which) {
+function placeMergeContent(data, fill, box, which, ghost = false) {
   const wrap = document.createElement('div');
   wrap.className = 'merge-content';
   wrap.style.left = `${box.left}px`;
   wrap.style.top = `${box.top}px`;
   wrap.style.width = `${box.w}px`;
   wrap.style.height = `${box.h}px`;
-  wrap.appendChild(mergeContentInner(data, fill, which));
+  wrap.appendChild(mergeContentInner(data, fill, which, ghost));
   chart.appendChild(wrap);
 }
 

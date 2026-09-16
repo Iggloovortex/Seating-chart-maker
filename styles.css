@@ -843,6 +843,9 @@ body {
 /* A merged desk spans several cells; each member cell renders blank (transparent)
    and the merge overlays (drawn by renderMerges) show the fused desk on top. */
 .cell--merged { background: transparent; border-color: transparent; }
+/* A unit merge fills only its centred square; the surrounding member-cell area is
+   dead so only the centred overlay responds to hover/tap/edit. */
+.cell--merged-inert { pointer-events: none; }
 /* Keep a selected member's outline visible above the merge overlay. */
 .cell--merged.cell--selected { z-index: 5; }
 .merge-shape,
@@ -852,6 +855,9 @@ body {
   pointer-events: none;   /* clicks pass to the cells below, which edit the anchor */
   z-index: 1;
 }
+/* The unit overlay IS the live target for a centred merge (its member cells are
+   inert), so it takes the pointer itself. */
+.merge-unit { pointer-events: auto; cursor: pointer; }
 .merge-content,
 .merge-unit {
   display: flex;
