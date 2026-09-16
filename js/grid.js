@@ -83,6 +83,7 @@ function renderGrid() {
 
   chart.style.setProperty('--line-out', `${LINE_BTN_OUT}px`);
   fitCellLabels();
+  fitSubcellLabels();
   renderTables();
   renderMerges();
   renderWalls();
@@ -129,6 +130,60 @@ function fitCellLabels() {
     const scale = Math.min(wScale, hScale);
     const px = scale < 1 ? Math.max(6, Math.round(BASE * scale)) : null; // floor so it stays legible
     for (const s of spans) s.style.fontSize = px ? `${px}px` : '';
+  }
+}
+
+/** Fit each split PIECE's labels to the space it actually has, rotation-aware, so
+ *  a side-facing label (rotated vertical) reads along the piece's LONG axis at up
+ *  to the normal square font instead of being capped tiny by the piece's narrow
+ *  width. Mirrors fitCellLabels but per sub-cell. */
+function fitSubcellLabels() {
+  const BASE = 12;          // match a normal square's label size when it fits
+  const LINE = BASE * 1.25;
+  const PAD = 4;
+  for (const sc of chart.querySelectorAll('.subcell')) {
+    const labelsEl = sc.querySelector('.cell__labels');
+    if (!labelsEl) continue;
+    const spans = labelsEl.querySelectorAll('.cell__label');
+    if (!spans.length) continue;
+    // Effective rotation of the labels within the piece (furniture sets a transform;
+    // a plain piece rotates the whole .cell__content via --rot).
+    let rot = 0;
+    const tf = labelsEl.style.transform;
+    const content = labelsEl.closest('.cell__content');
+    let m;
+    if (tf && (m = /rotate\(([-\d.]+)deg\)/.exec(tf))) rot = parseFloat(m[1]);
+    else if (content && (m = /([-\d.]+)deg/.exec(content.style.getPropertyValue('--rot') || ''))) rot = parseFloat(m[1]);
+    const a = (((Math.round(rot / 90) * 90) % 360) + 360) % 360;
+    const vertical = a === 90 || a === 270;
+
+    const w = sc.clientWidth - PAD, h = sc.clientHeight - PAD;
+    if (w <= 0 || h <= 0) continue;
+    const iconEl = sc.querySelector('.cell__icon');
+    const iconExtent = iconEl
+      ? (vertical ? iconEl.getBoundingClientRect().width : iconEl.getBoundingClientRect().height)
+      : 0;
+    // A vertical label reads along the piece's HEIGHT; its line-stack runs across
+    // the WIDTH. A horizontal one is the other way round.
+    const availLen = (vertical ? h : w);
+    const availStack = (vertical ? w : h) - iconExtent;
+
+    let widest = 0;
+    for (const s of spans) widest = Math.max(widest, measureLabelWidth(s.textContent));
+    const wScale = widest > availLen ? availLen / widest : 1;
+    const stackH = spans.length * LINE;
+    const hScale = (availStack > 0 && stackH > availStack) ? availStack / stackH : 1;
+    const scale = Math.min(1, wScale, hScale);
+    const px = Math.max(6, Math.floor(BASE * scale));
+    // A vertical label must not be clipped to the piece's narrow width, so free its
+    // max-width and let it extend along the (long) rotated axis. A horizontal one is
+    // capped to the length axis so a too-long name ellipsizes cleanly (the flex
+    // container sizes to content, so % max-width alone never constrains it).
+    labelsEl.classList.toggle('cell__labels--free', vertical);
+    for (const s of spans) {
+      s.style.fontSize = `${px}px`;
+      s.style.maxWidth = vertical ? '' : `${Math.max(0, availLen)}px`;
+    }
   }
 }
 

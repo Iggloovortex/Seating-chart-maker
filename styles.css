@@ -814,6 +814,10 @@ body {
 .subcell .cell__content { padding: 1px; gap: 1px; }
 .subcell .cell__icon { width: 42%; max-width: 22px; }
 .subcell .cell__label { font-size: 9px; line-height: 1.1; }
+/* A vertical (side-facing) split-piece label is fitted by JS (fitSubcellLabels)
+   and reads along the piece's long axis, so it must not be clipped to the piece's
+   narrow width. */
+.subcell .cell__labels--free, .subcell .cell__labels--free .cell__label { max-width: none; overflow: visible; text-overflow: clip; }
 
 /* Dragging a square to another cell (mouse only). The ghost is a clone of the
    square carried under the pointer; the cell it would land on is ringed. */
