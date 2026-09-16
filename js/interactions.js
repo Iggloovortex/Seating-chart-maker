@@ -66,7 +66,8 @@ function initInteractions(chartEl) {
   // A unit (centred) merge's member cells are inert; its centred overlay is the
   // live target and carries the anchor's data-key, so resolve it like a cell.
   const cellFrom = (target) => target.closest?.('.cell')
-    || target.closest?.('.merge-unit') || target.closest?.('.merge-furniture--live');
+    || target.closest?.('.merge-unit') || target.closest?.('.merge-furniture--live')
+    || target.closest?.('.merge-shape');
   // Which sub-cell of a split square the pointer is over, or null.
   const subFrom = (target) => {
     const el = target.closest?.('.subcell');
@@ -138,14 +139,19 @@ function initInteractions(chartEl) {
 
   /** What a press would drag: a split PIECE (when it has content), or a whole
    *  non-split square (when it does), or null when nothing/mode owns the gesture.
-   *  A merged or table-covered cell is not a content drag (handled elsewhere). */
+   *  A table-covered cell is not a content drag (handled elsewhere). */
   function dragSourceOf(p) {
     if (p.additive || p.shift || p.longFired) return null;
     if (p.pointerType !== 'mouse') return null;
     if (selectMode) return null;                     // select mode has its own move handle
     if (typeof isWallsMode === 'function' && isWallsMode()) return null;
     const [r, c] = parseKey(p.cell.dataset.key);
-    if (typeof mergeAt === 'function' && mergeAt(r, c)) return null;
+    // A merged desk drags its CONTENT (the anchor), keeping the merge in place —
+    // dropContentDrag swaps content rather than moving the cell.
+    if (typeof mergeAt === 'function' && mergeAt(r, c)) {
+      const [ar, ac] = parseKey(mergeAnchorKey(mergeAt(r, c)));
+      return cellHasAnyContent(peekCell(ar, ac)) ? { r: ar, c: ac, sub: null, merge: true } : null;
+    }
     if (typeof tableAt === 'function' && tableAt(r, c)) return null;
     const cell = peekCell(r, c);
     if (!cell) return null;
@@ -277,9 +283,9 @@ function initInteractions(chartEl) {
     const { src, target } = drag;
     cancelContentDrag();
     if (!target) return;
-    // Dropping onto a merge swaps CONTENT with the desk's anchor (or the piece
+    // Anything involving a merge swaps CONTENT with the desk's anchor (or the piece
     // under the pointer), never moving the cell itself — so the merge stays intact.
-    if (target.merge) { swapContentSlots(src, { r: target.r, c: target.c, sub: target.sub }); return; }
+    if (src.merge || target.merge) { swapContentSlots(src, { r: target.r, c: target.c, sub: target.sub }); return; }
     // Two whole squares trade places (non-destructive, split and all); anything
     // involving a piece swaps CONTENT between the two slots.
     if (src.sub == null && target.sub == null) moveSquare(keyOf(src.r, src.c), target.key);

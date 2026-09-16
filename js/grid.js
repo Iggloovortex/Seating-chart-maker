@@ -1260,7 +1260,7 @@ function updateMergeHover(e) {
   } else {
     // A unit merge's centred overlay (or its furniture host) is the live target
     // (member cells are inert).
-    const live = el && el.closest ? el.closest('.merge-unit, .merge-furniture--live') : null;
+    const live = el && el.closest ? el.closest('.merge-unit, .merge-furniture--live, .merge-shape') : null;
     if (live && live.dataset.mergeId) id = live.dataset.mergeId;
   }
   setHoverMerge(id);
@@ -1631,6 +1631,9 @@ function renderMerges() {
     const svg = document.createElementNS(MERGE_SVGNS, 'svg');
     svg.setAttribute('class', 'merge-shape' + (selected ? ' merge--selected' : ''));
     svg.dataset.mergeId = merge.id;
+    // The desk shape IS the hit target — one continuous path bridging the gaps
+    // between member cells, so a tap on an internal seam still lands on the merge.
+    svg.dataset.key = mergeAnchorKey(merge);
     svg.style.left = `${oLeft}px`;
     svg.style.top = `${oTop}px`;
     svg.setAttribute('width', (right - left) + pad * 2);
@@ -1703,7 +1706,10 @@ function mkFurnHost(area, merge, selected, extraClass = '') {
   const host = document.createElement('div');
   host.className = 'merge-furniture' + (extraClass ? ' ' + extraClass : '') + (selected ? ' merge--selected' : '');
   host.dataset.mergeId = merge.id;
-  if (merge.kind === 'unit') { host.classList.add('merge-furniture--live'); host.dataset.key = mergeAnchorKey(merge); }
+  // The furniture host is the desk's hit target (member cells can be split by
+  // gaps), carrying the anchor key so a tap/drag on it acts on the whole merge.
+  host.classList.add('merge-furniture--live');
+  host.dataset.key = mergeAnchorKey(merge);
   host.style.left = `${area.left}px`;
   host.style.top = `${area.top}px`;
   host.style.width = `${area.w}px`;
@@ -1775,7 +1781,8 @@ function renderMergeFurniture(furn, data, box, rects, merge, selected) {
   let hx = area.left + (area.w - cellW) / 2, hy = area.top + (area.h - cellH) / 2;
   if (dr < 0) hy = area.top; if (dr > 0) hy = area.top + area.h - cellH;
   if (dc < 0) hx = area.left; if (dc > 0) hx = area.left + area.w - cellW;
-  const host = mkFurnHost({ left: hx, top: hy, w: cellW, h: cellH }, merge, selected, 'cell--furniturehost');
+  // Show the grid square behind the piece, just like a standalone furniture cell.
+  const host = mkFurnHost({ left: hx, top: hy, w: cellW, h: cellH }, merge, selected, 'cell--furniturehost merge-furniture--square');
 
   const tile = document.createElement('div');
   tile.className = `cell__furniture cell__${furn}`;
