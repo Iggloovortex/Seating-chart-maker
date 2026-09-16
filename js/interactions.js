@@ -194,17 +194,44 @@ function initInteractions(chartEl) {
   }
 
   /** The slot under the pointer — a split piece if one is there, else the cell.
-   *  A merged cell is not a drop target. */
+   *  A merged desk IS a drop target: content lands on its anchor (or the piece
+   *  under the pointer for a desk-split merge), keeping the merge intact. */
   function slotUnder(clientX, clientY) {
     const under = document.elementFromPoint(clientX, clientY);
     if (!under || !under.closest) return null;
-    const cell = under.closest('.cell');
-    if (!cell || !cell.dataset.key) return null;
-    const [r, c] = parseKey(cell.dataset.key);
-    if (typeof mergeAt === 'function' && mergeAt(r, c)) return null;
     const subEl = under.closest('.subcell');
     const sub = subEl && subEl.dataset.sub != null ? Number(subEl.dataset.sub) : null;
-    return { key: cell.dataset.key, r, c, sub };
+
+    // Resolve a merge under the pointer — from a member .cell (poly), or straight
+    // from an overlay whose member cells are inert (unit / furniture / split desk).
+    let mergeHit = null;
+    const cell = under.closest('.cell');
+    if (cell && cell.dataset.key) {
+      const [cr, cc] = parseKey(cell.dataset.key);
+      mergeHit = typeof mergeAt === 'function' ? mergeAt(cr, cc) : null;
+      if (!mergeHit) return { key: cell.dataset.key, r: cr, c: cc, sub };
+    }
+    if (!mergeHit) {
+      const mEl = under.closest('.merge-unit, .merge-furniture, .merge-shape, .merge-split, .merge-content');
+      if (mEl && mEl.dataset.mergeId) mergeHit = state.merges.find((m) => m.id === mEl.dataset.mergeId);
+    }
+    // A poly merge's overlay is pointer-events:none and its desk spans the gaps
+    // between member cells, so the pointer can land on the bare chart between them.
+    // Hit-test the merge overlays geometrically to still resolve the desk.
+    if (!mergeHit) {
+      for (const el of chartEl.querySelectorAll('.merge-shape[data-merge-id], .merge-unit[data-merge-id], .merge-furniture[data-merge-id], .merge-split[data-merge-id]')) {
+        const b = el.getBoundingClientRect();
+        if (clientX >= b.left && clientX <= b.right && clientY >= b.top && clientY <= b.bottom) {
+          mergeHit = state.merges.find((m) => m.id === el.dataset.mergeId);
+          if (mergeHit) break;
+        }
+      }
+    }
+    if (mergeHit) {
+      const [ar, ac] = parseKey(mergeAnchorKey(mergeHit));
+      return { key: keyOf(ar, ac), r: ar, c: ac, sub, merge: true, mergeId: mergeHit.id };
+    }
+    return null;
   }
 
   function trackContentDrag(e) {
@@ -227,6 +254,18 @@ function initInteractions(chartEl) {
 
   function markSlot(t, on) {
     if (!t) return;
+    // A merge target highlights the desk overlay (or the piece under the pointer on
+    // a desk-split merge), not the inert member cell.
+    if (t.merge) {
+      if (t.sub != null) {
+        const el = chartEl.querySelector(`.merge-split[data-merge-id="${CSS.escape(t.mergeId)}"] .subcell[data-sub="${t.sub}"]`);
+        if (el) el.classList.toggle('subcell--droptarget', on);
+      } else {
+        chartEl.querySelectorAll(`.merge-unit[data-merge-id="${CSS.escape(t.mergeId)}"], .merge-furniture[data-merge-id="${CSS.escape(t.mergeId)}"], .merge-shape[data-merge-id="${CSS.escape(t.mergeId)}"], .merge-split[data-merge-id="${CSS.escape(t.mergeId)}"]`)
+          .forEach((el) => el.classList.toggle('merge--droptarget', on));
+      }
+      return;
+    }
     const el = t.sub != null
       ? chartEl.querySelector(`.cell[data-key="${CSS.escape(t.key)}"] .subcell[data-sub="${t.sub}"]`)
       : chartEl.querySelector(`.cell[data-key="${CSS.escape(t.key)}"]`);
@@ -238,6 +277,9 @@ function initInteractions(chartEl) {
     const { src, target } = drag;
     cancelContentDrag();
     if (!target) return;
+    // Dropping onto a merge swaps CONTENT with the desk's anchor (or the piece
+    // under the pointer), never moving the cell itself — so the merge stays intact.
+    if (target.merge) { swapContentSlots(src, { r: target.r, c: target.c, sub: target.sub }); return; }
     // Two whole squares trade places (non-destructive, split and all); anything
     // involving a piece swaps CONTENT between the two slots.
     if (src.sub == null && target.sub == null) moveSquare(keyOf(src.r, src.c), target.key);
