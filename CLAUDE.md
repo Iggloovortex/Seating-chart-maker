@@ -46,12 +46,26 @@ design-token/theme/component baseline so new work matches the rest of the app.
   each on its own (`config.barPosition` = 'top'|'bottom'|'custom' +
   `config.barPositions`), applied by `applyBarPositions` — a bar is a sibling of
   the stage, so it is just which side of it the bar is inserted on.
-- `js/editor.js` — edit pane (single/bulk/preset/split-piece). Every pane shares
-  one header via `renderActions(ctx)` — Cut, Copy, Paste, Delete as icon buttons
-  (`#ui-cut/#ui-copy/#ui-paste/#ui-trash`), Delete always present (Copy/Cut grey
-  out for a multi-select). Single-square sections read Format (fill/facing/colors
-  + Split) → Content (Labels, Icon, Special, Browse under Special); the row/column
-  **Size** section is gated behind `config.showSizeSection` (Settings → General).
+- `js/editor.js` — edit pane (single / bulk / preset / split-parent / split-piece /
+  merged). **Shared builders are the reference — a pane composes them, it does not
+  roll its own.** The header is `renderActions(ctx)` for every pane: Cut, Copy,
+  Paste, then Unmerge (only when merged) and Delete apart on the right; Delete is
+  always present and Copy/Cut grey out for a multi-select.
+  **Rule: every pane that shows a Format row also carries the Split column in it**
+  (`splitControlsCompact` — four exclusive-toggle shapes, no None; tap the active
+  shape to un-split). `squareSplitControls(rerender, merge?)` builds that column
+  for the square at `current.r/current.c`, so a SPLIT PIECE can change its parent's
+  split without going back up a level, and a MERGED desk divides the desk itself
+  (recording `merge.deskSplit`). The one exception is the **preset** pane: a preset
+  has no split in its data model, so its Format row has no Split column.
+  Section order for a square: Format (Fill / Facing / Colors / Split) → Content
+  (Labels, Icon, Special, Browse under Special) → **Size** (row/column weights),
+  gated behind `config.showSizeSection` (Settings → General).
+  Other shared builders: `piecesGroup(cell, rerender)` (the Pieces list, used by
+  the split-parent AND desk-split-merge panes), `mergeSection(merge)` (Shape /
+  Centered + the spans note), `splitSection(cell)` (the BIG split picker, with
+  None, for the split-parent pane, which has no Format row), `specialSection`,
+  `printerSection`, `fillControls` / `facingCompass` / `squareColors`.
 
 ## Branch / state
 

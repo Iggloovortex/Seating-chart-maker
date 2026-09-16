@@ -239,6 +239,14 @@ function render(cell) {
     bodyEl.replaceChildren();
     renderSquareActions();
     bodyEl.appendChild(mergeSection(merge));
+    // The desk's Split column, on its own row here (there is no Fill/Facing/Colors
+    // to sit beside — the content lives in the pieces below).
+    bodyEl.appendChild(group(null, (g) => {
+      const row = document.createElement('div');
+      row.className = 'erow erow--controls';
+      row.append(squareSplitControls(() => render(peekCell(current.r, current.c)), merge));
+      g.appendChild(row);
+    }));
     bodyEl.appendChild(piecesGroup(cell, () => render(peekCell(current.r, current.c))));
     const foot = document.createElement('div');
     foot.className = 'editor__foot';
@@ -268,9 +276,12 @@ function render(cell) {
     const row = document.createElement('div');
     row.className = 'erow erow--controls';
     row.append(fillControls(cell), facingCompass(cell), squareColors(cell));
-    // Split sits as a compact column right of Colors (a merged square splits from
-    // its own section instead).
-    if (!merge) row.append(splitControlsCompact(cell));
+    // Split always sits as a compact column right of Colors. On a merged square it
+    // divides the DESK (recording merge.deskSplit) rather than the bare square.
+    const re = () => render(peekCell(current.r, current.c));
+    if (!merge || (typeof mergeCanSplit === 'function' && mergeCanSplit(merge))) {
+      row.append(squareSplitControls(re, merge));
+    }
     g.appendChild(row);
   }));
 
@@ -667,34 +678,8 @@ function mergeSection(merge) {
     );
     g.appendChild(seg);
 
-    // A unit or rectangular merge can be split into sub-cells, drawn across the
-    // whole desk. The split lives on the anchor cell (current.r/current.c), so it
-    // reuses the ordinary split picker; once split, editing shows the split-parent
-    // pane (where 'None' un-splits it).
-    if (typeof mergeCanSplit === 'function' && mergeCanSplit(merge)) {
-      const cellNow = peekCell(current.r, current.c);
-      const picker = document.createElement('div');
-      picker.className = 'icon-picker';
-      picker.style.marginTop = '8px';
-      // A desk is "split" only when the user deliberately divides it here — the
-      // deskSplit flag. (A pre-split square pulled into a merge keeps its pieces in
-      // data but renders as one large desk until split on purpose.)
-      const deskSplit = !!merge.deskSplit && isSplit(cellNow);
-      for (const o of SPLIT_KINDS) {
-        const active = o.key === 'none' ? !deskSplit
-          : deskSplit && cellNow.split.rows === o.rows && cellNow.split.cols === o.cols;
-        picker.appendChild(splitOptionButton(o, active, () => {
-          if (o.key === 'none') { unsplitCell(current.r, current.c); updateMerge(merge.id, { deskSplit: false }); }
-          else { splitCell(current.r, current.c, o.rows, o.cols); updateMerge(merge.id, { deskSplit: true }); }
-          render(peekCell(current.r, current.c));
-        }));
-      }
-      const slabel = document.createElement('p');
-      slabel.className = 'egroup__note';
-      slabel.textContent = 'Split this desk into pieces (tap a piece on the grid to fill it):';
-      g.appendChild(slabel);
-      g.appendChild(picker);
-    }
+    // Splitting the desk lives in the Format row's Split column (like every other
+    // pane), not here — see squareSplitControls, which records merge.deskSplit.
 
     const note = document.createElement('p');
     note.className = 'egroup__note';
@@ -769,23 +754,40 @@ function splitSection(cell) {
 
 /** A compact Split control that sits as a column in the Format row, right of
  *  Colors — the same options as splitSection, shrunk to fit. */
-function splitControlsCompact(cell) {
-  const wrap = controlGroup('Split');
+function splitControlsCompact({ isActive, onToggle, title = 'Split' }) {
+  const wrap = controlGroup(title);
   const picker = document.createElement('div');
   picker.className = 'icon-picker icon-picker--split';
   // No "None": each shape is an exclusive toggle — clicking the active one
   // un-splits, and picking another switches to it.
   for (const o of SPLIT_KINDS) {
     if (o.key === 'none') continue;
-    const active = isSplit(cell) && cell.split.rows === o.rows && cell.split.cols === o.cols;
-    picker.appendChild(splitOptionButton(o, active, () => {
-      if (active) unsplitCell(current.r, current.c);
-      else splitCell(current.r, current.c, o.rows, o.cols);
-      render(peekCell(current.r, current.c));
-    }));
+    const active = !!isActive(o);
+    picker.appendChild(splitOptionButton(o, active, () => onToggle(o, active)));
   }
   wrap.appendChild(picker);
   return wrap;
+}
+
+/** The Split column for a whole square at current.r/current.c — the shape the
+ *  Format row shows in the square, piece and merged panes alike. `rerender` redraws
+ *  whichever pane hosts it; `merge`, when given, records the deliberate desk-split. */
+function squareSplitControls(rerender, merge = null) {
+  const target = () => peekCell(current.r, current.c);
+  const splitNow = () => {
+    const cell = target();
+    // A merged desk counts as split only when deliberately divided (deskSplit).
+    if (merge) return (!!merge.deskSplit && isSplit(cell)) ? cell : null;
+    return isSplit(cell) ? cell : null;
+  };
+  return splitControlsCompact({
+    isActive: (o) => { const c = splitNow(); return c && c.split.rows === o.rows && c.split.cols === o.cols; },
+    onToggle: (o, active) => {
+      if (active) { unsplitCell(current.r, current.c); if (merge) updateMerge(merge.id, { deskSplit: false }); }
+      else { splitCell(current.r, current.c, o.rows, o.cols); if (merge) updateMerge(merge.id, { deskSplit: true }); }
+      rerender();
+    },
+  });
 }
 
 function splitOptionButton(o, active, onClick) {
@@ -1029,7 +1031,20 @@ function renderSubcellEditor() {
     );
     colors.appendChild(sw);
 
-    row.append(fill, facing, colors);
+    // Split column — like every other Format row. It divides the PARENT square, so
+    // the split can be changed without going back up a level. Changing it can drop
+    // this piece (fewer spaces) or remove the split entirely, so fall back to the
+    // square's own pane when this piece no longer exists.
+    const reSub = () => {
+      const parent = peekCell(current.r, current.c);
+      if (!parent || !isSplit(parent) || current.sub == null || !parent.subcells[current.sub]) {
+        openEditor(current.r, current.c);
+      } else {
+        renderSubcellEditor();
+      }
+    };
+    row.append(fill, facing, colors, squareSplitControls(reSub));
+
     g.appendChild(row);
   }));
 
@@ -1265,7 +1280,27 @@ function renderBulk(keys) {
   bodyEl.appendChild(group(null, (g) => {
     const row = document.createElement('div');
     row.className = 'erow erow--controls';
+    // Split column — like every other Format row; it divides every selected square
+    // at once. Merged members are skipped (a merge splits from its own desk).
+    const plain = keys.filter((k) => { const [r, c] = parseKey(k); return !(typeof mergeAt === 'function' && mergeAt(r, c)); });
     row.append(bulkFillControls(keys), bulkFacing(keys), bulkColors(keys, first));
+    if (plain.length) {
+      row.append(splitControlsCompact({
+        isActive: (o) => plain.every((k) => {
+          const [r, c] = parseKey(k); const cell = peekCell(r, c);
+          return cell && isSplit(cell) && cell.split.rows === o.rows && cell.split.cols === o.cols;
+        }),
+        onToggle: (o, active) => {
+          batch(() => {
+            for (const k of plain) {
+              const [r, c] = parseKey(k);
+              if (active) unsplitCell(r, c); else splitCell(r, c, o.rows, o.cols);
+            }
+          });
+          renderBulk(keys);
+        },
+      }));
+    }
     g.appendChild(row);
   }));
 
