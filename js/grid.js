@@ -1258,9 +1258,10 @@ function updateMergeHover(e) {
     const m = typeof mergeAt === 'function' ? mergeAt(r, c) : null;
     if (m) id = m.id;
   } else {
-    // A unit merge's centred overlay is the live target (member cells are inert).
-    const unit = el && el.closest ? el.closest('.merge-unit') : null;
-    if (unit && unit.dataset.mergeId) id = unit.dataset.mergeId;
+    // A unit merge's centred overlay (or its furniture host) is the live target
+    // (member cells are inert).
+    const live = el && el.closest ? el.closest('.merge-unit, .merge-furniture--live') : null;
+    if (live && live.dataset.mergeId) id = live.dataset.mergeId;
   }
   setHoverMerge(id);
 }
@@ -1598,6 +1599,13 @@ function renderMerges() {
       continue;
     }
 
+    // A merged desk whose content is furniture renders as furniture over the
+    // footprint (no desk box), like a standalone furniture square.
+    if (!empty && typeof furnitureKind === 'function' && furnitureKind(data)) {
+      renderMergeFurniture(furnitureKind(data), data, { left, top, right, bottom }, vals, merge, selected);
+      continue;
+    }
+
     const plan = mergePlan(merge);
     if (merge.kind === 'unit') {
       renderMergeUnit(data, fill, border, { left, top, right, bottom }, vals[0], empty, merge.id, selected, mergeAnchorKey(merge));
@@ -1686,6 +1694,120 @@ function renderMergeUnit(data, fill, border, box, sample, empty, mergeId, select
     div.appendChild(mergeContentInner(data, fill, 'both', true));
   }
   chart.appendChild(div);
+}
+
+/** A furniture host positioned over `area` (chart-local px). A unit merge's host
+ *  is the live target (member cells are inert), so it carries the anchor key and
+ *  takes the pointer; a poly merge lets clicks fall to its member cells. */
+function mkFurnHost(area, merge, selected, extraClass = '') {
+  const host = document.createElement('div');
+  host.className = 'merge-furniture' + (extraClass ? ' ' + extraClass : '') + (selected ? ' merge--selected' : '');
+  host.dataset.mergeId = merge.id;
+  if (merge.kind === 'unit') { host.classList.add('merge-furniture--live'); host.dataset.key = mergeAnchorKey(merge); }
+  host.style.left = `${area.left}px`;
+  host.style.top = `${area.top}px`;
+  host.style.width = `${area.w}px`;
+  host.style.height = `${area.h}px`;
+  return host;
+}
+
+/** The stair variant for a member cell of a stairs merge — start/middle/end/single
+ *  resolved from whether the run continues into adjacent members (the grid twin of
+ *  export's mergeStairVariant). */
+function gridMergeStairVariant(memberSet, r, c, data) {
+  const forced = data.stairType;
+  if (forced && forced !== 'auto') return forced;
+  const step = STAIR_STEP[data.rotation || 0] || STAIR_STEP[0];
+  const hasFwd = memberSet.has(keyOf(r + step[0], c + step[1]));
+  const hasBwd = memberSet.has(keyOf(r - step[0], c - step[1]));
+  if (hasFwd && hasBwd) return 'middle';
+  if (hasBwd) return 'end';
+  if (hasFwd) return 'start';
+  return 'single';
+}
+
+/** Tile a stairs merge across its member cells so a run reads as one flight. */
+function renderMergeStairsGrid(data, merge, rects, selected) {
+  const memberSet = new Set(merge.keys);
+  const rot = data.rotation || 0;
+  const color = contrastLabelColor(data.iconColor || '#1f2933', data.fill || '#dbe7ff');
+  for (const b of rects) {
+    const variant = gridMergeStairVariant(memberSet, b.r, b.c, data);
+    const host = mkFurnHost({ left: b.left, top: b.top, w: b.width, h: b.height }, merge, selected, 'cell--stairs');
+    host.style.background = data.fill;
+    let svg;
+    if ((rot % 90) !== 0) { svg = stairsUse(diagStairSymbol(variant), 'cell__stairs', color); svg.style.transform = `rotate(${rot - 45}deg)`; }
+    else { svg = stairsUse(variant, 'cell__stairs', color); svg.style.transform = `rotate(${rot + 180}deg)`; }
+    host.appendChild(svg);
+    chart.appendChild(host);
+  }
+}
+
+/** Furniture over a merged desk: a chair stays ½×½ tucked to its facing, a server
+ *  fills the desk as a rack (or a single slab), stairs tile the member cells. The
+ *  grid twin of the furniture branch in drawMerge (js/export.js). */
+function renderMergeFurniture(furn, data, box, rects, merge, selected) {
+  if (furn === 'stairs') { renderMergeStairsGrid(data, merge, rects, selected); return; }
+
+  const boxW = box.right - box.left, boxH = box.bottom - box.top;
+  const cellW = rects[0].width, cellH = rects[0].height;
+  const rot = data.rotation || 0;
+  const labelCount = (data.labels || []).filter((l) => l.text).length;
+
+  // unit → centred square area; poly → whole bbox.
+  let area;
+  if (merge.kind === 'unit') { const s = Math.min(cellW, cellH);
+    area = { left: box.left + (boxW - s) / 2, top: box.top + (boxH - s) / 2, w: s, h: s }; }
+  else area = { left: box.left, top: box.top, w: boxW, h: boxH };
+
+  if (furn === 'server' && labelCount >= 2) {
+    const host = mkFurnHost(area, merge, selected, 'cell--furniturehost');
+    host.appendChild(buildServerRack(data, rot));
+    const svg = iconUse('server', 'cell__rackicon');
+    if (svg) { svg.style.color = surfaceLabelColor(data.iconColor || '#1f2933'); host.appendChild(svg); }
+    chart.appendChild(host);
+    return;
+  }
+
+  // chair or single server: a cell-size piece tucked to the box's facing edge.
+  const n = ((Math.round(rot / 45) * 45) % 360 + 360) % 360;
+  const [dr, dc] = FACING_STEP[n] || FACING_STEP[0];
+  let hx = area.left + (area.w - cellW) / 2, hy = area.top + (area.h - cellH) / 2;
+  if (dr < 0) hy = area.top; if (dr > 0) hy = area.top + area.h - cellH;
+  if (dc < 0) hx = area.left; if (dc > 0) hx = area.left + area.w - cellW;
+  const host = mkFurnHost({ left: hx, top: hy, w: cellW, h: cellH }, merge, selected, 'cell--furniturehost');
+
+  const tile = document.createElement('div');
+  tile.className = `cell__furniture cell__${furn}`;
+  tile.style.background = data.fill;
+  tile.style.borderColor = data.border;
+  if (furn === 'server') placeServerTile(tile, rot); else placeChairTile(tile, rot);
+  const content = document.createElement('div');
+  content.className = 'cell__content';
+  content.style.setProperty('--rot', `${rot}deg`);
+  if (data.icon) {
+    const svg = iconUse(data.icon, 'cell__icon', data.iconFill);
+    if (svg) { svg.style.color = contrastLabelColor(data.iconColor || '#1f2933', data.fill || '#dbe7ff'); content.appendChild(svg); }
+  }
+  tile.appendChild(content);
+  host.appendChild(tile);
+
+  if (labelCount) {
+    const labelsEl = document.createElement('div');
+    labelsEl.className = 'cell__labels cell__furniturelabels';
+    for (const line of data.labels) {
+      if (!line.text) continue;
+      const span = document.createElement('span');
+      span.className = 'cell__label';
+      span.textContent = line.text;
+      span.style.color = contrastLabelColor(line.color, data.fill || '#dbe7ff');
+      labelsEl.appendChild(span);
+    }
+    if (furn === 'server') placeServerLabels(labelsEl, rot); else placeChairLabels(labelsEl, rot);
+    labelsEl.style.transform = `rotate(${rot}deg)`;
+    host.appendChild(labelsEl);
+  }
+  chart.appendChild(host);
 }
 
 /** A split merge: the anchor cell's sub-grid drawn across the whole desk box
@@ -2312,7 +2434,7 @@ function showResizePreview({ preview, next }) {
 
 /** Re-measure table overlays after layout changes (zoom, resize). */
 function refreshTables() {
-  chart.querySelectorAll('.table-shape, .table-poly, .table-remove, .table-move, .table-handle, .move-handle, .merge-shape, .merge-content, .merge-unit, .merge-split, .walls-layer')
+  chart.querySelectorAll('.table-shape, .table-poly, .table-remove, .table-move, .table-handle, .move-handle, .merge-shape, .merge-content, .merge-unit, .merge-split, .merge-furniture, .walls-layer')
     .forEach((n) => n.remove());
   renderTables();
   renderMerges();

@@ -858,6 +858,19 @@ body {
 /* The unit overlay IS the live target for a centred merge (its member cells are
    inert), so it takes the pointer itself. */
 .merge-unit { pointer-events: auto; cursor: pointer; }
+/* Furniture drawn over a merged desk (no desk box): hosts a chair/server/rack/
+   stairs like a cell would. Poly merges let clicks fall to their member cells;
+   a unit furniture merge is the live target itself. */
+.merge-furniture {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  pointer-events: none;
+}
+.merge-furniture--live { pointer-events: auto; cursor: pointer; }
 .merge-content,
 .merge-unit {
   display: flex;

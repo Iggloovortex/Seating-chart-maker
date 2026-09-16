@@ -124,6 +124,20 @@ and push it; don't stack new work directly on `main`.
   shows only its content overlaid, no desk box (js/export.js `drawMerge`). The
   **Unmerge** control lives in the shared pane header (`renderActions`), not the
   Merged-square section, so it is reachable from every pane a merge can open.
+  **Special/furniture content** (chair/server/rack/stairs) renders as furniture
+  over the footprint with NO desk box, in both renderers: a chair stays a ½×½
+  piece tucked to its facing (`chairInBox` export / `renderMergeFurniture` grid),
+  a server fills the desk as a rack (`drawServerRack` / `buildServerRack`), and
+  stairs tile the member cells with the run's start/middle/end variants and seams
+  (`drawMergeStairs` / `renderMergeStairsGrid`, variant via `mergeStairVariant`).
+  A desk-split merge keeps its Shape/Centered kind buttons and Pieces list in one
+  universal pane (render() routes merged cells through the shared pane, `piecesGroup`
+  shared with `renderSplitParent`). A **unit** merge is one live object: its member
+  cells are inert (`.cell--merged-inert`) and its centred overlay/furniture host is
+  the pointer target (`.merge-unit` / `.merge-furniture--live`, carrying the anchor
+  key); the empty surround is a no-op. An emptied merge keeps a faded ghost of its
+  content in the grid. Pasting onto a merge writes once to the anchor and fills or
+  empties the whole desk (`pasteSquareTo`), so it never shatters or de-centres it.
 - **Walls — DONE** (branch `claude/walls-tmdavo`). Edge objects on the seams
   between squares and the outer border, styled from user-supplied reference SVGs.
   Every type is a bar one cell long and `WALL_THICK` (0.0909u) thick, outlined at

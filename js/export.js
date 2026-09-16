@@ -556,6 +556,35 @@ function drawMerge(ctx, rectOf, { merge, data, plan, coveredByTable }, imgCache,
     return;
   }
 
+  // A merged desk whose content is a special/furniture icon renders as furniture
+  // over the footprint (no desk box), like a standalone furniture square: a chair
+  // stays ½×½ tucked to its facing, a server fills the desk as a rack, stairs tile
+  // across the member cells.
+  const furn = !deskSplit ? furnitureKind(data) : null;
+  if (furn) {
+    if (furn === 'stairs') { drawMergeStairs(ctx, rectOf, merge, data, imgCache, out); return; }
+    const box = merge.kind === 'unit'
+      ? (() => { const s = Math.min(rects[0].w, rects[0].h);
+                 return { x: (left + right) / 2 - s / 2, y: (top + bottom) / 2 - s / 2, w: s, h: s }; })()
+      : { x: left, y: top, w: right - left, h: bottom - top };
+    const cellMin = Math.min(rects[0].w, rects[0].h);
+    if (furn === 'server') {
+      const labels = labelsOf(data);
+      if (labels.length >= 1) {
+        drawServerRack(ctx, { data, r: ar, c: ac, geo: { rect: box, full: cellMin, units: labels.length } }, imgCache, out);
+      } else {
+        roundRect(ctx, box.x, box.y, box.w, box.h, Math.min(box.w, box.h) * 0.06);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.lineWidth = Math.max(1, Math.min(box.w, box.h) * 0.03); ctx.strokeStyle = border; ctx.stroke();
+        drawIconOnly(ctx, box.x + box.w / 2, box.y + box.h / 2, Math.min(box.w, box.h), data, imgCache);
+      }
+      return;
+    }
+    // chair: a ½×½ piece tucked to the facing edge of the desk box.
+    drawChair(ctx, { data, geo: chairInBox(box, data, cellMin) }, imgCache, out);
+    return;
+  }
+
   // A split merge draws its sub-grid across the whole desk box (reusing drawSplit
   // on the anchor cell, with a rectOf that hands it the merge's box).
   if (deskSplit) {
@@ -716,6 +745,66 @@ function drawSubmerge(ctx, rect, data, sm, cw, ch, imgCache, plan) {
  *  square. The chair stays 1:1 and targets 50% of the full cell; the split already
  *  shrinks the subcell, so the percentage compensates (min(50%×N, 100%) per axis),
  *  capped to 1:1 via the smaller side. */
+/** A chair tucked into a merged desk box: a ½×½ (cell-size) piece attached to the
+ *  facing edge of the box, labels in the opposite region — the merge twin of
+ *  chairGeometry. `cellMin` is one member cell's short side, so the chair keeps its
+ *  standalone size instead of scaling to the whole desk. */
+function chairInBox(box, data, cellMin) {
+  const size = cellMin * CHAIR_SCALE;
+  const inset = size * 0.04;
+  let cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+  const [dr, dc] = FACING_STEP[data.rotation || 0] || FACING_STEP[0];
+  if (dr < 0) cy = box.y + size / 2 + inset;
+  if (dr > 0) cy = box.y + box.h - size / 2 - inset;
+  if (dc < 0) cx = box.x + size / 2 + inset;
+  if (dc > 0) cx = box.x + box.w - size / 2 - inset;
+  return { cx, cy, w: size, h: size, labelBox: chairLabelBox(box, dr, dc), full: cellMin };
+}
+
+/** The stair variant for a member cell of a stairs merge — start/middle/end/single
+ *  resolved from whether the run continues into adjacent members along the facing
+ *  axis (mirrors resolveStairType, keyed on merge membership). */
+function mergeStairVariant(memberSet, r, c, data) {
+  const forced = data.stairType;
+  if (forced && forced !== 'auto') return forced;
+  const step = STAIR_STEP[data.rotation || 0] || STAIR_STEP[0];
+  const hasFwd = memberSet.has(keyOf(r + step[0], c + step[1]));
+  const hasBwd = memberSet.has(keyOf(r - step[0], c - step[1]));
+  if (hasFwd && hasBwd) return 'middle';
+  if (hasBwd) return 'end';
+  if (hasFwd) return 'start';
+  return 'single';
+}
+
+/** Tile a stairs merge across its member cells so a run reads as one flight, then
+ *  bridge the seams between adjacent members (straight runs only). */
+function drawMergeStairs(ctx, rectOf, merge, data, imgCache, plan) {
+  const memberSet = new Set(merge.keys);
+  const rot = (((data.rotation || 0) % 360) + 360) % 360;
+  for (const k of merge.keys) {
+    const [r, c] = parseKey(k);
+    const rect = rectOf(r, c);
+    const variant = mergeStairVariant(memberSet, r, c, data);
+    drawStairs(ctx, { data: { ...data, stairType: variant }, r, c,
+      geo: { rect, cx: rect.x + rect.w / 2, cy: rect.y + rect.h / 2, w: rect.w, h: rect.h } }, imgCache, plan);
+  }
+  if (rot % 90 !== 0) return; // a diagonal landing owns its own hatch — no seams
+  const vertical = rot % 180 === 0;
+  ctx.fillStyle = contrastLabelColor(data.iconColor || '#1f2933', data.fill || '#dbe7ff');
+  const BAR = 35 / 1535;
+  for (const k of merge.keys) {
+    const [r, c] = parseKey(k);
+    const rect = rectOf(r, c);
+    if (vertical) {
+      const T = BAR * rect.h;
+      if (memberSet.has(keyOf(r + 1, c))) ctx.fillRect(rect.x, rect.y + rect.h - T / 2, rect.w, T);
+    } else {
+      const T = BAR * rect.w;
+      if (memberSet.has(keyOf(r, c + 1))) ctx.fillRect(rect.x + rect.w - T / 2, rect.y, T, rect.h);
+    }
+  }
+}
+
 function chairInRect(rect, data, rows, cols) {
   rows = rows || 1; cols = cols || 1;
   const f = Math.min(CHAIR_SCALE, 1 / Math.max(rows, cols));

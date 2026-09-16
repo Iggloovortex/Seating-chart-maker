@@ -65,7 +65,8 @@ function initInteractions(chartEl) {
 
   // A unit (centred) merge's member cells are inert; its centred overlay is the
   // live target and carries the anchor's data-key, so resolve it like a cell.
-  const cellFrom = (target) => target.closest?.('.cell') || target.closest?.('.merge-unit');
+  const cellFrom = (target) => target.closest?.('.cell')
+    || target.closest?.('.merge-unit') || target.closest?.('.merge-furniture--live');
   // Which sub-cell of a split square the pointer is over, or null.
   const subFrom = (target) => {
     const el = target.closest?.('.subcell');
