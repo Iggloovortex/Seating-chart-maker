@@ -67,7 +67,7 @@ function initInteractions(chartEl) {
   // live target and carries the anchor's data-key, so resolve it like a cell.
   const cellFrom = (target) => target.closest?.('.cell')
     || target.closest?.('.merge-unit') || target.closest?.('.merge-furniture--live')
-    || target.closest?.('.merge-shape');
+    || target.closest?.('.merge-shape') || target.closest?.('.merge-split');
   // Which sub-cell of a split square the pointer is over, or null.
   const subFrom = (target) => {
     const el = target.closest?.('.subcell');
@@ -150,7 +150,14 @@ function initInteractions(chartEl) {
     // dropContentDrag swaps content rather than moving the cell.
     if (typeof mergeAt === 'function' && mergeAt(r, c)) {
       const [ar, ac] = parseKey(mergeAnchorKey(mergeAt(r, c)));
-      return cellHasAnyContent(peekCell(ar, ac)) ? { r: ar, c: ac, sub: null, merge: true } : null;
+      const anchor = peekCell(ar, ac);
+      // On a desk-split merge, drag the PIECE under the pointer; otherwise the whole
+      // desk's content. Either way it is a content swap, so the merge stays put.
+      if (p.sub != null && isSplit(anchor)) {
+        const sub = subcellAt(ar, ac, p.sub);
+        return sub && (sub.enabled || hasContent(sub)) ? { r: ar, c: ac, sub: p.sub, merge: true } : null;
+      }
+      return cellHasAnyContent(anchor) ? { r: ar, c: ac, sub: null, merge: true } : null;
     }
     if (typeof tableAt === 'function' && tableAt(r, c)) return null;
     const cell = peekCell(r, c);

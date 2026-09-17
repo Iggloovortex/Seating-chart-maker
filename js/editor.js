@@ -813,7 +813,9 @@ function piecesGroup(cell, rerender) {
   return group('Pieces', (g) => {
     const grid = document.createElement('div');
     grid.className = 'piece-grid';
-    grid.style.gridTemplateColumns = `repeat(${cell.split.cols}, 1fr)`;
+    // One tile size for every split shape: the size a 3×3 needs to fill the pane,
+    // so 2×2 and 1×2 tiles match it instead of ballooning. The grid centres itself.
+    grid.style.gridTemplateColumns = `repeat(${cell.split.cols}, var(--piece-tile))`;
     const hidden = new Set();
     if (cell.submerges) {
       for (const sm of cell.submerges)

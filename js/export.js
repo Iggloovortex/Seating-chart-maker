@@ -596,7 +596,11 @@ function drawMerge(ctx, rectOf, { merge, data, plan, coveredByTable }, imgCache,
       box = { x: left, y: top, w: right - left, h: bottom - top };
     }
     const boxRectOf = (r, c) => (r === ar && c === ac ? box : rectOf(r, c));
-    drawSplit(ctx, boxRectOf, { r: ar, c: ac, data: anchorCell }, imgCache, out);
+    const mk = merge.keys.map(parseKey);
+    const span = merge.kind === 'unit' ? { rows: 1, cols: 1 } : {
+      rows: Math.max(...mk.map((k) => k[0])) - Math.min(...mk.map((k) => k[0])) + 1,
+      cols: Math.max(...mk.map((k) => k[1])) - Math.min(...mk.map((k) => k[1])) + 1 };
+    drawSplit(ctx, boxRectOf, { r: ar, c: ac, data: anchorCell }, imgCache, out, span);
     return;
   }
 
@@ -651,7 +655,10 @@ function drawMerge(ctx, rectOf, { merge, data, plan, coveredByTable }, imgCache,
  *  independent mini desk. Enabled pieces draw filled with their own colours and
  *  content; empty pieces leave the page showing through. Internal seams are the
  *  sub-cell borders, so the division reads clearly. */
-function drawSplit(ctx, rectOf, sp, imgCache, plan) {
+/** `span` is how many CELLS the split covers — 1×1 for an ordinary split square, the
+ *  desk's footprint for a merge split across several cells. Furniture is sized per
+ *  CELL, so without it a chair on a 2-cell desk comes out a whole cell wide. */
+function drawSplit(ctx, rectOf, sp, imgCache, plan, span = { rows: 1, cols: 1 }) {
   const rect = rectOf(sp.r, sp.c);
   const { rows, cols } = sp.data.split;
   const cw = rect.w / cols, ch = rect.h / rows;
@@ -677,13 +684,15 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan) {
     const box = { x: rect.x + cc * cw, y: rect.y + rr * ch, w: bw, h: bh };
     const effRows = smRect ? rows / smRect.rowSpan : rows;
     const effCols = smRect ? cols / smRect.colSpan : cols;
-    const scFurn = subcellFurniture(sub, effRows, effCols);
+    const uRows = effRows / Math.max(1, span.rows || 1);
+    const uCols = effCols / Math.max(1, span.cols || 1);
+    const scFurn = subcellFurniture(sub, uRows, uCols);
     if (scFurn === 'stairs') {
       drawStairs(ctx, { data: sub, r: sp.r, c: sp.c, geo: { rect: box, cx: box.x + bw / 2, cy: box.y + bh / 2, w: bw, h: bh } }, imgCache, plan, i, rows, cols);
       return;
     }
     if (scFurn) {
-      drawChair(ctx, { data: sub, geo: chairInRect(box, sub, effRows, effCols) }, imgCache, plan);
+      drawChair(ctx, { data: sub, geo: chairInRect(box, sub, uRows, uCols) }, imgCache, plan);
       return;
     }
     ctx.fillStyle = sub.fill || '#dbe7ff';

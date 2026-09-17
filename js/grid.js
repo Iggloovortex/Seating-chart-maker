@@ -184,7 +184,27 @@ function fitSubcellLabels() {
       s.style.fontSize = `${px}px`;
       s.style.maxWidth = vertical ? '' : `${Math.max(0, availLen)}px`;
     }
+    sizeSubcellIcon(sc, spans.length);
   }
+  // A piece with an icon but no labels still needs the icon sized to the piece.
+  for (const sc of chart.querySelectorAll('.subcell')) {
+    if (!sc.querySelector('.cell__labels')) sizeSubcellIcon(sc, 0);
+  }
+}
+
+/** Size a split piece's icon to the piece it sits in, rather than freezing it at a
+ *  fixed ceiling — the icon twin of the label fit above. An icon is square, so it is
+ *  measured against the piece's SHORT side; it gets more of that when there are no
+ *  labels sharing the space. */
+function sizeSubcellIcon(sc, labelLines) {
+  const icon = sc.querySelector('.cell__icon');
+  if (!icon) return;
+  const base = Math.min(sc.clientWidth, sc.clientHeight) - 4;
+  if (base <= 0) return;
+  const size = Math.max(12, Math.round(base * (labelLines ? 0.58 : 0.74)));
+  icon.style.width = `${size}px`;
+  icon.style.height = `${size}px`;
+  icon.style.maxWidth = 'none';
 }
 
 /** Output-accurate rectangles for the true-size preview, at the grid's own unit
@@ -823,7 +843,10 @@ function surfaceLabelColor(color) {
 }
 
 /** The sub-grid of a split square: a CSS-grid of rows×cols sub-cells. */
-function buildSplitGrid(r, c, data) {
+/** `span` is how many CELLS the split is drawn across — 1×1 for an ordinary split
+ *  square, the desk's footprint for a merge split across several cells. Furniture is
+ *  sized per CELL, so without it a chair on a 2-cell desk comes out twice as wide. */
+function buildSplitGrid(r, c, data, span = { rows: 1, cols: 1 }) {
   const wrap = document.createElement('div');
   wrap.className = 'cell__split';
   wrap.style.gridTemplateColumns = `repeat(${data.split.cols}, 1fr)`;
@@ -854,7 +877,7 @@ function buildSplitGrid(r, c, data) {
       return;
     }
     const sm = rectMerges.find((m) => m.anchor === i) || null;
-    const el = buildSubcell(sub, i, data.split, sm, r, c);
+    const el = buildSubcell(sub, i, data.split, sm, r, c, span);
     if (sm) {
       const rect = submergeRect(sm, cols);
       el.style.gridColumn = `${rect.c + 1} / span ${rect.colSpan}`;
@@ -962,7 +985,7 @@ function buildSubmergeOverlay(wrap, data, sm) {
 /** One sub-cell of a split square — a mini desk: fill/border when seated, its
  *  icon and labels turned to its own facing, faded when it holds content but is
  *  empty (the same ghost treatment a whole square gets). */
-function buildSubcell(sub, i, split, sm, parentR, parentC) {
+function buildSubcell(sub, i, split, sm, parentR, parentC, span = { rows: 1, cols: 1 }) {
   const el = document.createElement('div');
   el.className = 'subcell';
   el.dataset.sub = i;
@@ -971,7 +994,12 @@ function buildSubcell(sub, i, split, sm, parentR, parentC) {
   // For merged subcells, compute effective rows/cols for furniture sizing.
   const effRows = sm ? split.rows / submergeRect(sm, split.cols).rowSpan : split.rows;
   const effCols = sm ? split.cols / submergeRect(sm, split.cols).colSpan : split.cols;
-  const furniture = subcellFurniture(sub, effRows, effCols);
+  // Furniture is sized per CELL, so divide by how many cells the split is drawn
+  // across: a merge's desk-split spans its whole footprint, and without this a
+  // chair on a 2-cell desk comes out a whole cell wide instead of a half.
+  const uRows = effRows / Math.max(1, span.rows || 1);
+  const uCols = effCols / Math.max(1, span.cols || 1);
+  const furniture = subcellFurniture(sub, uRows, uCols);
   if (sub.enabled && !furniture) {
     el.classList.add('subcell--on');
     el.style.background = sub.fill;
@@ -1033,9 +1061,9 @@ function buildSubcell(sub, i, split, sm, parentR, parentC) {
       if (furniture === 'server') {
         placeServerTile(tile, rot);
       } else {
-        const f = Math.min(0.5, 1 / Math.max(effRows, effCols));
-        const cw = f * effCols * 100;
-        const ch = f * effRows * 100;
+        const f = Math.min(0.5, 1 / Math.max(uRows, uCols));
+        const cw = f * uCols * 100;
+        const ch = f * uRows * 100;
         tile.style.width = `${cw}%`;
         tile.style.height = `${ch}%`;
         const n = ((Math.round(rot / 45) * 45) % 360 + 360) % 360;
@@ -1650,7 +1678,13 @@ function renderMerges() {
       } else {
         box = { left, top, w: right - left, h: bottom - top };
       }
-      renderMergeSplit(merge, box, ar, ac, anchorCell, border, selected);
+      // How many CELLS the desk covers — a unit merge is always one square, a poly
+      // desk is its bounding box. Furniture inside the split is sized per cell.
+      const rs = vals.map((v) => v.r), cs2 = vals.map((v) => v.c);
+      const span = merge.kind === 'unit'
+        ? { rows: 1, cols: 1 }
+        : { rows: Math.max(...rs) - Math.min(...rs) + 1, cols: Math.max(...cs2) - Math.min(...cs2) + 1 };
+      renderMergeSplit(merge, box, ar, ac, anchorCell, border, selected, span);
       continue;
     }
 
@@ -1877,7 +1911,7 @@ function renderMergeFurniture(furn, data, box, rects, merge, selected) {
  *  buildSplitGrid; a tap on a piece fills it and right-click edits it — but in
  *  select mode the container lets the pointer through so the whole merge is
  *  picked as one unit. */
-function renderMergeSplit(merge, box, ar, ac, anchorCell, border, selected) {
+function renderMergeSplit(merge, box, ar, ac, anchorCell, border, selected, span = { rows: 1, cols: 1 }) {
   const container = document.createElement('div');
   container.className = 'merge-split' + (selected ? ' merge--selected' : '');
   container.dataset.mergeId = merge.id;
@@ -1886,23 +1920,13 @@ function renderMergeSplit(merge, box, ar, ac, anchorCell, border, selected) {
   container.style.width = `${box.w}px`;
   container.style.height = `${box.h}px`;
   container.style.borderColor = border;
-  const selecting = typeof isSelectMode === 'function' && isSelectMode();
-  container.style.pointerEvents = selecting ? 'none' : 'auto';
-  container.appendChild(buildSplitGrid(ar, ac, anchorCell));
-  if (!selecting) {
-    container.addEventListener('click', (e) => {
-      const sc = e.target.closest && e.target.closest('.subcell');
-      if (!sc || sc.dataset.sub == null) return;
-      e.stopPropagation();
-      toggleSubcell(ar, ac, Number(sc.dataset.sub));
-    });
-    container.addEventListener('contextmenu', (e) => {
-      const sc = e.target.closest && e.target.closest('.subcell');
-      if (!sc || sc.dataset.sub == null) return;
-      e.preventDefault(); e.stopPropagation();
-      openSubcellEditor(ar, ac, Number(sc.dataset.sub));
-    });
-  }
+  // The desk-split overlay is a live target carrying the anchor's key, so the shared
+  // pointer path (tap / long-press / DRAG) treats it like any other cell — that is
+  // what makes a merged desk draggable. Its own click/contextmenu handlers are gone
+  // so the piece is not toggled twice.
+  container.dataset.key = keyOf(ar, ac);
+  container.style.pointerEvents = 'auto';
+  container.appendChild(buildSplitGrid(ar, ac, anchorCell, span));
   chart.appendChild(container);
 }
 

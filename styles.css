@@ -812,7 +812,9 @@ body {
 }
 
 .subcell .cell__content { padding: 1px; gap: 1px; }
-.subcell .cell__icon { width: 42%; max-width: 22px; }
+/* A piece's icon is sized to the piece by fitSubcellLabels (like its labels), so it
+   grows with the space instead of freezing at a fixed ceiling. */
+.subcell .cell__icon { width: 42%; }
 .subcell .cell__label { font-size: 9px; line-height: 1.1; }
 /* A vertical (side-facing) split-piece label is fitted by JS (fitSubcellLabels)
    and reads along the piece's long axis, so it must not be clipped to the piece's
@@ -1059,10 +1061,15 @@ body {
 .split-opt__svg { width: 24px; height: 24px; color: var(--ink); }
 
 /* The piece list in a split square's pane — one preview button per sub-cell. */
+/* Every split shape uses ONE tile size — the size a 3×3 needs to fill the pane —
+   so a 2×2 or 1×2 shows the same squares rather than stretching to fit. The grid
+   is full width and centres its columns. */
 .piece-grid {
+  --piece-tile: calc((100% - 12px) / 3);
   display: grid;
   gap: 6px;
-  max-width: 220px;
+  width: 100%;
+  justify-content: center;
 }
 .piece-btn {
   position: relative;
