@@ -1421,7 +1421,9 @@ function renderTables() {
     // (L/T/+) draws its true outline instead, the way a merged desk does.
     let hL, hT, hR, hB; // where the ✕ and grips sit — inset for a rect, the box edge for a shape
     if (keysAreRect(table.cellKeys)) {
-      const inset = 6; // transparent spacing so the shape never touches borders
+      // Transparent spacing so the shape never touches borders, measured off a CELL
+      // (see TABLE_INSET) so every table keeps the same gap.
+      const inset = Math.min(members[0].w, members[0].h) * TABLE_INSET;
       hL = left + inset; hT = top + inset; hR = right - inset; hB = bottom - inset;
       const shape = document.createElement('div');
       shape.className = `table-shape table-shape--${table.shape}`;
@@ -1603,7 +1605,7 @@ function startTableBodyDrag(table, startEvent) {
 function buildTableShapeSvg(table, members, bounds, border, picked) {
   const rectOf = tableCellRectFn(members);
   const cw = members[0].w, ch = members[0].h;
-  const inset = 6; // breathing room, matching the .table-shape rectangle inset
+  const inset = Math.min(cw, ch) * TABLE_INSET; // matches the rectangle branch
   const rad = table.shape === 'round' ? Math.min(cw, ch) * 0.5 : Math.min(cw, ch) * 0.15;
   const oLeft = bounds.left, oTop = bounds.top;
 

@@ -102,6 +102,12 @@ function wallSegment(o, r, c, rectOf, gap = 0) {
 // it. Scaled down, a wall still reads as a wall but the layout it runs through
 // stays visible. Every wall measure scales together, so the proportions (and so
 // the look) are unchanged.
+/** How far a table is held off its cells' edges, as a fraction of ONE CELL's short
+ *  side — so the gap reads the same whatever size the table is, and the grid and the
+ *  export agree. It used to be a flat 6px in the grid and 6% of the TABLE's short
+ *  side in the export, which gave a big table a gap several times a small one's. */
+const TABLE_INSET = 0.03;
+
 const WALL_THICK = 0.0909;
 const WALL_STROKE = 0.0295;
 const WALL_OUT_SCALE = 0.5;

@@ -340,7 +340,12 @@ and push it; don't stack new work directly on `main`.
     js/grid.js, the non-rect branch of `drawTable` in js/export.js), so the
     border is one even weight all the way round with no per-edge hooks or gaps at
     concave corners. A table is inset from its cells with rounded corners
-    (`emitRoundedLoop`). **Merges share the same tracer** (`renderMerges` /
+    (`emitRoundedLoop`). That inset is `TABLE_INSET` (js/layout.js), a fraction of
+    ONE CELL's short side — the one dial for how much transparent padding a table
+    keeps. Measuring it off a cell is what makes the gap read the same at every
+    table size and keeps the two renderers in step: the grid used a flat 6px while
+    the export took 6% of the TABLE's short side, so a 2×2 exported with twice a
+    1×1's gap and neither matched the grid. **Merges share the same tracer** (`renderMerges` /
     `drawMerge`) but draw fused edge-to-edge with square corners (inset 0,
     radius 0) — the tracer is shared so both features get a clean, uniform
     border. **Rotate** turns the WHOLE shape rigidly about its bounding-box

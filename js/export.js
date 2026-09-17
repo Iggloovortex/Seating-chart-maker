@@ -1332,7 +1332,10 @@ function tableRect(table, rectOf) {
   const top = Math.min(...rects.map((b) => b.y));
   const right = Math.max(...rects.map((b) => b.x + b.w));
   const bottom = Math.max(...rects.map((b) => b.y + b.h));
-  const inset = Math.min(right - left, bottom - top) * 0.06;
+  // Off a CELL, not the table's own box: measuring the box gave a 2x2 table twice
+  // the gap of a 1x1 and disagreed with the grid (see TABLE_INSET).
+  const cm = Math.min(...rects.map((b) => Math.min(b.w, b.h)));
+  const inset = cm * TABLE_INSET;
   return { x: left + inset, y: top + inset,
            w: right - left - inset * 2, h: bottom - top - inset * 2 };
 }
@@ -1377,7 +1380,7 @@ function drawTable(ctx, table, rectOf) {
     // with rounded corners, matching the rectangle branch above (and the grid).
     const sample = rectOf(...parseKey(table.cellKeys[0]));
     const cm = Math.min(sample.w, sample.h);
-    const inset = cm * 0.06;
+    const inset = cm * TABLE_INSET;
     const rad = table.shape === 'round' ? cm * 0.5 : cm * 0.15;
     ctx.lineWidth = Math.max(1, cm * 0.02);
     ctx.beginPath();
