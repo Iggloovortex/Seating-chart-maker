@@ -408,7 +408,7 @@ function toggleSubcell(r, c, i) {
 // Subcells within a 2×2 or 3×3 split can merge with each other. Rectangular
 // groups use CSS grid spans; L/T/+ shapes use an SVG overlay (like grid-level
 // poly merges). The model mirrors the grid merge:
-// cell.submerges = [{ id, indices:[int], anchor:int }], where anchor is the
+// cell.submerges = [{ id, indices:[int], anchor:int, kind:'poly'|'unit' }], anchor is the
 // top-left subcell whose content the merged region shows.
 
 /** True when a set of subcell indices forms a complete rectangle in a rows×cols grid. */
@@ -516,7 +516,9 @@ function addSubmerge(r, c, indices) {
   for (const i of indices) if (submergeAt(cell, i)) return null;
   if (typeof historyCheckpoint === 'function') historyCheckpoint();
   const anchor = Math.min(...indices);
-  const sm = { id: `sm${Date.now().toString(36)}`, indices: [...indices].sort((a, b) => a - b), anchor };
+  // Kind mirrors a grid-level merge: 'poly' takes the exact shape of the pieces,
+  // 'unit' is one 1:1 square centred in them.
+  const sm = { id: `sm${Date.now().toString(36)}`, indices: [...indices].sort((a, b) => a - b), anchor, kind: 'poly' };
   cell.submerges.push(sm);
   const anchorSub = cell.subcells[anchor];
   if (anchorSub && !anchorSub.enabled) anchorSub.enabled = true;
@@ -531,6 +533,20 @@ function removeSubmerge(r, c, id) {
   if (typeof historyCheckpoint === 'function') historyCheckpoint();
   cell.submerges = cell.submerges.filter((sm) => sm.id !== id);
   if (!cell.submerges.length) delete cell.submerges;
+  emit();
+}
+
+/** A merged piece's kind, defaulting to 'poly' for merges saved before kinds. */
+function submergeKind(sm) { return sm && sm.kind === 'unit' ? 'unit' : 'poly'; }
+
+/** Patch one merged piece — its kind ('poly' | 'unit'), the piece twin of updateMerge. */
+function updateSubmerge(r, c, id, patch) {
+  const cell = peekCell(r, c);
+  if (!cell || !cell.submerges) return;
+  const sm = cell.submerges.find((x) => x.id === id);
+  if (!sm) return;
+  if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  Object.assign(sm, patch);
   emit();
 }
 
@@ -1909,6 +1925,7 @@ function deserialize(data) {
               id: String(sm.id || `sm${Math.random().toString(36).slice(2)}`),
               indices: sm.indices.filter((i) => typeof i === 'number' && i >= 0 && i < rows * cols).sort((a, b) => a - b),
               anchor: typeof sm.anchor === 'number' ? sm.anchor : Math.min(...sm.indices),
+              kind: sm.kind === 'unit' ? 'unit' : 'poly',
             }))
             .filter((sm) => sm.indices.length >= 2 && isConnectedSubcells(sm.indices, rows, cols));
           if (!cell.submerges.length) delete cell.submerges;

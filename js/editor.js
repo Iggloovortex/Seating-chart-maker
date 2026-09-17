@@ -1007,6 +1007,28 @@ function renderSubcellEditor() {
     g.appendChild(backButton('Back to split square',
       () => { submergeSelection.clear(); openEditor(current.r, current.c); }));
     if (sm) {
+      // The same two kinds a merged SQUARE offers, on the piece scale.
+      const seg = document.createElement('div');
+      seg.className = 'mergekind';
+      const kindBtn = (kind, label, desc) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = `btn ${submergeKind(sm) === kind ? 'btn--primary' : ''}`;
+        b.textContent = label;
+        b.title = desc;
+        b.setAttribute('aria-pressed', String(submergeKind(sm) === kind));
+        b.addEventListener('click', () => {
+          updateSubmerge(current.r, current.c, sm.id, { kind });
+          renderSubcellEditor();
+        });
+        return b;
+      };
+      seg.append(
+        kindBtn('poly', 'Shape', 'Fill the exact shape of the spaces (L, T, +): labels across the widest part, icon in the slimmest.'),
+        kindBtn('unit', 'Centered', 'One space, centred in the group and kept 1:1 — so it can straddle the seam between spaces.'),
+      );
+      g.appendChild(seg);
+
       const note = document.createElement('p');
       note.className = 'egroup__note';
       note.style.margin = '0';

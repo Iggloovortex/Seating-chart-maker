@@ -667,33 +667,50 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan, span = { rows: 1, cols: 1 })
   const polyMerges = [];
   if (sp.data.submerges) {
     for (const sm of sp.data.submerges) {
-      const isRect = isRectSubcells(sm.indices, rows, cols);
+      // A 'unit' merged piece is one centred square over the block's bounding box,
+      // so the shape of the pieces it fuses does not matter: it always takes the
+      // rect path, which is what centres and squares it.
+      const isRect = sm.kind === 'unit' || isRectSubcells(sm.indices, rows, cols);
       if (isRect) rectMerges.push(sm);
       else polyMerges.push(sm);
       for (const idx of sm.indices) hidden.add(idx);
     }
     for (const sm of rectMerges) hidden.delete(sm.anchor);
   }
-  sp.data.subcells.forEach((sub, i) => {
-    if (!sub.enabled || hidden.has(i)) return;
+  // A unit merged piece straddles the seams of the pieces around it, so it is
+  // painted after them — otherwise a later, un-merged piece paints over it.
+  const isUnitAnchor = (i) => rectMerges.some((m) => m.anchor === i && m.kind === 'unit');
+  const order = sp.data.subcells.map((_, i) => i)
+    .sort((a, b) => (isUnitAnchor(a) ? 1 : 0) - (isUnitAnchor(b) ? 1 : 0) || a - b);
+  for (const i of order) {
+    const sub = sp.data.subcells[i];
+    if (!sub.enabled || hidden.has(i)) continue;
     const rr = Math.floor(i / cols), cc = i % cols;
     const sm = rectMerges.find((m) => m.anchor === i) || null;
     const smRect = sm ? submergeRect(sm, cols) : null;
-    const bw = smRect ? smRect.colSpan * cw : cw;
-    const bh = smRect ? smRect.rowSpan * ch : ch;
-    const box = { x: rect.x + cc * cw, y: rect.y + rr * ch, w: bw, h: bh };
+    let bw = smRect ? smRect.colSpan * cw : cw;
+    let bh = smRect ? smRect.rowSpan * ch : ch;
+    let box = { x: rect.x + cc * cw, y: rect.y + rr * ch, w: bw, h: bh };
     const effRows = smRect ? rows / smRect.rowSpan : rows;
     const effCols = smRect ? cols / smRect.colSpan : cols;
-    const uRows = effRows / Math.max(1, span.rows || 1);
-    const uCols = effCols / Math.max(1, span.cols || 1);
+    let uRows = effRows / Math.max(1, span.rows || 1);
+    let uCols = effCols / Math.max(1, span.cols || 1);
+    // A 'unit' merged piece is one 1:1 square centred in the pieces it fuses —
+    // the piece twin of a unit merge, so it straddles their seams.
+    if (sm && sm.kind === 'unit') {
+      const side = Math.min(bw, bh);
+      box = { x: box.x + (bw - side) / 2, y: box.y + (bh - side) / 2, w: side, h: side };
+      bw = side; bh = side;
+      uRows = uCols = Math.max(uRows, uCols);
+    }
     const scFurn = subcellFurniture(sub, uRows, uCols);
     if (scFurn === 'stairs') {
       drawStairs(ctx, { data: sub, r: sp.r, c: sp.c, geo: { rect: box, cx: box.x + bw / 2, cy: box.y + bh / 2, w: bw, h: bh } }, imgCache, plan, i, rows, cols);
-      return;
+      continue;
     }
     if (scFurn) {
       drawChair(ctx, { data: sub, geo: chairInRect(box, sub, uRows, uCols) }, imgCache, plan);
-      return;
+      continue;
     }
     ctx.fillStyle = sub.fill || '#dbe7ff';
     ctx.fillRect(box.x, box.y, bw, bh);
@@ -703,7 +720,7 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan, span = { rows: 1, cols: 1 })
     drawContent(ctx, box.x + bw / 2, box.y + bh / 2, bw, bh, sub, imgCache, false, plan,
                 undefined, 0, sub.fill || '#dbe7ff');
     if (hasPrinter(sub) && isPrinterSecondary(sub)) drawPrinterOverlay(ctx, box.x, box.y, bw, bh, sub, imgCache);
-  });
+  }
   for (const sm of polyMerges) drawSubmerge(ctx, rect, sp.data, sm, cw, ch, imgCache, plan);
 }
 

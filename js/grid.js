@@ -82,6 +82,7 @@ function renderGrid() {
   }
 
   chart.style.setProperty('--line-out', `${LINE_BTN_OUT}px`);
+  sizeUnitSubmerges();
   fitCellLabels();
   fitSubcellLabels();
   renderTables();
@@ -137,6 +138,23 @@ function fitCellLabels() {
  *  a side-facing label (rotated vertical) reads along the piece's LONG axis at up
  *  to the normal square font instead of being capped tiny by the piece's narrow
  *  width. Mirrors fitCellLabels but per sub-cell. */
+/** Square off every 'unit' merged piece: it fills its block in the split grid,
+ *  and here that block is measured and the piece cut back to its short side,
+ *  centred. Measured rather than computed, so it holds under "true sizes" too. */
+function sizeUnitSubmerges(root = chart) {
+  for (const el of root.querySelectorAll('.subcell--unit')) {
+    // Back to filling the block first, so the measurement is of the BLOCK and a
+    // second pass does not shrink an already-squared piece again.
+    el.style.width = '100%';
+    el.style.height = '100%';
+    const box = el.getBoundingClientRect();
+    const side = Math.min(box.width, box.height);
+    if (side <= 0) continue;
+    el.style.width = `${side}px`;
+    el.style.height = `${side}px`;
+  }
+}
+
 function fitSubcellLabels() {
   const BASE = 12;          // match a normal square's label size when it fits
   const LINE = BASE * 1.25;
@@ -857,7 +875,10 @@ function buildSplitGrid(r, c, data, span = { rows: 1, cols: 1 }) {
   const polyMerges = [];
   if (data.submerges) {
     for (const sm of data.submerges) {
-      const isRect = isRectSubcells(sm.indices, rows, cols);
+      // A 'unit' merged piece is one centred square over the block's bounding box,
+      // so the shape of the pieces it fuses does not matter: it always takes the
+      // rect path, which is what centres and squares it.
+      const isRect = sm.kind === 'unit' || isRectSubcells(sm.indices, rows, cols);
       if (isRect) rectMerges.push(sm);
       else polyMerges.push(sm);
       for (const idx of sm.indices) if (idx !== sm.anchor) hidden.add(idx);
@@ -882,6 +903,11 @@ function buildSplitGrid(r, c, data, span = { rows: 1, cols: 1 }) {
       const rect = submergeRect(sm, cols);
       el.style.gridColumn = `${rect.c + 1} / span ${rect.colSpan}`;
       el.style.gridRow = `${rect.r + 1} / span ${rect.rowSpan}`;
+      // A 'unit' merged piece is ONE 1:1 square centred in the pieces it fuses
+      // (the piece twin of a unit merge). It fills its block here and is squared
+      // off by sizeUnitSubmerges once the block has been laid out — the block is
+      // only square when the cell is, which "true sizes" need not be.
+      if (sm.kind === 'unit') el.classList.add('subcell--unit');
     }
     wrap.appendChild(el);
   });
@@ -997,8 +1023,11 @@ function buildSubcell(sub, i, split, sm, parentR, parentC, span = { rows: 1, col
   // Furniture is sized per CELL, so divide by how many cells the split is drawn
   // across: a merge's desk-split spans its whole footprint, and without this a
   // chair on a 2-cell desk comes out a whole cell wide instead of a half.
-  const uRows = effRows / Math.max(1, span.rows || 1);
-  const uCols = effCols / Math.max(1, span.cols || 1);
+  let uRows = effRows / Math.max(1, span.rows || 1);
+  let uCols = effCols / Math.max(1, span.cols || 1);
+  // A unit merged piece draws as a square of the block's SHORT side, so that is
+  // the size its furniture has to fit.
+  if (sm && sm.kind === 'unit') uRows = uCols = Math.max(uRows, uCols);
   const furniture = subcellFurniture(sub, uRows, uCols);
   if (sub.enabled && !furniture) {
     el.classList.add('subcell--on');
@@ -1759,6 +1788,9 @@ function renderMerges() {
       }
     }
   }
+  // A desk split is built here, after the grid's own pass, so its unit pieces are
+  // squared off now that their blocks have a size.
+  sizeUnitSubmerges();
 }
 
 /** One 'unit' merge: a single square (one cell in size) centred in the block, so

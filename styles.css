@@ -773,6 +773,9 @@ body {
 .subcell:not(.subcell--on):hover { background: var(--surface-2); }
 .subcell--on { background: var(--seat); }
 .subcell--polyhidden { visibility: hidden; }
+/* A 'unit' merged piece: one square centred in the pieces it fuses, straddling
+   their seams. Its width/height come from the block's proportions (js/grid.js). */
+.subcell--unit { place-self: center; z-index: 2; }
 .subcell-merge-overlay {
   position: absolute; inset: 0;
   pointer-events: none; z-index: 1;

@@ -97,6 +97,18 @@ and push it; don't stack new work directly on `main`.
   piece↔square, square↔piece (`swapContentSlots`, js/state.js); the content drag
   lives in js/interactions.js beside the whole-square/table drags. Mobile uses
   cut/paste (`cutSubcell` + `pasteSquareToSubcell`) from the shared pane header.
+  **Pieces merge too** (`cell.submerges = [{id, indices, anchor, kind}]`, js/state.js
+  — `addSubmerge`/`removeSubmerge`/`updateSubmerge`/`submergeKind`): pick pieces in
+  the split-parent pane's Pieces list and merge them. `kind` mirrors a grid-level
+  merge — `'poly'` fills the exact shape of the pieces (`buildSubmergeOverlay` /
+  `drawSubmerge`), `'unit'` is ONE 1:1 square centred in their bounding box, so it
+  straddles the seams between pieces. A unit takes the rect path in both renderers
+  whatever shape it fuses, since only the bbox matters; the grid fills the block
+  and `sizeUnitSubmerges` (js/grid.js) squares it off after layout (measured, so it
+  holds under "true sizes"), and the export centres the square in the block and
+  paints unit anchors LAST so a neighbouring piece cannot paint over them. Its
+  furniture is sized to the square's short side. Shape / Centered live in the
+  merged-piece pane's Unique section, beside Unmerge in the header.
   Under a table a split shows only its pieces' content overlaid (no piece boxes),
   like any covered square (js/export.js).
 - **Merge — DONE.** Two kinds, from the `#btn-table-merge` menu on a ≥2-square
