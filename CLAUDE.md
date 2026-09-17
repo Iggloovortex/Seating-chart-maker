@@ -183,10 +183,15 @@ and push it; don't stack new work directly on `main`.
   (`drawMergeStairs` / `renderMergeStairsGrid`, variant via `mergeStairVariant`).
   A desk-split merge keeps its Shape/Centered kind buttons and Pieces list in one
   universal pane (render() routes merged cells through the shared pane, `piecesGroup`
-  shared with `renderSplitParent`). A **unit** merge is one live object: its member
-  cells are inert (`.cell--merged-inert`) and its centred overlay/furniture host is
-  the pointer target (`.merge-unit` / `.merge-furniture--live`, carrying the anchor
-  key); the empty surround is a no-op. An emptied merge keeps a faded ghost of its
+  shared with `renderSplitParent`). A **unit** merge is one live object: its centred
+  overlay/furniture host is the pointer target (`.merge-unit` /
+  `.merge-furniture--live`, carrying the anchor key) and a TAP on the empty surround
+  is a no-op. The surround is still pointer-ABLE, though (`.cell--merged-inert` no
+  longer kills pointer events; `pointer.unitSurround` in js/interactions.js suppresses
+  the tap instead), so the whole footprint can be grabbed for a drag or right-clicked
+  into the pane — the centred square is only a fraction of a wide desk, and requiring
+  the press to land on it is what made a 3-cell-or-wider unit merge impossible to
+  pick up. An emptied merge keeps a faded ghost of its
   content in the grid. Pasting onto a merge writes once to the anchor and fills or
   empties the whole desk (`pasteSquareTo`), so it never shatters or de-centres it.
 - **Walls — DONE** (branch `claude/walls-tmdavo`). Edge objects on the seams

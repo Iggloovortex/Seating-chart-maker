@@ -84,8 +84,17 @@ function initInteractions(chartEl) {
     const additive = e.ctrlKey || e.metaKey; // Ctrl (Win/Linux) or Cmd (Mac) = add to selection
     const shift = e.shiftKey;                 // Shift = range-select from the anchor
     const sub = subFrom(e.target);
+    // A unit merge draws ONE centred square; the rest of its footprint is empty
+    // surround. That surround must still be grabbable — on a 3-cell desk the square
+    // is a third of it, so requiring the press to land on the square is why a wide
+    // merge could not be picked up — but a TAP there stays a no-op, so only the
+    // square itself seats or empties the desk.
+    const mergeHere = typeof mergeAt === 'function' ? mergeAt(...parseKey(cell.dataset.key)) : null;
+    const onLive = !!(e.target.closest?.('.merge-unit') || e.target.closest?.('.merge-furniture--live'));
+    const unitSurround = !!mergeHere && mergeHere.kind === 'unit' && !onLive;
+
     pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, cell, sub, longFired: false,
-                timer: 0, additive, shift, pointerType: e.pointerType };
+                timer: 0, additive, shift, pointerType: e.pointerType, unitSurround };
     // Long-press opens the editor on TOUCH only. On a mouse the gesture belongs to
     // the drag: press, hold, then pull has to pick the square (or desk) up, and a
     // timer firing mid-hold would open the pane instead and kill the drag. Right-
@@ -123,7 +132,7 @@ function initInteractions(chartEl) {
     if (drag) return;                       // the window listeners finish a drag
     if (!pointer || e.pointerId !== pointer.id) return;
     window.clearTimeout(pointer.timer);
-    if (!pointer.longFired) fireTap(pointer.cell, { additive: pointer.additive, shift: pointer.shift, sub: pointer.sub });
+    if (!pointer.longFired && !pointer.unitSurround) fireTap(pointer.cell, { additive: pointer.additive, shift: pointer.shift, sub: pointer.sub });
     pointer = null;
   };
   chartEl.addEventListener('pointerup', endHandler);
