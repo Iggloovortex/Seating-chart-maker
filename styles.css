@@ -868,11 +868,15 @@ body {
   z-index: 1;
 }
 /* The unit overlay IS the live target for a centred merge (its member cells are
-   inert), so it takes the pointer itself. The poly shape is the live target too:
-   its filled path spans the desk INCLUDING the gaps between member cells, so a tap
-   on an internal seam still lands on the merge (visiblePainted = only the desk). */
+   inert), so it takes the pointer itself. The poly shape is the live target too,
+   but only where it is PAINTED: the <svg> covers the whole bounding box, so leaving
+   it live would let an L or T grab the free square in its notch. The root stays
+   transparent and the traced path alone answers the pointer — it spans the desk
+   including the gaps between member cells, so a tap on an internal seam still lands
+   on the merge, while the notch falls through to the ordinary square underneath. */
 .merge-unit { pointer-events: auto; cursor: pointer; }
-.merge-shape { pointer-events: auto; cursor: pointer; }
+.merge-shape { pointer-events: none; }
+.merge-shape path { pointer-events: auto; cursor: pointer; }
 /* Furniture drawn over a merged desk (no desk box): hosts a chair/server/rack/
    stairs like a cell would. Poly merges let clicks fall to their member cells;
    a unit furniture merge is the live target itself. */

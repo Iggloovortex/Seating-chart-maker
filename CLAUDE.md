@@ -149,6 +149,16 @@ and push it; don't stack new work directly on `main`.
   anchor's content (`mergeContentOf`) as one desk; the split data is kept and
   editable via the split-parent pane. Under a table a desk-split merge overlays
   EVERY piece's content (no boxes); a plain merge overlays its single content.
+  **A notched desk keeps only its own squares.** The `.merge-shape` `<svg>` covers the
+  merge's bounding box, so it is `pointer-events: none` and its traced PATH alone
+  answers the pointer: an L or T no longer commands a rectangular click box over the
+  free square in its notch, while the path still bridges the gaps between member
+  cells so a tap on an internal seam lands on the merge. A server RACK is a plain box
+  that fills the desk, so it is clipped to the merge's true shape in both renderers
+  (`clipHostToMerge` grid / `clipToMergeShape` export, both reusing `cellShapeLoops`)
+  — a clipped region is neither painted nor hit-tested. Note the rack is laid across
+  the bounding box, so on an L the clip visibly cuts the slabs that reach into the
+  notch.
   A selected merge shows
   ONE outline over the whole object (`.merge--selected`), not a tick per member
   (buildCell skips per-cell selection on merged cells). Walls are refused on a

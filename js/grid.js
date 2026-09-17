@@ -1838,6 +1838,20 @@ function mkFurnHost(area, merge, selected, extraClass = '') {
   return host;
 }
 
+/** Clip a merge overlay box to the merge's true cell shape, so an L or T never
+ *  covers — or steals the clicks of — the free squares in its notch. A no-op on a
+ *  rectangular merge, where the box already IS the shape. */
+function clipHostToMerge(host, merge, rects, area) {
+  if (typeof keysAreRect === 'function' && keysAreRect(merge.keys)) return;
+  const at = new Map(rects.map((b) => [keyOf(b.r, b.c), b]));
+  const rectOf = (r, c) => {
+    const v = at.get(keyOf(r, c));
+    return v ? { x: v.left, y: v.top, w: v.width, h: v.height } : null;
+  };
+  const d = roundedLoopPath(cellShapeLoops(merge.keys, rectOf, 0), 0, area.left, area.top);
+  if (d) host.style.clipPath = `path('${d}')`;
+}
+
 /** The stair variant for a member cell of a stairs merge — start/middle/end/single
  *  resolved from whether the run continues into adjacent members (the grid twin of
  *  export's mergeStairVariant). */
@@ -1889,6 +1903,11 @@ function renderMergeFurniture(furn, data, box, rects, merge, selected) {
 
   if (furn === 'server' && labelCount >= 2) {
     const host = mkFurnHost(area, merge, selected, 'cell--furniturehost');
+    // The rack fills the desk, and its host is a plain box — so on an L or T it
+    // would cover the free square in the notch AND swallow its clicks. Clip it to
+    // the merge's real shape (the same tracer the desk outline uses): a clipped
+    // region is neither painted nor hit-tested, so the notch square comes back.
+    clipHostToMerge(host, merge, rects, area);
     host.appendChild(buildServerRack(data, rot));
     const svg = iconUse('server', 'cell__rackicon');
     if (svg) { svg.style.color = surfaceLabelColor(data.iconColor || '#1f2933'); host.appendChild(svg); }

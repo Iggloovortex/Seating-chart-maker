@@ -571,7 +571,13 @@ function drawMerge(ctx, rectOf, { merge, data, plan, coveredByTable }, imgCache,
     if (furn === 'server') {
       const labels = labelsOf(data);
       if (labels.length >= 1) {
+        // The rack fills the desk BOX, which on an L or T reaches into the notch and
+        // over the free square there. Clip it to the merge's real shape, as the grid
+        // does, so both renderers show the same desk.
+        ctx.save();
+        clipToMergeShape(ctx, merge, rectOf);
         drawServerRack(ctx, { data, r: ar, c: ac, geo: { rect: box, full: cellMin, units: labels.length } }, imgCache, out);
+        ctx.restore();
       } else {
         roundRect(ctx, box.x, box.y, box.w, box.h, Math.min(box.w, box.h) * 0.06);
         ctx.fillStyle = fill; ctx.fill();
@@ -1387,6 +1393,22 @@ function drawTable(ctx, table, rectOf) {
     ctx.stroke();
   }
   ctx.restore();
+}
+
+/** Clip the canvas to a merge's true cell shape — the export twin of the grid's
+ *  clipHostToMerge. A no-op on a rectangular merge, whose box already IS the shape. */
+function clipToMergeShape(ctx, merge, rectOf) {
+  if (typeof keysAreRect === 'function' && keysAreRect(merge.keys)) return;
+  ctx.beginPath();
+  for (const loop of cellShapeLoops(merge.keys, rectOf, 0)) {
+    emitRoundedLoop(loop, 0, {
+      move: (x, y) => ctx.moveTo(x, y),
+      line: (x, y) => ctx.lineTo(x, y),
+      quad: (cx, cy, x, y) => ctx.quadraticCurveTo(cx, cy, x, y),
+      close: () => ctx.closePath(),
+    });
+  }
+  ctx.clip('evenodd');
 }
 
 /** A cell's chosen icon colour, before any contrast adjustment. */
