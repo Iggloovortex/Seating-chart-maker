@@ -225,7 +225,9 @@ function firstTableKey() {
 
 let mergeMenu = null;
 
-function openMergeMenu(x, y) {
+/** `after` (optional) is handed the new merge, or null when it was refused — the
+ *  edit pane uses it to land on the desk it just made. */
+function openMergeMenu(x, y, after) {
   closeMergeMenu();
   mergeMenu = document.createElement('div');
   mergeMenu.className = 'popmenu merge-menu';
@@ -240,8 +242,9 @@ function openMergeMenu(x, y) {
     b.addEventListener('click', (ev) => { ev.stopPropagation(); closeMergeMenu(); run(); });
     mergeMenu.appendChild(b);
   };
-  item('Merge into one shape', () => addMerge('poly'));
-  item('Merge into a centered square', () => addMerge('unit'));
+  const run = (kind) => { const m = addMerge(kind); after?.(m); };
+  item('Merge into one shape', () => run('poly'));
+  item('Merge into a centered square', () => run('unit'));
 
   document.body.appendChild(mergeMenu);
   const box = mergeMenu.getBoundingClientRect();

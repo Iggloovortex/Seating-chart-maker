@@ -149,7 +149,11 @@ and push it; don't stack new work directly on `main`.
   merge's interior seams (`seamInsideMerge`, js/grid.js). Under a table a merge
   shows only its content overlaid, no desk box (js/export.js `drawMerge`). The
   **Unmerge** control lives in the shared pane header (`renderActions`), not the
-  Merged-square section, so it is reachable from every pane a merge can open.
+  Merged-square section, so it is reachable from every pane a merge can open. The
+  BULK pane offers **Merge** in that same slot (`renderActions` `onMerge`), opening
+  the select bar's own `openMergeMenu` — which now takes an `after` callback, so the
+  pane lands on the desk it just made; it is withheld when a selected square is
+  already merged, since `addMerge` refuses stacking.
   **Special/furniture content** (chair/server/rack/stairs) renders as furniture
   over the footprint with NO desk box, in both renderers: a chair stays a ½×½
   piece tucked to its facing (`chairInBox` export / `renderMergeFurniture` grid),

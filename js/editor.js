@@ -1330,10 +1330,22 @@ function renderBulk(keys) {
   // multi-select; Paste applies the clipboard to all, and Delete acts on the
   // whole selection.
   const [sr, sc] = keys[0].split(',').map(Number);
+  // Merge is offered where Unmerge sits on a merged pane: two or more squares, none
+  // of them already fused (addMerge refuses stacking). It opens the same kind menu
+  // the toolbar's Merge button does, and lands on the new desk's own pane.
+  const canMerge = keys.length >= 2
+    && !keys.some((k) => { const [r, c] = parseKey(k); return typeof mergeAt === 'function' && mergeAt(r, c); });
   renderActions({
     onCut: null,
     onCopy: null,
     onPaste: () => { pasteSquareTo(keys); renderBulk(keys); },
+    onMerge: canMerge ? (e) => {
+      const box = e.currentTarget.getBoundingClientRect();
+      openMergeMenu(box.left, box.bottom + 6, (merge) => {
+        if (merge) openEditor(...parseKey(merge.anchor));
+        else closeEditor();   // the merge was refused; the selection is gone either way
+      });
+    } : null,
     onDelete: (e) => openDeleteAt(e, [...keys], { r: sr, c: sc }),
   });
 
@@ -2074,12 +2086,17 @@ function renderActions(ctx) {
     actionButton('Paste', ctx.onPaste,
       { enabled: ctx.pasteEnabled !== undefined ? ctx.pasteEnabled : hasSquareClipboard() }),
   );
-  if (ctx.onUnmerge) {
-    const u = actionButton('Unmerge', ctx.onUnmerge);
-    // Right-aligned before Delete, and accented so it reads at a glance.
-    u.classList.add('editor-action--pushright', 'editor-action--accent');
-    bar.append(u);
-  }
+  // Merge and Unmerge share the slot right of the gap, before Delete, accented so
+  // they read at a glance. A pane only ever offers one of them: you either have a
+  // merge to undo, or a selection to fuse.
+  const extras = [];
+  if (ctx.onMerge) extras.push(actionButton('Merge', ctx.onMerge));
+  if (ctx.onUnmerge) extras.push(actionButton('Unmerge', ctx.onUnmerge));
+  extras.forEach((b, i) => {
+    b.classList.add('editor-action--accent');
+    if (i === 0) b.classList.add('editor-action--pushright');
+    bar.append(b);
+  });
   bar.append(actionButton('Delete', ctx.onDelete, { danger: true }));
 }
 
