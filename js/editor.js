@@ -854,6 +854,7 @@ function piecesGroup(cell, rerender) {
       if (hidden.has(i)) return;
       const sm = cell.submerges && submergeAt(cell, i);
       const btn = pieceButton(sub, i, sm);
+      btn.dataset.sub = i;
       if (sm) {
         const rect = submergeRect(sm, cell.split.cols);
         btn.style.gridColumn = `${rect.c + 1} / span ${rect.colSpan}`;
@@ -886,6 +887,7 @@ function piecesGroup(cell, rerender) {
       const edit = () => openSubcellEditor(current.r, current.c, i);
       btn.addEventListener('contextmenu', (e) => { e.preventDefault(); edit(); });
       attachPieceLongPress(btn, edit);
+      attachPieceDrag(btn, grid, i, rerender);
       grid.appendChild(btn);
     });
     g.appendChild(grid);
@@ -907,34 +909,65 @@ function piecesGroup(cell, rerender) {
       });
       bar.appendChild(selBtn);
 
-      if (submergeSelection.size >= 2) {
-        // Which kind the merge will be — the same two the chart's merge menu offers.
-        const kindBtn = (kind, label, desc) => {
-          const b = document.createElement('button');
-          b.type = 'button';
-          b.className = `btn ${submergeKindChoice === kind ? 'btn--primary' : ''}`;
-          b.textContent = label;
-          b.title = desc;
-          b.setAttribute('aria-pressed', String(submergeKindChoice === kind));
-          b.addEventListener('click', () => { submergeKindChoice = kind; rerender(); });
-          return b;
-        };
-        bar.append(
-          kindBtn('poly', 'Shape', 'Fill the exact shape of the selected pieces.'),
-          kindBtn('unit', 'Centered', 'One square, centred in the selected pieces and kept 1:1.'),
-        );
+      // What the rest of the bar offers depends on WHAT is picked: an existing
+      // merged piece is unmerged and re-shaped; a set of loose pieces is merged.
+      const picked = [...submergeSelection];
+      const pickedMerges = [...new Set(picked.map((i) => submergeAt(cell, i)).filter(Boolean))];
 
-        const indices = [...submergeSelection];
-        const valid = isConnectedSubcells(indices, cell.split.rows, cell.split.cols)
-          && !indices.some((i) => submergeAt(cell, i));
+      // Shape / Centered: on picked merges they re-shape those merges; on loose
+      // pieces they choose what the merge about to be made will be.
+      const kindBtn = (kind, label, desc, active, onPick) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = `btn ${active ? 'btn--primary' : ''}`;
+        b.textContent = label;
+        b.title = desc;
+        b.setAttribute('aria-pressed', String(active));
+        b.addEventListener('click', onPick);
+        return b;
+      };
+      const kindPair = (isActive, onPick) => {
+        bar.append(
+          kindBtn('poly', 'Shape', 'Fill the exact shape of the pieces.', isActive('poly'), () => onPick('poly')),
+          kindBtn('unit', 'Centered', 'One square, centred in the pieces and kept 1:1.', isActive('unit'), () => onPick('unit')),
+        );
+      };
+
+      if (pickedMerges.length) {
+        kindPair(
+          (k) => pickedMerges.every((sm) => submergeKind(sm) === k),
+          (k) => {
+            batch(() => {
+              for (const sm of pickedMerges) updateSubmerge(current.r, current.c, sm.id, { kind: k });
+            });
+            rerender();
+          },
+        );
+        const unmergeBtn = document.createElement('button');
+        unmergeBtn.type = 'button';
+        unmergeBtn.className = 'btn btn--primary';
+        unmergeBtn.textContent = 'Unmerge';
+        unmergeBtn.title = pickedMerges.length > 1 ? 'Split these merged pieces apart' : 'Split this merged piece apart';
+        unmergeBtn.addEventListener('click', () => {
+          batch(() => {
+            for (const sm of pickedMerges) removeSubmerge(current.r, current.c, sm.id);
+          });
+          submergeSelection.clear();
+          rerender();
+        });
+        bar.appendChild(unmergeBtn);
+      } else if (picked.length >= 2) {
+        kindPair((k) => submergeKindChoice === k, (k) => { submergeKindChoice = k; rerender(); });
+
+        const valid = isConnectedSubcells(picked, cell.split.rows, cell.split.cols);
         const mergeBtn = document.createElement('button');
         mergeBtn.type = 'button';
         mergeBtn.className = 'btn btn--primary';
         mergeBtn.textContent = 'Merge';
         mergeBtn.disabled = !valid;
-        mergeBtn.title = valid ? 'Merge selected pieces' : 'Selection must be connected unmerged pieces';
+        mergeBtn.title = valid ? 'Merge selected pieces' : 'Selection must be connected pieces';
         mergeBtn.addEventListener('click', () => {
-          addSubmerge(current.r, current.c, indices, submergeKindChoice);
+          addSubmerge(current.r, current.c, picked, submergeKindChoice);
           submergeSelection.clear();
           rerender();
         });
@@ -946,8 +979,8 @@ function piecesGroup(cell, rerender) {
     const note = document.createElement('p');
     note.className = 'egroup__note';
     note.textContent = canMerge
-      ? 'Click a piece to fill or empty it, right-click to edit it. Shift+click to select pieces, then Merge to combine them.'
-      : 'Click a piece to fill or empty it, right-click to edit its fill, icon, labels and facing.';
+      ? 'Click a piece to fill or empty it, right-click to edit it, drag it onto another to swap their content. Shift+click to select pieces, then Merge to combine them.'
+      : 'Click a piece to fill or empty it, right-click to edit it, drag it onto another to swap their content.';
     g.appendChild(note);
   });
 }
@@ -971,6 +1004,63 @@ function renderSplitParent(cell) {
   done.addEventListener('click', closeEditor);
   foot.appendChild(done);
   bodyEl.appendChild(foot);
+}
+
+/** Drag a piece tile onto another to SWAP their content — the pane's twin of the
+ *  chart's content drag (swapContentSlots), so pieces can be rearranged without
+ *  leaving the editor. The drag only starts once the pointer has travelled, so an
+ *  ordinary click still fills the piece and a long-press still edits it. */
+function attachPieceDrag(btn, grid, index, rerender) {
+  let sx = 0, sy = 0, live = false, id = null;
+
+  const tileUnder = (x, y) => {
+    for (const el of grid.querySelectorAll('.piece-btn')) {
+      const r = el.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return el;
+    }
+    return null;
+  };
+  const clearMarks = () => grid.querySelectorAll('.piece-btn--drop')
+    .forEach((el) => el.classList.remove('piece-btn--drop'));
+
+  const move = (e) => {
+    if (!live && Math.hypot(e.clientX - sx, e.clientY - sy) > MOVE_TOLERANCE) {
+      live = true;
+      btn.classList.add('piece-btn--dragging');
+    }
+    if (!live) return;
+    clearMarks();
+    const t = tileUnder(e.clientX, e.clientY);
+    if (t && t !== btn) t.classList.add('piece-btn--drop');
+  };
+  const done = (e) => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', done);
+    window.removeEventListener('pointercancel', done);
+    btn.classList.remove('piece-btn--dragging');
+    clearMarks();
+    if (id != null && btn.hasPointerCapture?.(id)) btn.releasePointerCapture(id);
+    if (!live) return;
+    live = false;
+    btn.dataset.dragged = '1';   // swallowed by the capture-phase click below
+    const t = tileUnder(e.clientX, e.clientY);
+    const to = t && t !== btn ? Number(t.dataset.sub) : null;
+    if (to == null || Number.isNaN(to)) return;
+    // A tile can BE a merge's anchor; its index is the slot either way.
+    swapContentSlots({ r: current.r, c: current.c, sub: index },
+                     { r: current.r, c: current.c, sub: to });
+    rerender();
+  };
+
+  btn.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || e.pointerType !== 'mouse') return;   // touch keeps its scroll/long-press meaning
+    sx = e.clientX; sy = e.clientY; live = false; id = e.pointerId;
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', done);
+    window.addEventListener('pointercancel', done);
+  });
+  // A drag must not also read as a click (which would fill the piece).
+  btn.addEventListener('click', (e) => { if (btn.dataset.dragged === '1') { e.stopPropagation(); btn.dataset.dragged = '0'; } }, true);
 }
 
 /** Long-press on a piece tile opens its editor — the touch half of right-click,

@@ -113,8 +113,12 @@ and push it; don't stack new work directly on `main`.
   merging (`submergeKindChoice` → `addSubmerge`'s `kind` argument); a Centered merge
   shows there as a centred square too, so the list matches the chart.
   The Pieces list speaks the chart's mouse language: a plain click fills or empties
-  the piece, right-click / long-press edits it, and Shift/Ctrl (or an open selection)
-  gathers pieces to merge.
+  the piece, right-click / long-press edits it, dragging one onto another swaps their
+  content (`attachPieceDrag` → `swapContentSlots`, the pane's twin of the chart's
+  content drag), and Shift/Ctrl (or an open selection) gathers pieces to merge. What
+  the bar offers follows WHAT is picked: loose pieces get Shape / Centered (choosing
+  `submergeKindChoice`) + **Merge**; a picked MERGED piece gets Shape / Centered
+  reading and writing that merge's own kind + **Unmerge**.
   Under a table a split shows only its pieces' content overlaid (no piece boxes),
   like any covered square (js/export.js).
 - **Merge — DONE.** Two kinds, from the `#btn-table-merge` menu on a ≥2-square

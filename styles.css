@@ -1097,6 +1097,9 @@ body {
 }
 .piece-btn:hover { border-color: var(--line-strong); }
 .piece-btn--sel { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Dragging a piece onto another swaps their content, as on the chart. */
+.piece-btn--dragging { opacity: 0.45; }
+.piece-btn--drop { outline: 2px dashed var(--accent); outline-offset: -2px; }
 .piece-btn--merged { aspect-ratio: auto; }
 /* A Centered piece merge: one square in the middle of its block, as on the chart. */
 .piece-btn--unit { aspect-ratio: 1; place-self: center; }
