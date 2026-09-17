@@ -740,3 +740,21 @@ function slabel(text, control) {
   wrap.append(span, control);
   return wrap;
 }
+
+/** Apply preset `n` to one split PIECE — the piece twin of applyPreset, so the
+ *  piece pane can carry the same Preset 1 / Preset 2 buttons as a square. */
+function applyPresetToSubcell(n, r, c, i) {
+  const p = state.config.presets[String(n)];
+  if (!p) return false;
+  updateSubcell(r, c, i, {
+    icon: p.icon,
+    iconColor: p.iconColor,
+    iconFill: p.iconFill,
+    rotation: p.rotation || 0,
+    fill: p.fill,
+    border: p.border,
+    enabled: true,
+    labels: p.labels.map((l) => ({ text: l.text, color: l.color })),
+  });
+  return true;
+}

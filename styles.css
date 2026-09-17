@@ -1335,6 +1335,17 @@ body {
    each stretching to fill the row. */
 .editor-action { flex: 0 0 auto; }
 .editor-action:disabled { opacity: .4; cursor: default; }
+/* A filled (blue) button carries a defined edge so its silhouette matches the plain
+   buttons beside it — without it the colour runs to the edge and it reads larger. */
+.btn--primary, .editor-action--accent {
+  border: 1px solid color-mix(in srgb, var(--accent) 68%, #000);
+  background-clip: padding-box;
+}
+/* Unmerge: blue so it catches the eye, but the same box as its neighbours. */
+.editor-action--accent { background: var(--accent); color: #fff; }
+.editor-action--accent:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
+/* "Back to…" reads as a real button at the Done size, not a text link. */
+.editor__back { width: 100%; justify-content: center; margin-bottom: 20px; }
 .editor-action--pushright { margin-left: auto; } /* first right-aligned action (Unmerge) */
 .editor-action--pushright + .editor-action--danger { margin-left: 0; } /* Delete follows it, no extra gap */
 .editor-action--danger { color: var(--danger); margin-left: auto; }
@@ -2366,3 +2377,12 @@ body {
 .popmenu__item--danger { color: var(--danger); }
 .popmenu__item--danger:hover,
 .popmenu__item--danger:focus-visible { background: var(--danger); color: #fff; }
+
+/* Guidance folded into a section title (see titleNote): the title stays a small
+   uppercase label, the sentence after the dash reads as normal prose. */
+.egroup__titlenote {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  color: var(--ink-soft);
+}

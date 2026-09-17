@@ -12,7 +12,12 @@ let presetMode = null; // 1 | 2 while the pane is editing a preset instead of a 
 
 function initEditor() {
   editorEl.querySelectorAll('[data-close-editor]').forEach((el) =>
-    el.addEventListener('click', closeEditor)
+    // In "back" mode the header control steps UP to the parent square instead of
+    // shutting the editor (see setCloseMode); the backdrop always closes.
+    el.addEventListener('click', () => {
+      if (el.dataset.backMode && current) { submergeSelection.clear(); openEditor(current.r, current.c); return; }
+      closeEditor();
+    })
   );
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !editorEl.hidden) closeEditor();
@@ -79,6 +84,7 @@ function renderPresetEditor(n) {
   const p = cur();
 
   bodyEl.replaceChildren();
+  setCloseMode('close');
   document.getElementById('editor-actions').replaceChildren();
 
   // Facing + colours on one row, matching the square pane (no fill toggle — a
@@ -239,13 +245,23 @@ function render(cell) {
     bodyEl.replaceChildren();
     renderSquareActions();
     bodyEl.appendChild(mergeSection(merge));
-    // The desk's Split column, on its own row here (there is no Fill/Facing/Colors
-    // to sit beside — the content lives in the pieces below).
-    bodyEl.appendChild(group(null, (g) => {
-      const row = document.createElement('div');
-      row.className = 'erow erow--controls';
-      row.append(squareSplitControls(() => render(peekCell(current.r, current.c)), merge));
-      g.appendChild(row);
+    // The desk's split uses the BIG picker with None — the split-parent pattern —
+    // since there is no Fill/Facing/Colors row for a compact column to sit beside.
+    bodyEl.appendChild(group('Split desk', (g) => {
+      titleNote(g, 'Divide this desk into pieces. Tap a piece to fill it; long-press or right-click a piece to edit it.');
+      const picker = document.createElement('div');
+      picker.className = 'icon-picker';
+      const deskSplit = !!merge.deskSplit && isSplit(cell);
+      for (const o of SPLIT_KINDS) {
+        const active = o.key === 'none' ? !deskSplit
+          : deskSplit && cell.split.rows === o.rows && cell.split.cols === o.cols;
+        picker.appendChild(splitOptionButton(o, active, () => {
+          if (o.key === 'none') { unsplitCell(current.r, current.c); updateMerge(merge.id, { deskSplit: false }); }
+          else { splitCell(current.r, current.c, o.rows, o.cols); updateMerge(merge.id, { deskSplit: true }); }
+          render(peekCell(current.r, current.c));
+        }));
+      }
+      g.appendChild(picker);
     }));
     bodyEl.appendChild(piecesGroup(cell, () => render(peekCell(current.r, current.c))));
     const foot = document.createElement('div');
@@ -683,7 +699,7 @@ function mergeSection(merge) {
 
     const note = document.createElement('p');
     note.className = 'egroup__note';
-    note.textContent = `This desk spans ${merge.keys.length} squares. Its fill, border, icon, labels and facing above apply to the whole merged desk.`;
+    note.textContent = `This desk spans ${merge.keys.length} squares.`;
     g.appendChild(note);
   });
 }
@@ -730,6 +746,8 @@ function splitPreview(rows, cols) {
  *  None). Choosing a shape re-renders the pane, which then switches to the
  *  split-parent view. */
 function splitSection(cell) {
+  // The guidance rides on the section title rather than sitting as a separate
+  // paragraph below the picker.
   return group('Split square', (g) => {
     const picker = document.createElement('div');
     picker.className = 'icon-picker';
@@ -744,12 +762,20 @@ function splitSection(cell) {
         render(peekCell(current.r, current.c));
       }));
     }
+    titleNote(g, 'Divide this square into smaller squares. Tap a piece to fill it; long-press or right-click a piece to edit it.');
     g.appendChild(picker);
-    const note = document.createElement('p');
-    note.className = 'egroup__note';
-    note.textContent = 'Divide this square into smaller squares. Tap a piece to fill it; long-press or right-click a piece to edit it.';
-    g.appendChild(note);
   });
+}
+
+/** Hang a section's guidance off its TITLE (after an em dash) instead of leaving it
+ *  as a paragraph under the controls. */
+function titleNote(g, text) {
+  const h = g.querySelector('.egroup__title');
+  if (!h) return;
+  const s = document.createElement('span');
+  s.className = 'egroup__titlenote';
+  s.textContent = ` — ${text}`;
+  h.appendChild(s);
 }
 
 /** A compact Split control that sits as a column in the Format row, right of
@@ -902,10 +928,9 @@ function renderSplitParent(cell) {
   bodyEl.appendChild(splitSection(cell));
   bodyEl.appendChild(piecesGroup(cell, () => renderSplitParent(peekCell(current.r, current.c))));
 
+  // Delete lives in the shared header, so the footer is just Done (as in the base).
   const foot = document.createElement('div');
   foot.className = 'editor__foot';
-  foot.appendChild(deleteButton(() => [keyOf(current.r, current.c)],
-                                () => ({ r: current.r, c: current.c })));
   const done = document.createElement('button');
   done.type = 'button';
   done.className = 'btn btn--primary';
@@ -965,43 +990,30 @@ function renderSubcellEditor() {
   // The same shared header as every pane — cut/copy/paste this PIECE, delete
   // (clear) it. Copy a square, open a piece, paste is how content moves between a
   // whole square and a split space (special icons travel with it).
+  const cell = peekCell(current.r, current.c);
+  const sm = cell && submergeAt(cell, current.sub);
   renderActions({
     onCut: () => { cutSubcell(current.r, current.c, current.sub); renderSubcellEditor(); },
     onCopy: () => { copySubcell(current.r, current.c, current.sub); renderSubcellEditor(); },
     onPaste: () => { pasteSquareToSubcell(current.r, current.c, current.sub); renderSubcellEditor(); },
+    // A merged PIECE unmerges from the header, exactly like a merged square.
+    onUnmerge: sm ? () => { removeSubmerge(current.r, current.c, sm.id); renderSubcellEditor(); } : null,
     onDelete: () => { clearSubcell(current.r, current.c, current.sub); renderSubcellEditor(); },
   });
+  setCloseMode('back');
 
-  // Back to the whole split square.
-  const back = document.createElement('button');
-  back.type = 'button';
-  back.className = 'link-btn';
-  back.textContent = '‹ Back to split square';
-  back.addEventListener('click', () => { submergeSelection.clear(); openEditor(current.r, current.c); });
-  bodyEl.appendChild(back);
-
-  // Unmerge button when this piece is in a subcell merge.
-  const cell = peekCell(current.r, current.c);
-  const sm = cell && submergeAt(cell, current.sub);
-  if (sm) {
-    bodyEl.appendChild(group('Merged piece', (g) => {
+  // === Unique: back to the parent square, then what makes this piece special ===
+  bodyEl.appendChild(group(null, (g) => {
+    g.appendChild(backButton('Back to split square',
+      () => { submergeSelection.clear(); openEditor(current.r, current.c); }));
+    if (sm) {
       const note = document.createElement('p');
       note.className = 'egroup__note';
+      note.style.margin = '0';
       note.textContent = `This piece spans ${sm.indices.length} spaces.`;
       g.appendChild(note);
-      const ubtn = document.createElement('button');
-      ubtn.type = 'button';
-      ubtn.className = 'btn btn--empty';
-      ubtn.style.marginTop = '6px';
-      ubtn.textContent = 'Unmerge';
-      ubtn.title = 'Split this merged piece back into separate spaces';
-      ubtn.addEventListener('click', () => {
-        removeSubmerge(current.r, current.c, sm.id);
-        renderSubcellEditor();
-      });
-      g.appendChild(ubtn);
-    }));
-  }
+    }
+  }));
 
   const set = (patch) => { updateSubcell(current.r, current.c, current.sub, patch); renderSubcellEditor(); };
 
@@ -1017,7 +1029,12 @@ function renderSubcellEditor() {
     btn.textContent = sub.enabled ? 'Filled' : 'Empty';
     btn.setAttribute('aria-pressed', String(sub.enabled));
     btn.addEventListener('click', () => set({ enabled: !sub.enabled }));
-    fill.appendChild(btn);
+    // Same Fill stack as the base pane — a piece takes a preset too.
+    const applyToPiece = (n) => {
+      applyPresetToSubcell(n, current.r, current.c, current.sub);
+      renderSubcellEditor();
+    };
+    fill.appendChild(fillStack(btn, presetButton(1, applyToPiece), presetButton(2, applyToPiece)));
 
     const facing = controlGroup('Facing');
     facing.appendChild(buildCompass(sub.rotation || 0, (deg) => set({ rotation: deg })));
@@ -1050,6 +1067,23 @@ function renderSubcellEditor() {
     g.appendChild(row);
   }));
 
+  // Labels — text + colour per line.
+  bodyEl.appendChild(group('Labels', (g) => {
+    if (sub.labels.length === 0) sub.labels.push({ text: '', color: defaultLabelColor(0) });
+    sub.labels.forEach((line, i) => g.appendChild(subLabelRow(line, i)));
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'link-btn';
+    add.textContent = '+ Add label line';
+    add.addEventListener('click', () => {
+      subCur().labels.push({ text: '', color: defaultLabelColor(subCur().labels.length) });
+      set({});
+      const inputs = bodyEl.querySelectorAll('.erow input[type="text"]');
+      inputs[inputs.length - 1]?.focus();
+    });
+    g.appendChild(add);
+  }));
+
   // Icon (+ library), like the square pane.
   bodyEl.appendChild(group('Icon', (g) => {
     const picker = document.createElement('div');
@@ -1074,14 +1108,6 @@ function renderSubcellEditor() {
       picker.appendChild(b);
     }
     g.appendChild(picker);
-    if (typeof iconLibraryAvailable === 'function' && iconLibraryAvailable()) {
-      const browse = document.createElement('button');
-      browse.type = 'button';
-      browse.className = 'link-btn';
-      browse.textContent = '+ Browse icon library';
-      browse.addEventListener('click', () => openIconLibrary((id) => set({ icon: id })));
-      g.appendChild(browse);
-    }
   }));
 
   // Special icons for subcells (chair, server, stairs)
@@ -1145,22 +1171,16 @@ function renderSubcellEditor() {
     }
   }));
 
-  // Labels — text + colour per line.
-  bodyEl.appendChild(group('Labels', (g) => {
-    if (sub.labels.length === 0) sub.labels.push({ text: '', color: defaultLabelColor(0) });
-    sub.labels.forEach((line, i) => g.appendChild(subLabelRow(line, i)));
-    const add = document.createElement('button');
-    add.type = 'button';
-    add.className = 'link-btn';
-    add.textContent = '+ Add label line';
-    add.addEventListener('click', () => {
-      subCur().labels.push({ text: '', color: defaultLabelColor(subCur().labels.length) });
-      set({});
-      const inputs = bodyEl.querySelectorAll('.erow input[type="text"]');
-      inputs[inputs.length - 1]?.focus();
-    });
-    g.appendChild(add);
-  }));
+  // Browse the icon library — standalone, AFTER Special, as in the base pane.
+  if (typeof iconLibraryAvailable === 'function' && iconLibraryAvailable()) {
+    const browse = document.createElement('button');
+    browse.type = 'button';
+    browse.className = 'link-btn';
+    browse.style.marginTop = '4px';
+    browse.textContent = '+ Browse icon library';
+    browse.addEventListener('click', () => openIconLibrary((id) => set({ icon: id })));
+    bodyEl.appendChild(browse);
+  }
 
   // Printer accessory on subcell — options only when the printer is on
   const subPrinter = printerSection(sub, (patch) => {
@@ -1237,7 +1257,26 @@ function subLabelRow(line, index) {
     const s = subCur();
     if (s) { s.labels.splice(index, 1); updateSubcell(current.r, current.c, current.sub, {}); renderSubcellEditor(); }
   });
-  row.append(text, color, del);
+  // The same two grips as the base pane: the left one reorders the LINE, the one
+  // beside the swatch moves just the COLOUR to another line.
+  const grip = labelGrip('Drag to reorder this line');
+  const colorGrip = labelGrip('Drag to move this color to another line');
+  colorGrip.classList.add('erow__grip--color');
+  const cfg = { listId: 'sublabel-list', apply: (from, to, kind) => {
+    const s2 = subCur(); if (!s2) return;
+    if (kind === 'color') {
+      const cols = s2.labels.map((l) => l.color);
+      const [x] = cols.splice(from, 1); cols.splice(to, 0, x);
+      s2.labels.forEach((l, i) => { l.color = cols[i]; });
+    } else {
+      const [x] = s2.labels.splice(from, 1); s2.labels.splice(to, 0, x);
+    }
+    updateSubcell(current.r, current.c, current.sub, {});
+    renderSubcellEditor();
+  } };
+  attachLabelDrag(grip, index, 'line', cfg);
+  attachLabelDrag(colorGrip, index, 'color', cfg);
+  row.append(grip, text, color, colorGrip, del);
   return row;
 }
 
@@ -1264,6 +1303,7 @@ function sizeEntry(label, value, onChange) {
 
 function renderBulk(keys) {
   bodyEl.replaceChildren();
+  setCloseMode('close');
   // The shared header: Copy/Cut act on ONE square, so they are greyed for a
   // multi-select; Paste applies the clipboard to all, and Delete acts on the
   // whole selection.
@@ -1312,9 +1352,12 @@ function renderBulk(keys) {
   // every selected square; the color applies to all of them too.
   bodyEl.appendChild(group('Labels (all selected)', (g) => {
     const maxLines = maxLabelLines(keys);
+    const list = document.createElement('div');
+    list.id = 'bulklabel-list';
     for (let i = 0; i < maxLines; i++) {
-      g.appendChild(bulkLabelRow(keys, i));
+      list.appendChild(bulkLabelRow(keys, i));
     }
+    g.appendChild(list);
 
     const add = document.createElement('button');
     add.type = 'button';
@@ -1351,7 +1394,10 @@ function renderBulk(keys) {
     none.addEventListener('click', () => updateCells(keys, { icon: null }));
     picker.appendChild(none);
 
-    const bulkIds = ICON_IDS.concat(((state.config && state.config.customIcons) || []).map((c) => c.id));
+    // Special icons live in their own section (as in the base pane), so this grid
+    // holds only the ordinary ones.
+    const bulkIds = ICON_IDS.concat(((state.config && state.config.customIcons) || []).map((c) => c.id))
+      .filter((id) => !isSpecialIcon(id));
     for (const id of bulkIds) {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -1366,24 +1412,49 @@ function renderBulk(keys) {
     g.appendChild(picker);
   }));
 
-  // --- Paste the copied square onto the whole selection --------------------
-  bodyEl.appendChild(group('Copy square', (g) => {
-    const paste = document.createElement('button');
-    paste.type = 'button';
-    paste.className = 'btn';
-    paste.style.width = '100%';
-    paste.textContent = 'Paste square to all';
-    paste.disabled = !hasSquareClipboard();
-    paste.addEventListener('click', () => { pasteSquareTo(keys); renderBulk(keys); });
-    g.appendChild(paste);
+  // --- Special (all selected) ---------------------------------------------
+  bodyEl.appendChild(group('Special (all selected)', (g) => {
+    const picker = document.createElement('div');
+    picker.className = 'icon-picker';
+    for (const id of SPECIAL_ICON_IDS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'icon-picker__btn';
+      btn.title = ICONS[id].label;
+      btn.setAttribute('aria-label', ICONS[id].label);
+      const svg = iconUse(id, '');
+      if (svg) btn.appendChild(svg);
+      btn.addEventListener('click', () => updateCells(keys, { icon: id }));
+      picker.appendChild(btn);
+    }
+    // The printer accessory, like the base pane's Special row.
+    const pbtn = document.createElement('button');
+    pbtn.type = 'button';
+    pbtn.className = 'icon-picker__btn';
+    pbtn.title = 'Printer';
+    pbtn.setAttribute('aria-label', 'Printer');
+    pbtn.appendChild(printerUse({ color: false }, '', 'currentColor'));
+    pbtn.addEventListener('click', () =>
+      updateCells(keys, { printer: { color: false, compass: 'se', labels: [], size: 'max' } }));
+    picker.appendChild(pbtn);
+    g.appendChild(picker);
   }));
 
+  // Browse the icon library — standalone, after Special, as in the base pane.
+  if (typeof iconLibraryAvailable === 'function' && iconLibraryAvailable()) {
+    const browse = document.createElement('button');
+    browse.type = 'button';
+    browse.className = 'link-btn';
+    browse.style.marginTop = '4px';
+    browse.textContent = '+ Browse icon library';
+    browse.addEventListener('click', () => openIconLibrary((id) => { updateCells(keys, { icon: id }); renderBulk(keys); }));
+    bodyEl.appendChild(browse);
+  }
+
   // --- Footer -------------------------------------------------------------
+  // Delete lives in the shared header, so the footer is just Done (as in the base).
   const foot = document.createElement('div');
   foot.className = 'editor__foot';
-  // The row and column named in the menu are the first selected square's.
-  foot.appendChild(deleteButton(() => [...keys],
-                                () => { const [r, c] = parseKey(keys[0]); return { r, c }; }));
   const done = document.createElement('button');
   done.type = 'button';
   done.className = 'btn btn--primary';
@@ -1507,7 +1578,22 @@ function bulkLabelRow(keys, index) {
     renderBulk(keys);
   });
 
-  row.append(text, color, del);
+  // Reorder grips, as in the base pane — applied to every selected square.
+  const grip = labelGrip('Drag to reorder this line on all selected');
+  const colorGrip = labelGrip('Drag to move this color to another line on all selected');
+  colorGrip.classList.add('erow__grip--color');
+  const cfg = { listId: 'bulklabel-list', apply: (from, to, kind) => {
+    batch(() => {
+      for (const k of keys) {
+        const [r, c] = parseKey(k);
+        if (kind === 'color') moveLabelColor(r, c, from, to); else moveLabelLine(r, c, from, to);
+      }
+    });
+    renderBulk(keys);
+  } };
+  attachLabelDrag(grip, index, 'line', cfg);
+  attachLabelDrag(colorGrip, index, 'color', cfg);
+  row.append(grip, text, color, colorGrip, del);
   return row;
 }
 
@@ -1933,6 +2019,30 @@ function actionButton(label, onClick, { danger = false, enabled = true } = {}) {
  *  onPaste, onDelete, onUnmerge, pasteEnabled }. onDelete is required (Delete is
  *  always present); a missing onCut/onCopy/onPaste greys that button; onUnmerge is
  *  omitted for a non-merged item. */
+/** The header's top-right control: a plain Close (✕) on a top-level pane, or a Back
+ *  (‹) on one you stepped INTO (a piece), where the same gesture should go up a
+ *  level rather than shut the editor. */
+function setCloseMode(mode) {
+  const x = document.querySelector('.editor__close');
+  if (!x) return;
+  const back = mode === 'back';
+  x.textContent = back ? '‹' : '✕';
+  x.title = back ? 'Back' : 'Close';
+  x.setAttribute('aria-label', back ? 'Back' : 'Close');
+  x.dataset.backMode = back ? '1' : '';
+}
+
+/** A "‹ Back to …" control built as a real button at the Done size, sitting in the
+ *  Unique block above Format — the same affordance in every pane that has a parent. */
+function backButton(label, onClick) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'btn editor__back';
+  b.textContent = `‹ ${label}`;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
 function renderActions(ctx) {
   const bar = document.getElementById('editor-actions');
   bar.replaceChildren();
@@ -1944,7 +2054,8 @@ function renderActions(ctx) {
   );
   if (ctx.onUnmerge) {
     const u = actionButton('Unmerge', ctx.onUnmerge);
-    u.classList.add('editor-action--pushright'); // sits at the right, before Delete
+    // Right-aligned before Delete, and accented so it reads at a glance.
+    u.classList.add('editor-action--pushright', 'editor-action--accent');
     bar.append(u);
   }
   bar.append(actionButton('Delete', ctx.onDelete, { danger: true }));
@@ -1954,6 +2065,7 @@ function renderActions(ctx) {
  *  square at current.r/current.c. */
 function renderSquareActions() {
   if (!current) { document.getElementById('editor-actions').replaceChildren(); return; }
+  setCloseMode('close');   // a top-level pane closes; only a piece pane goes back
   const re = () => render(peekCell(current.r, current.c));
   const merge = mergeAt(current.r, current.c);
   renderActions({
