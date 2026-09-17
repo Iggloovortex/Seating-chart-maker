@@ -830,6 +830,9 @@ function splitOptionButton(o, active, onClick) {
 }
 
 let submergeSelection = new Set();
+/** Which kind the next piece merge will be — the Shape / Centered pair beside
+ *  "Select to merge", mirroring the grid's own merge menu. */
+let submergeKindChoice = 'poly';
 
 /** The Pieces list for a split square (also shown inside the merge pane when a
  *  desk is split). `rerender` re-draws whichever pane hosts it, so the submerge
@@ -855,20 +858,34 @@ function piecesGroup(cell, rerender) {
         const rect = submergeRect(sm, cell.split.cols);
         btn.style.gridColumn = `${rect.c + 1} / span ${rect.colSpan}`;
         btn.style.gridRow = `${rect.r + 1} / span ${rect.rowSpan}`;
+        // A Centered merge is one square in the middle of its block, here as on the
+        // chart. The tiles are square, so the block's short side is whichever span
+        // is smaller: pin that side to the block and let the ratio do the rest.
+        if (submergeKind(sm) === 'unit') {
+          btn.classList.add('piece-btn--unit');
+          if (rect.rowSpan <= rect.colSpan) { btn.style.height = '100%'; btn.style.width = 'auto'; }
+          else { btn.style.width = '100%'; btn.style.height = 'auto'; }
+        }
       }
       if (submergeSelection.has(i)) btn.classList.add('piece-btn--sel');
-      if (canMerge) {
-        btn.addEventListener('click', (e) => {
-          if (!submergeSelection.size && !e.shiftKey) {
-            openSubcellEditor(current.r, current.c, i);
-            return;
-          }
+      // The same mouse language as the chart: a plain click fills or empties the
+      // piece, right-click / long-press edits it, and Shift or Ctrl (or an open
+      // selection) gathers pieces to merge.
+      btn.addEventListener('click', (e) => {
+        const picking = canMerge && (e.shiftKey || e.ctrlKey || e.metaKey || submergeSelection.size > 0);
+        if (picking) {
           e.preventDefault();
           if (submergeSelection.has(i)) submergeSelection.delete(i);
           else submergeSelection.add(i);
           rerender();
-        });
-      }
+          return;
+        }
+        toggleSubcell(current.r, current.c, i);
+        rerender();
+      });
+      const edit = () => openSubcellEditor(current.r, current.c, i);
+      btn.addEventListener('contextmenu', (e) => { e.preventDefault(); edit(); });
+      attachPieceLongPress(btn, edit);
       grid.appendChild(btn);
     });
     g.appendChild(grid);
@@ -891,6 +908,22 @@ function piecesGroup(cell, rerender) {
       bar.appendChild(selBtn);
 
       if (submergeSelection.size >= 2) {
+        // Which kind the merge will be — the same two the chart's merge menu offers.
+        const kindBtn = (kind, label, desc) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = `btn ${submergeKindChoice === kind ? 'btn--primary' : ''}`;
+          b.textContent = label;
+          b.title = desc;
+          b.setAttribute('aria-pressed', String(submergeKindChoice === kind));
+          b.addEventListener('click', () => { submergeKindChoice = kind; rerender(); });
+          return b;
+        };
+        bar.append(
+          kindBtn('poly', 'Shape', 'Fill the exact shape of the selected pieces.'),
+          kindBtn('unit', 'Centered', 'One square, centred in the selected pieces and kept 1:1.'),
+        );
+
         const indices = [...submergeSelection];
         const valid = isConnectedSubcells(indices, cell.split.rows, cell.split.cols)
           && !indices.some((i) => submergeAt(cell, i));
@@ -901,7 +934,7 @@ function piecesGroup(cell, rerender) {
         mergeBtn.disabled = !valid;
         mergeBtn.title = valid ? 'Merge selected pieces' : 'Selection must be connected unmerged pieces';
         mergeBtn.addEventListener('click', () => {
-          addSubmerge(current.r, current.c, indices);
+          addSubmerge(current.r, current.c, indices, submergeKindChoice);
           submergeSelection.clear();
           rerender();
         });
@@ -913,8 +946,8 @@ function piecesGroup(cell, rerender) {
     const note = document.createElement('p');
     note.className = 'egroup__note';
     note.textContent = canMerge
-      ? 'Click a piece to edit it. Shift+click to select pieces, then Merge to combine them.'
-      : 'Click a piece to edit its fill, icon, labels and facing.';
+      ? 'Click a piece to fill or empty it, right-click to edit it. Shift+click to select pieces, then Merge to combine them.'
+      : 'Click a piece to fill or empty it, right-click to edit its fill, icon, labels and facing.';
     g.appendChild(note);
   });
 }
@@ -938,6 +971,22 @@ function renderSplitParent(cell) {
   done.addEventListener('click', closeEditor);
   foot.appendChild(done);
   bodyEl.appendChild(foot);
+}
+
+/** Long-press on a piece tile opens its editor — the touch half of right-click,
+ *  on the same timing and travel tolerance the chart uses. */
+function attachPieceLongPress(btn, run) {
+  let timer = null, sx = 0, sy = 0;
+  const cancel = () => { clearTimeout(timer); timer = null; };
+  btn.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse') return;   // mouse has right-click
+    sx = e.clientX; sy = e.clientY;
+    timer = setTimeout(() => { timer = null; run(); }, LONG_PRESS_MS);
+  });
+  btn.addEventListener('pointermove', (e) => {
+    if (timer && Math.hypot(e.clientX - sx, e.clientY - sy) > MOVE_TOLERANCE) cancel();
+  });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) btn.addEventListener(ev, cancel);
 }
 
 /** One button in the piece list: a preview of the sub-cell's fill/border with its
@@ -1333,8 +1382,10 @@ function renderBulk(keys) {
   // Merge is offered where Unmerge sits on a merged pane: two or more squares, none
   // of them already fused (addMerge refuses stacking). It opens the same kind menu
   // the toolbar's Merge button does, and lands on the new desk's own pane.
-  const canMerge = keys.length >= 2
-    && !keys.some((k) => { const [r, c] = parseKey(k); return typeof mergeAt === 'function' && mergeAt(r, c); });
+  const mergesHere = [...new Set(keys
+    .map((k) => { const [r, c] = parseKey(k); return typeof mergeAt === 'function' ? mergeAt(r, c) : null; })
+    .filter(Boolean))];
+  const canMerge = keys.length >= 2 && !mergesHere.length;
   renderActions({
     onCut: null,
     onCopy: null,
@@ -1345,6 +1396,12 @@ function renderBulk(keys) {
         if (merge) openEditor(...parseKey(merge.anchor));
         else closeEditor();   // the merge was refused; the selection is gone either way
       });
+    } : null,
+    // Merged squares in the selection unmerge from the same slot — every merge the
+    // selection touches, in one go.
+    onUnmerge: mergesHere.length ? () => {
+      batch(() => { for (const m of mergesHere) removeMerge(m.id); });
+      renderBulk(keys);
     } : null,
     onDelete: (e) => openDeleteAt(e, [...keys], { r: sr, c: sc }),
   });

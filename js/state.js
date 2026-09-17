@@ -507,7 +507,7 @@ function submergePlan(sm, rows, cols) {
 
 /** Merge a set of subcell indices within a split square. Returns the new submerge
  *  or null on failure (not connected, overlapping an existing merge). */
-function addSubmerge(r, c, indices) {
+function addSubmerge(r, c, indices, kind = 'poly') {
   const cell = peekCell(r, c);
   if (!cell || !isSplit(cell)) return null;
   const { rows, cols } = cell.split;
@@ -518,7 +518,12 @@ function addSubmerge(r, c, indices) {
   const anchor = Math.min(...indices);
   // Kind mirrors a grid-level merge: 'poly' takes the exact shape of the pieces,
   // 'unit' is one 1:1 square centred in them.
-  const sm = { id: `sm${Date.now().toString(36)}`, indices: [...indices].sort((a, b) => a - b), anchor, kind: 'poly' };
+  const sm = {
+    id: `sm${Date.now().toString(36)}`,
+    indices: [...indices].sort((a, b) => a - b),
+    anchor,
+    kind: kind === 'unit' ? 'unit' : 'poly',
+  };
   cell.submerges.push(sm);
   const anchorSub = cell.subcells[anchor];
   if (anchorSub && !anchorSub.enabled) anchorSub.enabled = true;

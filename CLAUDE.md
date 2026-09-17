@@ -108,7 +108,13 @@ and push it; don't stack new work directly on `main`.
   holds under "true sizes"), and the export centres the square in the block and
   paints unit anchors LAST so a neighbouring piece cannot paint over them. Its
   furniture is sized to the square's short side. Shape / Centered live in the
-  merged-piece pane's Unique section, beside Unmerge in the header.
+  merged-piece pane's Unique section, beside Unmerge in the header, and the Pieces
+  list offers the same pair beside "Select to merge" to choose the kind BEFORE
+  merging (`submergeKindChoice` → `addSubmerge`'s `kind` argument); a Centered merge
+  shows there as a centred square too, so the list matches the chart.
+  The Pieces list speaks the chart's mouse language: a plain click fills or empties
+  the piece, right-click / long-press edits it, and Shift/Ctrl (or an open selection)
+  gathers pieces to merge.
   Under a table a split shows only its pieces' content overlaid (no piece boxes),
   like any covered square (js/export.js).
 - **Merge — DONE.** Two kinds, from the `#btn-table-merge` menu on a ≥2-square
@@ -153,7 +159,8 @@ and push it; don't stack new work directly on `main`.
   BULK pane offers **Merge** in that same slot (`renderActions` `onMerge`), opening
   the select bar's own `openMergeMenu` — which now takes an `after` callback, so the
   pane lands on the desk it just made; it is withheld when a selected square is
-  already merged, since `addMerge` refuses stacking.
+  already merged, since `addMerge` refuses stacking — that selection gets **Unmerge**
+  in the same slot instead, clearing every merge it touches.
   **Special/furniture content** (chair/server/rack/stairs) renders as furniture
   over the footprint with NO desk box, in both renderers: a chair stays a ½×½
   piece tucked to its facing (`chairInBox` export / `renderMergeFurniture` grid),
