@@ -1507,11 +1507,24 @@ function sortCellKeys(keys) {
  *  cell (the desk fills its whole footprint) and clears the selection, like a
  *  table. Needs at least two squares. */
 function addMerge(kind = 'poly') {
-  const keys = sortCellKeys(state.selection);
+  let keys = sortCellKeys(state.selection);
   if (keys.length < 2) return null;
-  // No stacking: a cell already fused into a merge can't join a second one.
-  if (keys.some((k) => { const [r, c] = parseKey(k); return mergeAt(r, c); })) return null;
+  // No stacking — but a selection that reaches into an existing merge is a request
+  // to GROW it, not an error: those merges are dissolved and everything they held
+  // joins the new one, so merging a desk with the squares beside it works in a
+  // single gesture. A merge's whole footprint comes along even when only part of it
+  // was picked, since a merge is one object.
+  const absorbed = [...new Set(keys.map((k) => mergeAt(...parseKey(k))).filter(Boolean))];
+  if (absorbed.length) {
+    const union = new Set(keys);
+    for (const m of absorbed) for (const k of m.keys) union.add(k);
+    keys = sortCellKeys(union);
+  }
   if (typeof historyCheckpoint === 'function') historyCheckpoint();
+  for (const m of absorbed) {
+    const i = state.merges.indexOf(m);
+    if (i >= 0) state.merges.splice(i, 1);
+  }
   // The merged desk shows ONE square's content, so keep the one that actually has
   // some rather than whichever happens to sit top-left. A split square counts —
   // its content lives in its pieces. With several, the first in reading order wins.

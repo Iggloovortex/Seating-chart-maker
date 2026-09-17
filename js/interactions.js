@@ -172,7 +172,12 @@ function initInteractions(chartEl) {
         const sub = subcellAt(ar, ac, p.sub);
         return sub && (sub.enabled || hasContent(sub)) ? { r: ar, c: ac, sub: p.sub, merge: true } : null;
       }
-      return cellHasAnyContent(anchor) ? { r: ar, c: ac, sub: null, merge: true } : null;
+      // A blank desk is still a desk: a plain square drags on `enabled` OR content
+      // (see below), so a merge drags on FILLED or content. Reading content alone is
+      // what made an empty merge unmovable.
+      const m = mergeAt(r, c);
+      const filled = typeof mergeIsEmpty === 'function' ? !mergeIsEmpty(m) : !!anchor?.enabled;
+      return (filled || cellHasAnyContent(anchor)) ? { r: ar, c: ac, sub: null, merge: true } : null;
     }
     if (typeof tableAt === 'function' && tableAt(r, c)) return null;
     const cell = peekCell(r, c);

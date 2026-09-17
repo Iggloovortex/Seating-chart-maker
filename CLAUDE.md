@@ -137,7 +137,10 @@ and push it; don't stack new work directly on `main`.
   kind / unmerges.
   **Grid-level behaviour** (a merge acts as one unit, not just an overlay): a
   select-mode / Ctrl tap gathers the WHOLE merge (`toggleMergeSelection`), not the
-  cell under it; `addMerge` refuses cells already in a merge (no stacking);
+  cell under it; `addMerge` ABSORBS any merge the selection reaches into — those merges are
+  dissolved and their whole footprints join the new one, so merging a desk with the
+  squares beside it is one gesture rather than unmerge-then-merge (a merge is one
+  object, so its every cell comes along even when only part of it was picked);
   deleting any member expands to the whole merge and clears it (the delete menu +
   `deleteMerge`); a plain tap seats/empties the desk like a square
   (`toggleMergeFilled` / `mergeIsEmpty` — an emptied merge renders as one empty
@@ -173,8 +176,12 @@ and push it; don't stack new work directly on `main`.
   BULK pane offers **Merge** in that same slot (`renderActions` `onMerge`), opening
   the select bar's own `openMergeMenu` — which now takes an `after` callback, so the
   pane lands on the desk it just made; it is withheld when a selected square is
-  already merged, since `addMerge` refuses stacking — that selection gets **Unmerge**
-  in the same slot instead, clearing every merge it touches.
+  exactly one whole merge and nothing else (there is nothing to grow it with);
+  otherwise Merge grows the merge it touches. **Unmerge** appears in the same slot
+  whenever the selection contains a merge, so a merge picked with its neighbours
+  shows both. A menu raised from the pane must be `.merge-menu`-styled at z-index 70
+  like the delete/preset menus, or it opens BEHIND the pane and the button reads as
+  doing nothing.
   **Special/furniture content** (chair/server/rack/stairs) renders as furniture
   over the footprint with NO desk box, in both renderers: a chair stays a ½×½
   piece tucked to its facing (`chairInBox` export / `renderMergeFurniture` grid),
@@ -192,7 +199,9 @@ and push it; don't stack new work directly on `main`.
   into the pane — the centred square is only a fraction of a wide desk, and requiring
   the press to land on it is what made a 3-cell-or-wider unit merge impossible to
   pick up. An emptied merge keeps a faded ghost of its
-  content in the grid. Pasting onto a merge writes once to the anchor and fills or
+  content in the grid. A merge drags on FILLED-or-content (`!mergeIsEmpty(m) ||
+  cellHasAnyContent(anchor)`), matching a plain square's `enabled || content` —
+  reading content alone left a blank desk unmovable. Pasting onto a merge writes once to the anchor and fills or
   empties the whole desk (`pasteSquareTo`), so it never shatters or de-centres it.
 - **Walls — DONE** (branch `claude/walls-tmdavo`). Edge objects on the seams
   between squares and the outer border, styled from user-supplied reference SVGs.

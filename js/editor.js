@@ -597,6 +597,10 @@ function printerSection(data, set, live) {
     // Printer labels — the same row as a regular label: reorder grip, live text
     // (no re-render so the caret survives), its own colour, a colour grip, and a
     // red remove. `live` mutates the printer in place + emits; `set` re-renders.
+    // Only a SECONDARY printer (beside an icon, or sized Small) draws them — a solo
+    // Max printer fills the square and both renderers skip its labels — so the rows
+    // are not offered there rather than sitting dead in the pane.
+    if (!isPrinterSecondary(data)) { g.appendChild(opts); return; }
     const lblGroup = controlGroup('Printer labels');
     const pLabels = p.labels && p.labels.length ? p.labels : [{ text: '', color: defaultLabelColor(0) }];
     const applyLabels = (labels) => set({ printer: { ...p, labels } });
@@ -1475,7 +1479,14 @@ function renderBulk(keys) {
   const mergesHere = [...new Set(keys
     .map((k) => { const [r, c] = parseKey(k); return typeof mergeAt === 'function' ? mergeAt(r, c) : null; })
     .filter(Boolean))];
-  const canMerge = keys.length >= 2 && !mergesHere.length;
+  // Merge now GROWS a merge the selection reaches into (addMerge absorbs it), so it
+  // is offered whenever two or more squares are picked — except when the selection
+  // is exactly one whole merge and nothing else, where there is nothing to grow it
+  // with and only Unmerge makes sense.
+  const soleMerge = mergesHere.length === 1
+    && keys.length === mergesHere[0].keys.length
+    && keys.every((k) => mergesHere[0].keys.includes(k));
+  const canMerge = keys.length >= 2 && !soleMerge;
   renderActions({
     onCut: null,
     onCopy: null,
