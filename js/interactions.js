@@ -86,11 +86,17 @@ function initInteractions(chartEl) {
     const sub = subFrom(e.target);
     pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, cell, sub, longFired: false,
                 timer: 0, additive, shift, pointerType: e.pointerType };
-    pointer.timer = window.setTimeout(() => {
-      pointer.longFired = true;
-      fireEdit(cell, sub);
-      if (navigator.vibrate) { try { navigator.vibrate(15); } catch {} }
-    }, LONG_PRESS_MS);
+    // Long-press opens the editor on TOUCH only. On a mouse the gesture belongs to
+    // the drag: press, hold, then pull has to pick the square (or desk) up, and a
+    // timer firing mid-hold would open the pane instead and kill the drag. Right-
+    // click is the desktop way into the editor, so nothing is lost.
+    if (e.pointerType !== 'mouse') {
+      pointer.timer = window.setTimeout(() => {
+        pointer.longFired = true;
+        fireEdit(cell, sub);
+        if (navigator.vibrate) { try { navigator.vibrate(15); } catch {} }
+      }, LONG_PRESS_MS);
+    }
   });
 
   chartEl.addEventListener('pointermove', (e) => {

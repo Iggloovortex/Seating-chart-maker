@@ -290,7 +290,11 @@ and push it; don't stack new work directly on `main`.
   border is reachable as a seam, and squares stop answering the pointer
   (`.chart--walls`).
 - **Drag a square — DONE.** Press a square and pull (mouse only; touch keeps its
-  scroll meaning, so there is no mobile equivalent yet): it lifts off as a ghost,
+  scroll meaning, so there is no mobile equivalent yet). **A mouse does not arm the
+  long-press** (js/interactions.js): the hold belongs to the drag — press, hold, then
+  pull has to pick the square or desk up, and a timer firing mid-hold would open the
+  pane instead and kill it. Right-click is the desktop way into the editor; touch
+  keeps long-press, where there is no right-click and no drag. it lifts off as a ghost,
   the cell under it is ringed, and letting go runs `swapCells` — an empty target
   receives it, an occupied one trades places, so a drag never destroys anything.
   The whole cell travels, a split square and its pieces included. Lives in
