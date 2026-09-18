@@ -844,6 +844,20 @@ function piecesGroup(cell, rerender) {
     // One tile size for every split shape: the size a 3×3 needs to fill the pane,
     // so 2×2 and 1×2 tiles match it instead of ballooning. The grid centres itself.
     grid.style.gridTemplateColumns = `repeat(${cell.split.cols}, var(--piece-tile))`;
+    // Every row gets a height from a hidden, tile-shaped spacer in its first column.
+    // A row normally takes its height from an ordinary tile's `aspect-ratio: 1`, but a
+    // merged button has no ratio, so a row a merge covered end to end had nothing to
+    // size it and collapsed to the height of its caption. Rows cannot be given
+    // `var(--piece-tile)` directly: that is a share of the grid's WIDTH, and a row
+    // percentage measures the grid's height — the very thing being decided. The
+    // spacer is measured in the same units the tiles are, so a merged row lines up
+    // with a plain one exactly, gaps and all.
+    for (let r = 0; r < cell.split.rows; r++) {
+      const spacer = document.createElement('div');
+      spacer.className = 'piece-rowspacer';
+      spacer.style.gridArea = `${r + 1} / 1`;
+      grid.appendChild(spacer);
+    }
     const hidden = new Set();
     if (cell.submerges) {
       for (const sm of cell.submerges)
@@ -854,17 +868,33 @@ function piecesGroup(cell, rerender) {
       const sm = cell.submerges && submergeAt(cell, i);
       const btn = pieceButton(sub, i, sm);
       btn.dataset.sub = i;
+      // A merged piece sits in a BLOCK of tiles: the block takes the span and fills it,
+      // and the button inside is shaped to the merge's kind.
+      let host = btn;
+      // Every tile is placed explicitly. The row spacers are grid items too, so they
+      // take a cell, and auto-placement would push the pieces along by one and spill
+      // the last of each row onto the next.
+      btn.style.gridColumn = `${(i % cell.split.cols) + 1}`;
+      btn.style.gridRow = `${Math.floor(i / cell.split.cols) + 1}`;
       if (sm) {
         const rect = submergeRect(sm, cell.split.cols);
-        btn.style.gridColumn = `${rect.c + 1} / span ${rect.colSpan}`;
-        btn.style.gridRow = `${rect.r + 1} / span ${rect.rowSpan}`;
-        // A Centered merge is one square in the middle of its block, here as on the
-        // chart. The tiles are square, so the block's short side is whichever span
-        // is smaller: pin that side to the block and let the ratio do the rest.
-        if (submergeKind(sm) === 'unit') {
+        const unit = submergeKind(sm) === 'unit';
+        const block = document.createElement('div');
+        block.className = 'piece-block';
+        block.style.gridColumn = `${rect.c + 1} / span ${rect.colSpan}`;
+        block.style.gridRow = `${rect.r + 1} / span ${rect.rowSpan}`;
+        block.appendChild(btn);
+        host = block;
+        // A Centered merge is ONE square in the middle of its block, here as on the
+        // chart. The tiles are square, so the block's short side is whichever span is
+        // smaller: pin that side and let the 1:1 ratio give the other.
+        if (unit) {
           btn.classList.add('piece-btn--unit');
           if (rect.rowSpan <= rect.colSpan) { btn.style.height = '100%'; btn.style.width = 'auto'; }
           else { btn.style.width = '100%'; btn.style.height = 'auto'; }
+        } else {
+          btn.style.width = '100%';
+          btn.style.height = '100%';
         }
       }
       if (submergeSelection.has(i)) btn.classList.add('piece-btn--sel');
@@ -887,7 +917,7 @@ function piecesGroup(cell, rerender) {
       btn.addEventListener('contextmenu', (e) => { e.preventDefault(); edit(); });
       attachPieceLongPress(btn, edit);
       attachPieceDrag(btn, grid, i, rerender);
-      grid.appendChild(btn);
+      grid.appendChild(host);
     });
     g.appendChild(grid);
 

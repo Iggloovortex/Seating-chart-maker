@@ -120,6 +120,18 @@ and push it; don't stack new work directly on `main`.
   Centered reading and writing that merge's own kind, plus **Unmerge** in Merge's
   place. A Centered merge shows in the list as a centred square too, so it matches
   the chart.
+  **The Pieces list is a tile grid, explicitly placed.** Every piece is given its own
+  `gridColumn`/`gridRow`, and each ROW carries a hidden tile-shaped spacer
+  (`.piece-rowspacer`) in its first column. A row normally takes its height from an
+  ordinary tile's `aspect-ratio: 1`, so a row a merge covered end to end had nothing to
+  size it and collapsed to the height of its caption — a 1×3 merge came out 388×22
+  instead of a tile square. Rows cannot simply be given `var(--piece-tile)`: that is a
+  share of the grid's WIDTH, while a row percentage measures the grid's HEIGHT, which is
+  the thing being decided. The spacer is measured in the tiles' own units, so a merged
+  row lines up with a plain one exactly, gaps included — and the spacers are why the
+  placement has to be explicit, since they take a cell and auto-placement would push
+  every piece along by one. A merged piece then sits in a `.piece-block` spanning its
+  tiles: a poly fills the block, a unit is one square centred in it.
   The Pieces list speaks the chart's mouse language: a plain click fills or empties
   the piece, right-click / long-press edits it, dragging one onto another swaps their
   content (`attachPieceDrag` → `swapContentSlots`, the pane's twin of the chart's
@@ -413,6 +425,13 @@ and push it; don't stack new work directly on `main`.
   **Float is only offered where it can act** (`floatApplies`, js/layout.js): a special
   icon that can shrink. An ordinary desk never shrinks, and a server RACK keeps its
   names in its slabs, so neither shows the control rather than showing a dead one.
+  **A DESK SPLIT's pieces float too**, and both renderers had to be let at them: the
+  export now passes its deferred `hanging` list through `drawMerge` into `drawSplit`
+  (without it a merged desk's names simply stayed inside), and in the grid
+  `renderMergeSplit` marks the overlay `.merge-split--floatlabel` when any piece floats
+  — the overlay AND the `.cell__split` inside it both clip, so the bands were built and
+  then cut off, and the overlay is raised so a name may lie over the squares beside the
+  desk. That is `.cell--floatlabel`'s licence, given to a desk.
   **A split PIECE always shows it**, because a piece is already a small square: both
   renderers hang its name outside the PIECE (`buildSubcell`'s float branch + the
   `hanging` pushes in `drawSplit`, for a plain piece and a furniture one alike), so it

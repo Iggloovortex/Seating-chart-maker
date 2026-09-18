@@ -2131,7 +2131,12 @@ function renderMergeFurniture(furn, data, box, rects, merge, selected) {
  *  picked as one unit. */
 function renderMergeSplit(merge, box, ar, ac, anchorCell, border, selected, span = { rows: 1, cols: 1 }) {
   const container = document.createElement('div');
-  container.className = 'merge-split' + (selected ? ' merge--selected' : '');
+  // A piece that hangs its name outside itself needs the DESK to let it out, exactly as
+  // a split square needs `.cell--floatlabel`: the overlay and the sub-grid inside it
+  // both clip, so a desk-split merge's names were built and then cut off.
+  const floats = (anchorCell.subcells || []).some((sc) => anyLabelFloats(sc, true));
+  container.className = 'merge-split' + (selected ? ' merge--selected' : '')
+    + (floats ? ' merge-split--floatlabel' : '');
   container.dataset.mergeId = merge.id;
   container.style.left = `${box.left}px`;
   container.style.top = `${box.top}px`;

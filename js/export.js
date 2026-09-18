@@ -208,7 +208,7 @@ async function renderToCanvas(dpi = 300) {
   for (const sp of splits) drawSplit(ctx, rectOf, sp, imgCache, plan, undefined, hanging);
 
   // 2.6) Merged desks — one desk over a whole group of squares.
-  for (const md of mergeDraws) drawMerge(ctx, rectOf, md, imgCache, plan);
+  for (const md of mergeDraws) drawMerge(ctx, rectOf, md, imgCache, plan, hanging);
 
   // 3) Seats gathered around their table.
   for (const s of seats) drawTableSeat(ctx, s, imgCache, plan);
@@ -532,7 +532,7 @@ function drawDesk(ctx, rectOf, { r, c, data }, deskSet, imgCache, plan) {
  *  single square centred in the block; a 'poly' merge fills the exact shape of
  *  the group (an L, T or +) with a single outline, its labels across the widest
  *  run and its icon in the slimmest cell. Content contrasts against the fill. */
-function drawMerge(ctx, rectOf, { merge, data, plan, coveredByTable }, imgCache, out) {
+function drawMerge(ctx, rectOf, { merge, data, plan, coveredByTable }, imgCache, out, hanging = null) {
   const fill = data.fill || '#dbe7ff';
   const border = data.border || '#2f6feb';
   const rectFor = (k) => { const [r, c] = parseKey(k); return rectOf(r, c); };
@@ -614,7 +614,9 @@ function drawMerge(ctx, rectOf, { merge, data, plan, coveredByTable }, imgCache,
     const span = merge.kind === 'unit' ? { rows: 1, cols: 1 } : {
       rows: Math.max(...mk.map((k) => k[0])) - Math.min(...mk.map((k) => k[0])) + 1,
       cols: Math.max(...mk.map((k) => k[1])) - Math.min(...mk.map((k) => k[1])) + 1 };
-    drawSplit(ctx, boxRectOf, { r: ar, c: ac, data: anchorCell }, imgCache, out, span);
+    // A desk split's pieces float their names like any other piece's, so the late
+    // pass has to reach them too — without it a merged desk's names stayed inside.
+    drawSplit(ctx, boxRectOf, { r: ar, c: ac, data: anchorCell }, imgCache, out, span, hanging);
     return;
   }
 

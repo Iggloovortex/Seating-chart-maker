@@ -921,6 +921,13 @@ body {
   border-radius: 6px;
   overflow: hidden;
 }
+/* A desk split whose pieces hang their names outside themselves has to let them out —
+   the overlay AND the sub-grid in it both clip — and ride above the squares they lie
+   over, the same licence .cell--floatlabel gives a split square. The band's own z-index
+   still orders it above the pieces inside this overlay. */
+.merge-split--floatlabel,
+.merge-split--floatlabel .cell__split { overflow: visible; }
+.merge-split--floatlabel { z-index: 4; }
 /* Hovering any member cell lights the WHOLE fused desk, so a merge reads as one
    unit rather than a stack of squares. The member cells are transparent, so kill
    their own single-cell hover — the overlay is what answers the pointer. */
@@ -1141,6 +1148,13 @@ body {
 .piece-btn--dragging { opacity: 0.45; }
 .piece-btn--drop { outline: 2px dashed var(--accent); outline-offset: -2px; }
 .piece-btn--merged { aspect-ratio: auto; }
+/* The block a merged piece sits in: it spans the tiles and carries their shape, so a
+   row a merge covers end to end still has a height. */
+.piece-block { display: flex; align-items: center; justify-content: center; min-width: 0; }
+/* Gives its row a tile's height, in the tiles' own units, so a row covered end to end
+   by a merge still lines up with a plain one. It shares its cell with whatever is
+   there and is never seen or hit. */
+.piece-rowspacer { aspect-ratio: 1; width: 100%; visibility: hidden; pointer-events: none; }
 /* A Centered piece merge: one square in the middle of its block, as on the chart. */
 .piece-btn--unit { aspect-ratio: 1; place-self: center; }
 .piece-btn__icon { width: 40%; max-width: 26px; height: auto; aspect-ratio: 1; }
