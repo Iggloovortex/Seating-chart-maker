@@ -412,9 +412,23 @@ and push it; don't stack new work directly on `main`.
   lost.
   **Float is only offered where it can act** (`floatApplies`, js/layout.js): a special
   icon that can shrink. An ordinary desk never shrinks, and a server RACK keeps its
-  names in its slabs, so neither shows the control rather than showing a dead one. A
-  split PIECE does not show it either — no renderer hangs a piece's name outside its
-  square yet; the control belongs there once they do.
+  names in its slabs, so neither shows the control rather than showing a dead one.
+  **A split PIECE always shows it**, because a piece is already a small square: both
+  renderers hang its name outside the SQUARE (`buildSubcell`'s float branch + the
+  `hanging` pushes in `drawSplit`, for a plain piece and a furniture one alike), so it
+  is never shrunk into the piece or laid over its own icon. Which way it hangs comes
+  from WHERE the piece sits, not its facing — a piece in the top half of the split
+  hangs above the square, one in the bottom half below it (`pieceHangDir` grid /
+  `pieceHangStep` export) — because every piece facing the same way would otherwise
+  stack its name on the piece beneath it. How far it spreads sideways is
+  `pieceHangSpan` (js/layout.js): its own column plus any adjacent column in the same
+  piece-row whose piece hangs nothing, so a lone name reads across the whole square and
+  two side by side each keep their half. The name starts at a full CELL's text and is
+  then shrunk only as far as that run requires (`fitHangBand` grid / `fitHangBase`
+  export, both measured, floor 6px); at the floor it is allowed to spill past the run
+  rather than be cut, since the export draws it in full at that size.
+  **Not built:** a 3×3's MIDDLE row has nowhere to hang — it takes the bottom half's
+  rule and can meet the row below. Stairs in a piece keep their name inside.
   **A SERVER's slab is capped the same way** (`slabDepth`): half a full square along the
   axis it faces, never more than the square itself, so a slab in a thinned walkway fills
   its depth. The name then gets whatever the slab LEFT, which is no longer simply the

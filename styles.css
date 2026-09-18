@@ -1106,6 +1106,12 @@ body {
 /* A square whose name hangs below it has to let that name out of its own box, and
    sit above its neighbours so the name is not painted over. */
 .cell--floatlabel { overflow: visible; z-index: 4; }
+/* A split piece hangs its floated name outside itself, so it needs the same licence. */
+.subcell--floatlabel { overflow: visible; z-index: 4; }
+/* ...and the sub-grid it sits in must not clip it on the way out of the square. */
+.cell--floatlabel .cell__split { overflow: visible; }
+/* A hung piece name keeps a full square's text — it is not sharing the piece. */
+.subcell--floatlabel .cell__label { font-size: 12px; }
 .cell__furniturelabels--hang {
   /* Position and transform are set inline: the band sits on the side the facing
      implies and carries the square's rotation, like any other label. */

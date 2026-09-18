@@ -205,7 +205,7 @@ async function renderToCanvas(dpi = 300) {
   for (const d of desks) if (isStairsCell(d.data)) drawStairSeams(ctx, rectOf, d);
 
   // 2.5) Split squares — a block of independent sub-cells filling the cell.
-  for (const sp of splits) drawSplit(ctx, rectOf, sp, imgCache, plan);
+  for (const sp of splits) drawSplit(ctx, rectOf, sp, imgCache, plan, undefined, hanging);
 
   // 2.6) Merged desks — one desk over a whole group of squares.
   for (const md of mergeDraws) drawMerge(ctx, rectOf, md, imgCache, plan);
@@ -672,7 +672,7 @@ function drawMerge(ctx, rectOf, { merge, data, plan, coveredByTable }, imgCache,
 /** `span` is how many CELLS the split covers — 1×1 for an ordinary split square, the
  *  desk's footprint for a merge split across several cells. Furniture is sized per
  *  CELL, so without it a chair on a 2-cell desk comes out a whole cell wide. */
-function drawSplit(ctx, rectOf, sp, imgCache, plan, span = { rows: 1, cols: 1 }) {
+function drawSplit(ctx, rectOf, sp, imgCache, plan, span = { rows: 1, cols: 1 }, hanging = null) {
   const rect = rectOf(sp.r, sp.c);
   const { rows, cols } = sp.data.split;
   const cw = rect.w / cols, ch = rect.h / rows;
@@ -725,7 +725,16 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan, span = { rows: 1, cols: 1 })
       continue;
     }
     if (scFurn) {
-      drawChair(ctx, { data: sub, geo: chairInRect(box, sub, uRows, uCols) }, imgCache, plan);
+      const geo = chairInRect(box, sub, uRows, uCols);
+      // A furniture piece floats its name the same way a plain one does: the piece
+      // keeps its square, the name steps out of the whole cell and is painted late.
+      if (hanging && anyLabelFloats(sub, true)) {
+        const run = hangRun(rect, box, sp.data, i, { rows, cols }, cw);
+        geo.labelBox = hangingLabelBox(run, pieceHangStep(i, rows, cols), 0, geo.w, run.w);
+        geo.full = fitHangBase(ctx, geo.labelBox, sub, plan, cellRef, sub.rotation || 0);
+        geo.floating = true;
+      }
+      drawChair(ctx, { data: sub, geo }, imgCache, plan, hanging);
       continue;
     }
     ctx.fillStyle = sub.fill || '#dbe7ff';
@@ -736,8 +745,23 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan, span = { rows: 1, cols: 1 })
     // Struck from a CELL, not the piece: `span` says how many cells the split is
     // drawn across, so this is one cell however the split got there (a desk split
     // covers the whole merge). drawContent then shrinks to fit the piece.
-    drawContent(ctx, box.x + bw / 2, box.y + bh / 2, bw, bh, sub, imgCache, false, plan,
-                undefined, 0, sub.fill || '#dbe7ff', cellRef);
+    // A piece IS a small square, so a name marked to float hangs outside it exactly as
+    // a shrunken square's does: the piece keeps its icon, the name steps out and is
+    // painted in the late pass so the pieces after it cannot bury it.
+    if (hanging && anyLabelFloats(sub, true)) {
+      drawContent(ctx, box.x + bw / 2, box.y + bh / 2, bw, bh, { ...sub, labels: [] },
+                  imgCache, false, plan, undefined, 0, sub.fill || '#dbe7ff', cellRef);
+      // Up out of the square for a piece in the top half, down for one in the bottom
+      // half — the same rule the grid follows, so the names leave the square instead of
+      // landing on the piece next door.
+      const run = hangRun(rect, box, sp.data, i, { rows, cols }, cw);
+      const lbox = hangingLabelBox(run, pieceHangStep(i, rows, cols), 0, Math.min(bw, bh), run.w);
+      const lbase = fitHangBase(ctx, lbox, sub, plan, cellRef, sub.rotation || 0);
+      hanging.push(() => drawLabelBox(ctx, lbox, sub, plan, lbase, sub.rotation || 0));
+    } else {
+      drawContent(ctx, box.x + bw / 2, box.y + bh / 2, bw, bh, sub, imgCache, false, plan,
+                  undefined, 0, sub.fill || '#dbe7ff', cellRef);
+    }
     if (hasPrinter(sub) && isPrinterSecondary(sub)) drawPrinterOverlay(ctx, box.x, box.y, bw, bh, sub, imgCache);
   }
   for (const sm of polyMerges) drawSubmerge(ctx, rect, sp.data, sm, cw, ch, imgCache, plan);
@@ -918,6 +942,44 @@ function chairGeometry(rectOf, item) {
   };
 }
 
+/** Which way a split piece hangs its name: up out of the square for a piece in the top
+ *  half, down for one in the bottom half, so the names leave the square instead of
+ *  landing on the piece next door. The grid twin is pieceHangDir (js/grid.js). */
+function pieceHangStep(i, rows, cols) {
+  return Math.floor(i / Math.max(1, cols)) < rows / 2 ? 1 : -1;
+}
+
+/** Shrink a hung band's text base until the longest name fits the run it was given,
+ *  down to the same 6px floor the in-piece fit uses. A piece's text is struck from a
+ *  whole CELL and then shrunk only as far as its space requires — for a hung name that
+ *  space is the run, not the piece. The grid's twin is fitHangBand. */
+function fitHangBase(ctx, box, data, plan, base, rot = 0) {
+  const labels = labelsOf(data);
+  if (!labels.length) return base;
+  const norm = ((Math.round(rot / 45) * 45) % 360 + 360) % 360;
+  const maxW = ((norm === 90 || norm === 270) ? box.h : box.w) * LABEL_WIDTH;
+  const lineOf = (f) => f * plan.lineFrac;
+  ctx.save();
+  let f = base;
+  for (let i = 0; i < 40 && lineOf(f) * FONT_OF_LINE > 6; i++) {
+    ctx.font = contentFont(lineOf(f) * FONT_OF_LINE);
+    let widest = 0;
+    for (const l of labels) widest = Math.max(widest, ctx.measureText(l.text).width);
+    if (widest <= maxW) break;
+    f *= 0.94;
+  }
+  ctx.restore();
+  return f;
+}
+
+/** The box a split piece's hung name is laid out against: its own piece vertically,
+ *  but spread sideways over the columns pieceHangSpan grants it, so a lone name reads
+ *  across the square and two side by side keep their halves. */
+function hangRun(rect, box, data, i, split, cw) {
+  const { start, span } = pieceHangSpan(data, i, split);
+  return { x: rect.x + start * cw, y: box.y, w: span * cw, h: box.h };
+}
+
 /** The band a floating name is drawn in: the SAME band a label always gets, grown past
  *  the square's edge only on the axis the square is short of. A side-facing name reads
  *  down the square, so it keeps the standard far HALF beside the piece and grows its
@@ -925,11 +987,24 @@ function chairGeometry(rectOf, item) {
  *  no longer has, so it steps just outside that edge. Either way it stays centred on
  *  the square and anchored to the edge nearest the piece, exactly as chairLabelBox
  *  places it. */
-function hangingLabelBox(rect, dr = -1, dc = 0, size = null) {
+function hangingLabelBox(rect, dr = -1, dc = 0, size = null, tight = 0) {
   const unit = layoutUnit() || Math.max(rect.w, rect.h);
   const depth = unit * 0.5;                            // room a stack of lines needs
   const s = size != null ? size : Math.min(rect.w, rect.h);
   const midX = rect.x + rect.w / 2, midY = rect.y + rect.h / 2;
+  // `tight` is for a PIECE: beside a square the band may spread wider than its box,
+  // because there is open space either side; beside a piece the next piece is there.
+  if (tight) {
+    // A PIECE. Its content fills it, so the band sits against the piece's own edge —
+    // not measured in from it, which put the band back INSIDE a tall piece. `tight` is
+    // the run it may spread over: the whole SQUARE, so a name reads in full rather than
+    // being cut to a quarter-square, at the cost of possibly meeting a neighbour's.
+    const run = Math.max(rect.w, tight);
+    const x = midX - run / 2;
+    return dr > 0
+      ? { x, y: rect.y - depth,  w: run, h: depth, anchor: 'bottom' }
+      : { x, y: rect.y + rect.h, w: run, h: depth, anchor: 'top' };
+  }
   // It starts at the PIECE's edge, exactly where the standard band starts, so a floated
   // name sits the same distance from its icon as one kept inside. Only its far edge
   // moves, out past the square, to give the stack the room the square no longer has.

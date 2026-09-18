@@ -1435,9 +1435,14 @@ function subLabelRow(line, index) {
   } };
   attachLabelDrag(grip, index, 'line', cfg);
   attachLabelDrag(color, index, 'color', { ...cfg, deferred: true });
-  // No Float here: neither renderer hangs a split PIECE's name outside its square, so
-  // the control would do nothing. It belongs here once they do.
-  row.append(grip, text, color, del);
+  // A piece is always small, so Float always has something to do here.
+  const flt = floatToggle(line.float !== false, () => {
+    const s2 = subCur(); if (!s2) return;
+    s2.labels[index].float = s2.labels[index].float === false;
+    updateSubcell(current.r, current.c, current.sub, {});
+    renderSubcellEditor();
+  });
+  row.append(grip, text, color, flt, del);
   return row;
 }
 
