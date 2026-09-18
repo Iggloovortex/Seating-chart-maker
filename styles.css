@@ -924,6 +924,10 @@ body {
 /* Hovering any member cell lights the WHOLE fused desk, so a merge reads as one
    unit rather than a stack of squares. The member cells are transparent, so kill
    their own single-cell hover — the overlay is what answers the pointer. */
+/* A merged cell never lights on its own — the desk does (.merge--hot). This has to
+   out-weigh `.cell:not(.cell--on):hover`, which is a class heavier, or a unit
+   merge's exposed surround paints itself and reads as a live empty square. */
+.cell.cell--merged:not(.cell--on):hover,
 .cell--merged:hover { background: transparent; }
 /* A selected merge shows ONE outline over the whole fused object (not a tick on
    every member square) — the grid-level equivalent of .table-shape--picked. */

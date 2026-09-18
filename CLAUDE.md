@@ -145,7 +145,11 @@ and push it; don't stack new work directly on `main`.
   `deleteMerge`); a plain tap seats/empties the desk like a square
   (`toggleMergeFilled` / `mergeIsEmpty` — an emptied merge renders as one empty
   region in the grid and draws nothing in the export, content kept); hovering any
-  member lights the whole desk (`.merge--hot`). A `unit` merge or a rectangular
+  member lights the whole desk (`.merge--hot`) and never the cell under the pointer:
+  `.cell--merged`'s hover has to out-weigh `.cell:not(.cell--on):hover`, which is a
+  class heavier, or a unit merge's exposed surround paints itself and reads as a live
+  empty square. `setHoverMerge` lights `.merge-furniture` too, since a desk whose
+  content is a chair or rack has no `.merge-unit` to light. A `unit` merge or a rectangular
   `poly` merge (`mergeCanSplit`) can be **split**: the split lives on the anchor
   cell (reuses `splitCell`/`toggleSubcell`/`openSubcellEditor`) and is drawn across
   the whole desk box by `renderMergeSplit` (grid) / the split branch of `drawMerge`

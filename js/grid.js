@@ -1381,7 +1381,9 @@ function updateMergeHover(e) {
 function setHoverMerge(id) {
   if (id === hoverMergeId) return;
   hoverMergeId = id;
-  chart.querySelectorAll('.merge-shape, .merge-unit, .merge-split').forEach((el) => {
+  // Every overlay a merge can be drawn as, furniture included — a desk whose
+  // content is a chair or rack has no .merge-unit to light.
+  chart.querySelectorAll('.merge-shape, .merge-unit, .merge-split, .merge-furniture').forEach((el) => {
     el.classList.toggle('merge--hot', el.dataset.mergeId === id && id != null);
   });
 }
