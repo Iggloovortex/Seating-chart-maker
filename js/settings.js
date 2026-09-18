@@ -279,7 +279,7 @@ function applyPreset(n, keys) {
 // app — export, its icon/title branding, appearance and paper sizes.
 let settingsTab = 'general';
 const SETTINGS_TABS = [
-  { id: 'general', label: 'General', build: () => [interfaceSection(), presetSection(), customIconsSection()] },
+  { id: 'general', label: 'General', build: () => [interfaceSection(), floatLabelSection(), presetSection(), customIconsSection()] },
   { id: 'site', label: 'Site & export', build: () => [exportSection(), siteSection(), themeSection(), barsSection(), paperSection()] },
 ];
 
@@ -406,6 +406,28 @@ function interfaceSection() {
   }
   g.appendChild(seg);
   g.appendChild(snote('Show the row & column size controls in the edit pane.'));
+  return g;
+}
+
+/** General → whether label lines marked "Float" in the edit pane are allowed to hang
+ *  outside their square. It only ever takes effect where the line has nowhere to go:
+ *  a square shrunk by its row/column size, or a split piece. A full-size square keeps
+ *  its labels inside whatever this says. */
+function floatLabelSection() {
+  const g = sgroup('Labels on small squares');
+  const seg = document.createElement('div');
+  seg.className = 'seg settings-seg';
+  for (const [val, label] of [[false, 'Keep inside'], [true, 'May hang outside']]) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'seg__btn';
+    b.textContent = label;
+    b.setAttribute('aria-pressed', String(!!state.config.floatLabels === val));
+    b.addEventListener('click', () => { setConfig({ floatLabels: val }); renderSettings(); emit(); });
+    seg.appendChild(b);
+  }
+  g.appendChild(seg);
+  g.appendChild(snote('Label lines marked "Float" in the edit pane hang outside the square when it is too small to hold them — a shrunken or split square. Full-size squares always keep their labels inside.'));
   return g;
 }
 

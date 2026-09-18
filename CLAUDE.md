@@ -358,10 +358,29 @@ and push it; don't stack new work directly on `main`.
     they stay in step. Note stairs tile a whole cell, so a stairs-only square now
     squashes into a band; excluding stairs (or a per-kind floor, the rejected
     "Option B") is the fix if that reads badly.
+  - **Phases 3-5 (data, export, editor, setting) — PARTLY BUILT, off by default.**
+    `line.float` per label line + `config.floatLabels` (Settings → General, "Labels on
+    small squares"). `floatsOutside` / `anyLabelFloats` / `canFloatLabels` /
+    `rectIsShrunk` / `layoutUnit` (js/layout.js) are the one decision both renderers
+    read: a line hangs out only when the setting allows it, the line is marked, AND
+    the square really has no room. `sizedByWeight` therefore lets a LABELLED special
+    square shrink too, once every line floats — the text has somewhere else to go,
+    which is the whole point. A server RACK is excluded (`canFloatLabels`): its names
+    live in its own slabs. In the editor the colour now drags from its own SWATCH
+    (`attachLabelDrag`'s `deferred` mode, which waits for travel so the picker still
+    opens) and the freed grip is the per-line **Float** toggle (`floatToggle`); the
+    printer row drops the grip entirely, since its labels draw inside its overlay.
+    The export hangs a name in a band below the square (`hangingLabelBox`) at a full
+    square's text size, collected during the draw and painted LAST (step 6 of
+    renderToCanvas) so the next row does not bury it.
   - **Phase 2 — not built.** In a shrunken square the icon takes the FULL square
     height instead of a chair's ½, with the name moved out: the chair's own
     arrangement with the piece grown to fill. Touches `chairGeometry` /
     `renderMergeFurniture`.
+  - **STILL OPEN, and why it is off by default:** the GRID renderer does not hang
+    labels yet (export only), and a name hung below a square lands ON TOP of whatever
+    occupies the row beneath — nothing reserves space for it. Placement needs a
+    decision before this can be turned on.
   - **Phase 3 — not built.** A per-line `line.float` flag (so it travels with saves,
     share links, copy/paste and presets beside `text`/`color`). When the square is too
     small to hold the line, that line prints OUTSIDE the square at the same gap a

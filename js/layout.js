@@ -397,12 +397,53 @@ function layoutRules() {
     if (!isEnabled(r, c)) return true;
     const cell = peekCell(r, c);
     if (!furnitureKind(cell)) return false;
-    return !(cell.labels || []).some((l) => l.text && l.text.trim());
+    // With the labels kept inside, the text is what needs the room, so the square
+    // stays full. Once every line is marked to FLOAT it has somewhere else to go,
+    // and the square is free to shrink around the icon.
+    const lines = (cell.labels || []).filter((l) => l.text && l.text.trim());
+    if (!lines.length) return true;
+    if (!canFloatLabels(cell)) return false;
+    return !!(state.config && state.config.floatLabels) && lines.every((l) => l.float);
   };
   const wUnits = (r, c) => (sizedByWeight(r, c) ? colWeight(c) : 1); // cell width in units
   const hUnits = (r, c) => (sizedByWeight(r, c) ? rowWeight(r) : 1); // cell height in units
 
   return { footprints, insideAnyFootprint, seatTableOf, sizedByWeight, wUnits, hUnits };
+}
+
+// The full-square size of the most recent layout, in whatever px the caller asked
+// for. Both renderers go through layoutRects, so each pass leaves the figure its own
+// drawing code needs to tell a SHRUNKEN square from a full one.
+let LAYOUT_UNIT = 0;
+function layoutUnit() { return LAYOUT_UNIT; }
+
+/** True when this rect has been cut below a full square by its row/column size — the
+ *  test for "there is no room in here for the text", which is what lets a label hang
+ *  outside (see floatsOutside). */
+function rectIsShrunk(rect) {
+  return !!rect && LAYOUT_UNIT > 0 && Math.min(rect.w, rect.h) < LAYOUT_UNIT * 0.995;
+}
+
+/** Whether a label line hangs OUTSIDE its square rather than being crushed inside it.
+ *  Three things must agree: the setting is on, the line is marked to float, and the
+ *  square really has no room — shrunk by its weight, or a split piece. A full-size
+ *  square always keeps its labels in. */
+function floatsOutside(line, shrunk) {
+  return !!(shrunk && line && line.float && state.config && state.config.floatLabels);
+}
+
+/** A server RACK lays each of its names in its own slab, so it has no name to float
+ *  and no half to free — it is the one special icon floating does not apply to. */
+function canFloatLabels(cell) {
+  if (!cell) return false;
+  const lines = (cell.labels || []).filter((l) => l.text && l.text.trim());
+  return !(cell.icon === 'server' && lines.length >= 2);
+}
+
+/** True when any of a square's labels would hang outside it. */
+function anyLabelFloats(cell, shrunk) {
+  if (!canFloatLabels(cell)) return false;
+  return (cell.labels || []).some((l) => l.text && l.text.trim() && floatsOutside(l, shrunk));
 }
 
 /** Overall size of the layout in units: the widest row and the tallest column. */
@@ -426,6 +467,7 @@ function layoutExtent({ wUnits, hUnits }) {
  *  each row and y accumulates top→bottom within each column — two independent
  *  walks, so one thinned square offsets its neighbours in both directions. */
 function layoutRects({ wUnits, hUnits }, unit, originX, originY) {
+  LAYOUT_UNIT = unit;
   const { rows, cols } = state.grid;
   const rects = new Map();
   for (let r = 0; r < rows; r++) {

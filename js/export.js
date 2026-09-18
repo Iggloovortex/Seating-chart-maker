@@ -181,11 +181,15 @@ async function renderToCanvas(dpi = 300) {
   // 1) Table shapes (drawn solid; the editing grid shows them semi-transparent).
   for (const table of state.tables) drawTable(ctx, table, rectOf);
 
+  // Names that hang OUTSIDE their square reach into the space around it, which the
+  // squares after them would paint over. They are collected here and drawn last.
+  const hanging = [];
+
   // 2) Connected desks — furniture (chairs, servers) draws as a tucked piece instead.
   for (const d of desks) {
-    if (isChairCell(d.data)) drawChair(ctx, d, imgCache, plan);
-    else if (isServerCell(d.data)) (d.geo.units >= 2 ? drawServerRack : drawServer)(ctx, d, imgCache, plan);
-    else if (isStairsCell(d.data)) drawStairs(ctx, d, imgCache, plan);
+    if (isChairCell(d.data)) drawChair(ctx, d, imgCache, plan, hanging);
+    else if (isServerCell(d.data)) (d.geo.units >= 2 ? drawServerRack : drawServer)(ctx, d, imgCache, plan, hanging);
+    else if (isStairsCell(d.data)) drawStairs(ctx, d, imgCache, plan, undefined, undefined, undefined, hanging);
     else drawDesk(ctx, rectOf, d, deskSet, imgCache, plan);
     if (hasPrinter(d.data) && isPrinterSecondary(d.data)) {
       const { x, y, w, h } = rectOf(d.r, d.c);
@@ -218,6 +222,10 @@ async function renderToCanvas(dpi = 300) {
 
   // 5) Walls, railings, doors and windows — drawn last, on the seams, on top.
   drawWalls(ctx, rectOf);
+
+  // 6) Names hung OUTSIDE their squares. They reach into the space around the square,
+  //    so they go over the finished page — otherwise the next row paints them out.
+  for (const paint of hanging) paint();
 
   return canvas;
 }
@@ -859,7 +867,8 @@ function chairInRect(rect, data, rows, cols) {
 
 /** Where a chair sits and how big it is. Split out from drawChair so the layout
  *  can be measured before anything is painted. */
-function chairGeometry(rectOf, { r, c, data }) {
+function chairGeometry(rectOf, item) {
+  const { r, c, data } = item;
   const rect = rectOf(r, c);
   const size = Math.min(rect.w, rect.h) * CHAIR_SCALE;
 
@@ -892,7 +901,24 @@ function chairGeometry(rectOf, { r, c, data }) {
   // Labels turn with the chair (like its icon), sitting in the region opposite
   // the tile — a top/bottom band for a vertical facing, the far half for a side
   // facing so the now-vertical name has full height and never truncates.
-  return { cx, cy, w: size, h: size, labelBox: chairLabelBox(rect, dr, dc), full: Math.min(rect.w, rect.h) };
+  // A name that FLOATS hangs in a band just below the square instead of sharing the
+  // inside of it, and keeps a full square's text size — that is the whole point of
+  // letting a small square shrink. The 'top' anchor makes the stack hug the square's
+  // underside at the same gap a chair's own name sits at.
+  const shrunk = rectIsShrunk(rect);
+  const floating = anyLabelFloats(data, shrunk);
+  return {
+    cx, cy, w: size, h: size,
+    labelBox: floating ? hangingLabelBox(rect) : chairLabelBox(rect, dr, dc),
+    full: floating ? layoutUnit() : Math.min(rect.w, rect.h),
+    floating,
+  };
+}
+
+/** The band a floating name is drawn in: directly under the square, a half-unit deep
+ *  so a stack of lines has room, hugging the square's underside. */
+function hangingLabelBox(rect) {
+  return { x: rect.x, y: rect.y + rect.h, w: Math.max(rect.w, layoutUnit()), h: layoutUnit() / 2, anchor: 'top' };
 }
 
 /** Where a chair's labels are drawn, opposite the tile: a full-width top/bottom
@@ -908,8 +934,8 @@ function chairLabelBox(rect, dr, dc) {
 /** A chair: standalone furniture drawn at a fixed fraction of its full-size
  *  square, attached to the edge it faces and centred on the other axis, so it
  *  tucks up to the desk or table it belongs to. */
-function drawChair(ctx, item, imgCache, plan) {
-  const { cx, cy, w: size, labelBox, full } = item.geo;
+function drawChair(ctx, item, imgCache, plan, hanging) {
+  const { cx, cy, w: size, labelBox, full, floating } = item.geo;
   roundRect(ctx, cx - size / 2, cy - size / 2, size, size, size * 0.18);
   ctx.fillStyle = item.data.fill || '#dbe7ff';
   ctx.fill();
@@ -918,15 +944,24 @@ function drawChair(ctx, item, imgCache, plan) {
   ctx.stroke();
   // The furniture carries its icon and its labels, both turned to the facing.
   drawIconOnly(ctx, cx, cy, size, item.data, imgCache);
-  if (labelBox) drawLabelBox(ctx, labelBox, item.data, plan, full || Math.min(labelBox.w, labelBox.h), item.data.rotation || 0);
+  if (!labelBox) return;
+  const paint = () => drawLabelBox(ctx, labelBox, item.data, plan,
+                                   full || Math.min(labelBox.w, labelBox.h), floating ? 0 : (item.data.rotation || 0));
+  if (floating && hanging) hanging.push(paint); else paint();
 }
 
 /** Stairs fill the square edge to edge — no fill, border or padding — so a run
  *  of them reads as one flight, the half-bars on the seams merging into full
  *  step bars. The art turns with the facing. The DOM twin is the cell--stairs
  *  branch in grid.js. */
-function drawStairs(ctx, item, imgCache, plan, subIndex, splitRows, splitCols) {
+function drawStairs(ctx, item, imgCache, plan, subIndex, splitRows, splitCols, hanging) {
   const { rect } = item.geo;
+  // Stairs fill their square and carry no label box of their own, so a floating name
+  // is the only name they can show — hung below, like a chair's.
+  if (hanging && anyLabelFloats(item.data, rectIsShrunk(rect))) {
+    const box = hangingLabelBox(rect);
+    hanging.push(() => drawLabelBox(ctx, box, item.data, plan, layoutUnit(), 0));
+  }
   const { x, y, w, h } = rect;
   const variant = resolveStairType(item.data, item.r, item.c, subIndex, splitRows, splitCols);
   const ic = item.data.iconColor || '#1f2933';
@@ -1006,14 +1041,27 @@ function serverGeometry(rectOf, { r, c, data }) {
     box =      { x: rect.x + half(rect.w), y: rect.y, w: half(rect.w), h: rect.h };
     labelBox = { x: rect.x,               y: rect.y, w: half(rect.w), h: rect.h, anchor: 'right' };
   }
-  return { rect, box, labelBox, full: Math.min(rect.w, rect.h), units: labelsOf(data).length };
+  // Floating names hang below the square, as a chair's do, and the SLAB takes the
+  // whole square rather than half of it — there is no label half left to leave free.
+  const shrunk = rectIsShrunk(rect);
+  const floating = anyLabelFloats(data, shrunk);
+  if (floating) {
+    box = { x: rect.x, y: rect.y, w: rect.w, h: rect.h };
+    labelBox = hangingLabelBox(rect);
+  }
+  return {
+    rect, box, labelBox,
+    full: floating ? layoutUnit() : Math.min(rect.w, rect.h),
+    units: labelsOf(data).length,
+    floating,
+  };
 }
 
 /** A single server: a half-square slab tucked to the faced edge, its icon
  *  centred and turned to face, its one label rotated to the facing in the other
  *  half — just as a normal square's label turns. */
-function drawServer(ctx, item, imgCache, plan) {
-  const { box, labelBox, full } = item.geo;
+function drawServer(ctx, item, imgCache, plan, hanging) {
+  const { box, labelBox, full, floating } = item.geo;
   const inset = Math.min(box.w, box.h) * 0.05;
   const x = box.x + inset, y = box.y + inset, w = box.w - inset * 2, h = box.h - inset * 2;
   roundRect(ctx, x, y, w, h, Math.min(w, h) * 0.16);
@@ -1023,7 +1071,9 @@ function drawServer(ctx, item, imgCache, plan) {
   ctx.strokeStyle = item.data.border || '#2f6feb';
   ctx.stroke();
   drawIconOnly(ctx, x + w / 2, y + h / 2, Math.min(w, h), item.data, imgCache);
-  if (labelBox) drawLabelBox(ctx, labelBox, item.data, plan, full, item.data.rotation || 0);
+  if (!labelBox) return;
+  const paint = () => drawLabelBox(ctx, labelBox, item.data, plan, full, floating ? 0 : (item.data.rotation || 0));
+  if (floating && hanging) hanging.push(paint); else paint();
 }
 
 /** A server rack holding several servers: split into one slab per label, stacked

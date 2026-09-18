@@ -49,6 +49,7 @@ const DEFAULT_CONFIG = {
   barPositions: { select: 'top', walls: 'top' },
   customColors: [],                   // saved swatches, newest first (see CUSTOM_COLOR_SLOTS)
   showSizeSection: false,             // show the row/column size controls in the edit pane
+  floatLabels: false,                 // let marked label lines hang outside a small square
 };
 
 /** How many colours the picker's saved bar holds. Deliberately small: it is a
@@ -2053,6 +2054,7 @@ function serializeConfig() {
     barPositions: { ...state.config.barPositions },
     customColors: [...state.config.customColors],
     showSizeSection: !!state.config.showSizeSection,
+    floatLabels: !!state.config.floatLabels,
   };
 }
 
@@ -2109,6 +2111,7 @@ function applyConfig(data) {
     .map((c) => String(c).toLowerCase())
     .slice(0, CUSTOM_COLOR_SLOTS);
   cfg.showSizeSection = !!data.showSizeSection;
+  cfg.floatLabels = !!data.floatLabels;
   emitConfig();
   return true;
 }

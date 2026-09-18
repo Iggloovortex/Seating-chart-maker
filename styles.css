@@ -1103,6 +1103,11 @@ body {
 }
 .piece-btn:hover { border-color: var(--line-strong); }
 .piece-btn--sel { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Per-line Float toggle, in the slot the colour's drag grip used to hold. */
+.erow__grip--float { cursor: pointer; }
+.erow__grip--float.is-on { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+/* The colour swatch now carries the colour drag, so it says so on hover. */
+.erow__color, .erow .field__input--color { cursor: grab; }
 /* Dragging a piece onto another swaps their content, as on the chart. */
 .piece-btn--dragging { opacity: 0.45; }
 .piece-btn--drop { outline: 2px dashed var(--accent); outline-offset: -2px; }

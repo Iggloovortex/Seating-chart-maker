@@ -624,8 +624,6 @@ function printerSection(data, set, live) {
       row.className = 'erow';
 
       const grip = labelGrip('Drag to reorder this line');
-      const colorGrip = labelGrip('Drag to move this color to another line');
-      colorGrip.classList.add('erow__grip--color');
 
       const text = document.createElement('input');
       text.type = 'text';
@@ -652,9 +650,9 @@ function printerSection(data, set, live) {
       del.addEventListener('click', () => applyLabels(pLabels.filter((_, j) => j !== i)));
 
       attachLabelDrag(grip, i, 'line', { listId: 'printer-label-list', apply: reorder });
-      attachLabelDrag(colorGrip, i, 'color', { listId: 'printer-label-list', apply: reorder });
+      attachLabelDrag(color, i, 'color', { listId: 'printer-label-list', apply: reorder, deferred: true });
 
-      row.append(grip, text, color, colorGrip, del);
+      row.append(grip, text, color, del);
       lblList.appendChild(row);
     });
     lblGroup.appendChild(lblList);
@@ -1423,8 +1421,6 @@ function subLabelRow(line, index) {
   // The same two grips as the base pane: the left one reorders the LINE, the one
   // beside the swatch moves just the COLOUR to another line.
   const grip = labelGrip('Drag to reorder this line');
-  const colorGrip = labelGrip('Drag to move this color to another line');
-  colorGrip.classList.add('erow__grip--color');
   const cfg = { listId: 'sublabel-list', apply: (from, to, kind) => {
     const s2 = subCur(); if (!s2) return;
     if (kind === 'color') {
@@ -1438,8 +1434,14 @@ function subLabelRow(line, index) {
     renderSubcellEditor();
   } };
   attachLabelDrag(grip, index, 'line', cfg);
-  attachLabelDrag(colorGrip, index, 'color', cfg);
-  row.append(grip, text, color, colorGrip, del);
+  attachLabelDrag(color, index, 'color', { ...cfg, deferred: true });
+  const flt = floatToggle(!!line.float, () => {
+    const s2 = subCur(); if (!s2) return;
+    s2.labels[index].float = !s2.labels[index].float;
+    updateSubcell(current.r, current.c, current.sub, {});
+    renderSubcellEditor();
+  });
+  row.append(grip, text, color, flt, del);
   return row;
 }
 
@@ -1770,8 +1772,6 @@ function bulkLabelRow(keys, index) {
 
   // Reorder grips, as in the base pane — applied to every selected square.
   const grip = labelGrip('Drag to reorder this line on all selected');
-  const colorGrip = labelGrip('Drag to move this color to another line on all selected');
-  colorGrip.classList.add('erow__grip--color');
   const cfg = { listId: 'bulklabel-list', apply: (from, to, kind) => {
     batch(() => {
       for (const k of keys) {
@@ -1782,8 +1782,22 @@ function bulkLabelRow(keys, index) {
     renderBulk(keys);
   } };
   attachLabelDrag(grip, index, 'line', cfg);
-  attachLabelDrag(colorGrip, index, 'color', cfg);
-  row.append(grip, text, color, colorGrip, del);
+  attachLabelDrag(color, index, 'color', { ...cfg, deferred: true });
+  // One toggle for the whole selection: on unless every selected line already floats.
+  const allFloat = keys.every((k) => {
+    const [r, c] = parseKey(k); const cell = peekCell(r, c);
+    return cell && cell.labels[index] && cell.labels[index].float;
+  });
+  const flt = floatToggle(allFloat, () => {
+    batch(() => {
+      for (const k of keys) {
+        const [r, c] = parseKey(k); const cell = getCell(r, c);
+        if (cell.labels[index]) cell.labels[index].float = !allFloat;
+      }
+    });
+    renderBulk(keys);
+  });
+  row.append(grip, text, color, flt, del);
   return row;
 }
 
@@ -1804,17 +1818,32 @@ function attachLabelDrag(handle, index, kind, cfg) {
   let drag = null;
   const listId = (cfg && cfg.listId) || 'label-list';
 
+  // A `deferred` handle is one that has its own click to protect — the colour swatch,
+  // which must still open its picker. It waits for the pointer to travel before the
+  // drag takes over, and never swallows the press itself.
+  const deferred = !!(cfg && cfg.deferred);
+  let armed = null;
+
+  const begin = (e, rows) => {
+    handle.setPointerCapture(e.pointerId);
+    drag = { rows, boxes: rows.map((el) => el.getBoundingClientRect()), target: index };
+    rows[index].classList.add(kind === 'color' ? 'erow--dragging-color' : 'erow--dragging');
+  };
+
   handle.addEventListener('pointerdown', (e) => {
     const list = document.getElementById(listId);
     const rows = list ? [...list.children] : [];
     if (rows.length < 2) return;
+    if (deferred) { armed = { x: e.clientX, y: e.clientY, rows }; return; }
     e.preventDefault();
-    handle.setPointerCapture(e.pointerId);
-    drag = { rows, boxes: rows.map((el) => el.getBoundingClientRect()), target: index };
-    rows[index].classList.add(kind === 'color' ? 'erow--dragging-color' : 'erow--dragging');
+    begin(e, rows);
   });
 
   handle.addEventListener('pointermove', (e) => {
+    if (armed && !drag) {
+      if (Math.hypot(e.clientX - armed.x, e.clientY - armed.y) <= MOVE_TOLERANCE) return;
+      begin(e, armed.rows);
+    }
     if (!drag) return;
     let best = 0, bestD = Infinity;
     drag.boxes.forEach((b, i) => {
@@ -1828,7 +1857,11 @@ function attachLabelDrag(handle, index, kind, cfg) {
   });
 
   const finish = () => {
+    armed = null;
     if (!drag) return;
+    // A swatch that was dragged must not also open its picker on the click that ends
+    // the drag.
+    if (deferred) handle.dataset.dragged = '1';
     const to = drag.target;
     drag.rows.forEach((el) =>
       el.classList.remove('erow--dragging', 'erow--dragging-color', 'erow--drop'));
@@ -1844,6 +1877,30 @@ function attachLabelDrag(handle, index, kind, cfg) {
   };
   handle.addEventListener('pointerup', finish);
   handle.addEventListener('pointercancel', finish);
+  if (deferred) {
+    handle.addEventListener('click', (e) => {
+      if (handle.dataset.dragged !== '1') return;
+      handle.dataset.dragged = '0';
+      e.preventDefault();
+      e.stopPropagation();
+    }, true);
+  }
+}
+
+/** The per-line Float toggle — the control that used to be the colour's drag grip,
+ *  freed now that the colour drags from its own swatch. On, the line hangs outside
+ *  the square when the square is too small to hold it (Settings → Labels on small
+ *  squares must allow it, and a full-size square never floats). */
+function floatToggle(on, onToggle) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'erow__grip erow__grip--float' + (on ? ' is-on' : '');
+  b.textContent = '\u21A7';            // downwards arrow to bar — the name drops below
+  b.title = on ? 'This line hangs outside a small square' : 'Keep this line inside the square';
+  b.setAttribute('aria-label', 'Float this line outside a small square');
+  b.setAttribute('aria-pressed', String(!!on));
+  b.addEventListener('click', onToggle);
+  return b;
 }
 
 /** First non-default color found on line `index` among the selected cells. */
@@ -1923,12 +1980,18 @@ function labelRow(line, index) {
   // Two grips. The left one carries the whole line; the one beside the swatch
   // carries only the colour, so a palette can be shuffled without retyping.
   const grip = labelGrip('Drag to reorder this line');
-  const colorGrip = labelGrip('Drag to move this color to another line');
-  colorGrip.classList.add('erow__grip--color');
   attachLabelDrag(grip, index, 'line');
-  attachLabelDrag(colorGrip, index, 'color');
+  // The colour now drags from its own swatch, which frees the second grip to be the
+  // per-line Float toggle.
+  attachLabelDrag(color, index, 'color', { deferred: true });
+  const flt = floatToggle(!!line.float, () => {
+    const cell = getCell(current.r, current.c);
+    cell.labels[index].float = !cell.labels[index].float;
+    updateCell(current.r, current.c, {});
+    render(peekCell(current.r, current.c));
+  });
 
-  row.append(grip, text, color, colorGrip, del);
+  row.append(grip, text, color, flt, del);
   return row;
 }
 
