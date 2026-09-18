@@ -458,6 +458,13 @@ function canFloatLabels(cell) {
   return !(cell.icon === 'server' && lines.length >= 2);
 }
 
+/** Whether the Float control is worth offering for a square at all. Only a special
+ *  icon can shrink (sizedByWeight), so only its name has anywhere to go — on an
+ *  ordinary desk the toggle would sit there doing nothing whatever it was set to. */
+function floatApplies(cell) {
+  return !!(cell && furnitureKind(cell) && canFloatLabels(cell));
+}
+
 /** True when any of a square's labels would hang outside it. */
 function anyLabelFloats(cell, shrunk) {
   if (!canFloatLabels(cell)) return false;

@@ -379,6 +379,18 @@ and push it; don't stack new work directly on `main`.
   mode, which waits for travel so the picker still opens) and the freed grip is the
   per-line **Float** toggle (`floatToggle`); the printer row drops the grip entirely,
   since its labels draw inside its own overlay.
+  **The swatch is not an inert handle.** It carries `bindColorInput`'s input/change/
+  **blur** listeners and `enhanceColorInput`'s click-to-open popover, so a drag from it
+  has to stand all three down: `input.dataset.dragging` / `dragged`, read by
+  `colorInputBusy` (js/editor.js) and by the popover's `open` (js/colorpicker.js).
+  Without that, `blur` fires as the drag ends and writes the dragged-FROM colour back
+  over the line the reorder just gave it — the source colour survives and another is
+  lost.
+  **Float is only offered where it can act** (`floatApplies`, js/layout.js): a special
+  icon that can shrink. An ordinary desk never shrinks, and a server RACK keeps its
+  names in its slabs, so neither shows the control rather than showing a dead one. A
+  split PIECE does not show it either — no renderer hangs a piece's name outside its
+  square yet; the control belongs there once they do.
   **A SERVER's slab is capped the same way** (`slabDepth`): half a full square along the
   axis it faces, never more than the square itself, so a slab in a thinned walkway fills
   its depth. The name then gets whatever the slab LEFT, which is no longer simply the

@@ -1435,13 +1435,9 @@ function subLabelRow(line, index) {
   } };
   attachLabelDrag(grip, index, 'line', cfg);
   attachLabelDrag(color, index, 'color', { ...cfg, deferred: true });
-  const flt = floatToggle(line.float !== false, () => {
-    const s2 = subCur(); if (!s2) return;
-    s2.labels[index].float = s2.labels[index].float === false;
-    updateSubcell(current.r, current.c, current.sub, {});
-    renderSubcellEditor();
-  });
-  row.append(grip, text, color, flt, del);
+  // No Float here: neither renderer hangs a split PIECE's name outside its square, so
+  // the control would do nothing. It belongs here once they do.
+  row.append(grip, text, color, del);
   return row;
 }
 
@@ -1788,7 +1784,8 @@ function bulkLabelRow(keys, index) {
     const [r, c] = parseKey(k); const cell = peekCell(r, c);
     return cell && cell.labels[index] && cell.labels[index].float !== false;
   });
-  const flt = floatToggle(allFloat, () => {
+  const anyApplies = keys.some((k) => { const [r, c] = parseKey(k); return floatApplies(peekCell(r, c)); });
+  const flt = !anyApplies ? null : floatToggle(allFloat, () => {
     batch(() => {
       for (const k of keys) {
         const [r, c] = parseKey(k); const cell = getCell(r, c);
@@ -1797,7 +1794,7 @@ function bulkLabelRow(keys, index) {
     });
     renderBulk(keys);
   });
-  row.append(grip, text, color, flt, del);
+  row.append(grip, text, color, ...(flt ? [flt] : []), del);
   return row;
 }
 
@@ -1825,6 +1822,7 @@ function attachLabelDrag(handle, index, kind, cfg) {
   let armed = null;
 
   const begin = (e, rows) => {
+    if (deferred) handle.dataset.dragging = '1';
     handle.setPointerCapture(e.pointerId);
     drag = { rows, boxes: rows.map((el) => el.getBoundingClientRect()), target: index };
     rows[index].classList.add(kind === 'color' ? 'erow--dragging-color' : 'erow--dragging');
@@ -1859,9 +1857,13 @@ function attachLabelDrag(handle, index, kind, cfg) {
   const finish = () => {
     armed = null;
     if (!drag) return;
-    // A swatch that was dragged must not also open its picker on the click that ends
-    // the drag.
-    if (deferred) handle.dataset.dragged = '1';
+    // A swatch that was dragged must not also open its picker, or commit its value, on
+    // the click and blur that end the drag.
+    if (deferred) {
+      handle.dataset.dragged = '1';
+      handle.dataset.dragging = '0';
+      setTimeout(() => { handle.dataset.dragged = '0'; }, 0);
+    }
     const to = drag.target;
     drag.rows.forEach((el) =>
       el.classList.remove('erow--dragging', 'erow--dragging-color', 'erow--drop'));
@@ -1984,14 +1986,17 @@ function labelRow(line, index) {
   // The colour now drags from its own swatch, which frees the second grip to be the
   // per-line Float toggle.
   attachLabelDrag(color, index, 'color', { deferred: true });
-  const flt = floatToggle(line.float !== false, () => {
-    const cell = getCell(current.r, current.c);
-    cell.labels[index].float = cell.labels[index].float === false;
-    updateCell(current.r, current.c, {});
-    render(peekCell(current.r, current.c));
-  });
+  // Only offered where it can do something: a square that can actually shrink.
+  const flt = floatApplies(peekCell(current.r, current.c))
+    ? floatToggle(line.float !== false, () => {
+        const cell = getCell(current.r, current.c);
+        cell.labels[index].float = cell.labels[index].float === false;
+        updateCell(current.r, current.c, {});
+        render(peekCell(current.r, current.c));
+      })
+    : null;
 
-  row.append(grip, text, color, flt, del);
+  row.append(grip, text, color, ...(flt ? [flt] : []), del);
   return row;
 }
 
@@ -2015,12 +2020,22 @@ function colorRow(label, value, onChange) {
  *  the value already shown, so we also apply on blur — that lets the user keep
  *  the same color without having to change to another and back. */
 function bindColorInput(input, apply) {
-  input.addEventListener('input', apply);
-  input.addEventListener('change', apply);
-  input.addEventListener('blur', apply);
+  // A swatch that also carries the colour DRAG must not commit its own value during
+  // one. `blur` in particular fires as the drag ends and would write the dragged-from
+  // colour straight back over the line the reorder just gave it.
+  const guarded = (e) => { if (colorInputBusy(input)) return; apply(e); };
+  input.addEventListener('input', guarded);
+  input.addEventListener('change', guarded);
+  input.addEventListener('blur', guarded);
   // Swap the browser's un-themed color dialog for the app's own popover. The
   // native input stays the value holder, so these listeners keep firing.
   if (typeof enhanceColorInput === 'function') enhanceColorInput(input);
+}
+
+/** True while a colour swatch is being dragged, or immediately after — the window in
+ *  which its own listeners (and the colour popover) must stand down. */
+function colorInputBusy(input) {
+  return input.dataset.dragging === '1' || input.dataset.dragged === '1';
 }
 
 function weightRow(label, value, onChange) {

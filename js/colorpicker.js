@@ -123,6 +123,9 @@ function enhanceColorInput(input) {
   input.dataset.cpick = '1';
   const open = (e) => {
     if (input.disabled) return;
+    // The swatch doubles as the colour's drag handle; a drag must not end in the
+    // picker opening (see colorInputBusy in js/editor.js).
+    if (input.dataset.dragging === '1' || input.dataset.dragged === '1') { e.preventDefault(); return; }
     e.preventDefault();   // cancels the input's activation → the OS picker never shows
     openColorPopover(input, input.value, (hex, commit) => {
       setColorInput(input, hex);
