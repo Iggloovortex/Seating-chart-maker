@@ -239,6 +239,12 @@ and push it; don't stack new work directly on `main`.
   posts exactly a wall thick and its slim shaft half of that, so a rail tucks
   inside a wall's footprint. The editing grid keeps railings at full weight,
   where they have room to read.
+  **A wall CROPS to a thinned row or column, it does not shrink into it.** `u` in
+  `wallSegment` — the unit every wall measure is struck from (thickness, outline,
+  bevel, the lot) — is a FULL square (`layoutUnit()`), not the square beside it. Taking
+  it from the shrunken cell scaled the whole bar down, so a wall crossing a 0.35 row
+  drew a third as thick as its neighbours and read as a different object. Only the
+  bar's LENGTH (`a0..a1`) follows the cell, which is the cropping.
   Colours are chart-wide (walls are not individually selectable) and serialized
   with the other defaults. The UNIVERSAL pair — `wallFill` / `wallBorder`, used
   by wall, hollow and window — is the 4th section of the toolbar's Default

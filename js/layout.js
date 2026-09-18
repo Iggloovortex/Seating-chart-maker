@@ -1,10 +1,11 @@
 // layout.js — the geometry rules shared by the canvas output and the grid's
 // "true sizes" preview, so the two can never drift apart.
 //
-// Desks, chairs and seats always claim one full unit. Only EMPTY squares take
-// their row/column weight. That lets a single square be thinned into a walkway
-// without the seats around it shrinking too. (A chair keeps its full square and
-// draws a small piece of furniture inside it — see js/export.js.)
+// A DESK claims one full unit — it is all text, with no piece to shrink around.
+// Empty squares, and squares holding a special icon, take their row/column weight,
+// which is what lets a row be thinned into a walkway. A square keeping a name INSIDE
+// only thins as far as that name needs (floorUnits); one whose name floats thins all
+// the way and hangs the name outside (see hangingLabelBox in js/export.js).
 
 
 /** Bounding box of a set of "r,c" keys. */
@@ -76,14 +77,21 @@ function mergePlan(merge) {
 function wallSegment(o, r, c, rectOf, gap = 0) {
   const { rows, cols } = state.grid;
   const g = gap / 2;
+  // `u` is every wall measure's unit — thickness, outline, bevel, the lot. It is a FULL
+  // square, not this square: a wall beside a thinned walkway is the same wall as one
+  // beside a full row, just a shorter piece of it. Taking it from the shrunken cell
+  // scaled the whole bar down, so a wall along a 0.35 row drew a third as thick as its
+  // neighbours and read as a different object. The bar's LENGTH still follows the cell,
+  // which is the cropping.
+  const wallUnit = (cell) => layoutUnit() || Math.min(cell.w, cell.h);
   if (o === 'h') {
     const cell = r < rows ? rectOf(r, c) : rectOf(rows - 1, c);
     const y = (r < rows ? cell.y : cell.y + cell.h) + (r < rows ? -g : g);
-    return { o, cross: y, a0: cell.x - g, a1: cell.x + cell.w + g, u: Math.min(cell.w, cell.h) };
+    return { o, cross: y, a0: cell.x - g, a1: cell.x + cell.w + g, u: wallUnit(cell) };
   }
   const cell = c < cols ? rectOf(r, c) : rectOf(r, cols - 1);
   const x = (c < cols ? cell.x : cell.x + cell.w) + (c < cols ? -g : g);
-  return { o, cross: x, a0: cell.y - g, a1: cell.y + cell.h + g, u: Math.min(cell.w, cell.h) };
+  return { o, cross: x, a0: cell.y - g, a1: cell.y + cell.h + g, u: wallUnit(cell) };
 }
 
 // Wall proportions, measured from the reference SVGs (where a bar spans one cell
