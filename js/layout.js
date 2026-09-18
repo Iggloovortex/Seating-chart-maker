@@ -393,20 +393,20 @@ function layoutRules() {
   // up: the empty spaces beside it shrank while it did not, leaving the row ragged.
   // A square with labels still claims a full unit, because the text is what needs
   // the space.
-  const sizedByWeight = (r, c) => {
-    if (!isEnabled(r, c)) return true;
+  // Any special icon takes its row/column size. An ordinary desk still claims a full
+  // unit — it is all text, and there is no piece to shrink around.
+  const sizedByWeight = (r, c) => isEnabled(r, c) ? !!furnitureKind(peekCell(r, c)) : true;
+
+  // ...but a square keeping its names INSIDE only thins as far as those names need, so
+  // "Keep inside" extends the row to fit the text instead of forcing a full square.
+  const floorUnits = (r, c) => {
+    if (!isEnabled(r, c)) return 0;
     const cell = peekCell(r, c);
-    if (!furnitureKind(cell)) return false;
-    // With the labels kept inside, the text is what needs the room, so the square
-    // stays full. Once every line is marked to FLOAT it has somewhere else to go,
-    // and the square is free to shrink around the icon.
-    const lines = (cell.labels || []).filter((l) => l.text && l.text.trim());
-    if (!lines.length) return true;
-    if (!canFloatLabels(cell)) return false;
-    return !!(state.config && state.config.floatLabels) && lines.every((l) => l.float !== false);
+    if (!furnitureKind(cell)) return 0;
+    return labelRoomUnits(cell, true);
   };
-  const wUnits = (r, c) => (sizedByWeight(r, c) ? colWeight(c) : 1); // cell width in units
-  const hUnits = (r, c) => (sizedByWeight(r, c) ? rowWeight(r) : 1); // cell height in units
+  const wUnits = (r, c) => (sizedByWeight(r, c) ? Math.max(colWeight(c), floorUnits(r, c)) : 1);
+  const hUnits = (r, c) => (sizedByWeight(r, c) ? Math.max(rowWeight(r), floorUnits(r, c)) : 1);
 
   // A square is SHRUNK when it takes a weight and that weight is under a full unit —
   // answerable without the rects, which is what the reserve below needs.
@@ -449,6 +449,18 @@ function floatsOutside(line, shrunk) {
 
 /** How much room a hung name needs below its square, in units. */
 const FLOAT_BAND = 0.5;
+
+/** A label line's height as a fraction of a full square — BASE_LINE in js/export.js. */
+const LABEL_LINE_UNITS = 0.18;
+
+/** How much of a square a KEPT-INSIDE name needs: the piece's own half plus its stack.
+ *  A square that is not floating its names shrinks only to this, rather than jumping
+ *  back to a full unit — the row extends just far enough to hold the text. */
+function labelRoomUnits(cell, shrunk) {
+  const kept = (cell.labels || []).filter((l) => l.text && l.text.trim() && !floatsOutside(l, shrunk));
+  if (!kept.length) return 0;
+  return Math.min(1, 0.5 + kept.length * LABEL_LINE_UNITS + 0.06);
+}
 
 /** A server RACK lays each of its names in its own slab, so it has no name to float
  *  and no half to free — it is the one special icon floating does not apply to. */

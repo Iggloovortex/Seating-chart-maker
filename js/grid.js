@@ -784,11 +784,8 @@ function placeChairTile(tile, rot, rect) {
   // Measure against the box the ELEMENT will have, not the layout rect: buildCell
   // insets every square by a gap, and taking percentages of the un-inset rect made
   // the two axes disagree, so the "square" came out oblong.
-  const w = rect ? Math.max(2, rect.w - CELL_GAP) : 0;
-  const h = rect ? Math.max(2, rect.h - CELL_GAP) : 0;
-  const side = rect ? chairSize({ w, h }, Math.max(2, layoutUnit() - CELL_GAP)) : 0;
-  if (side > 0) {
-    const pw = (side / w) * 100, ph = (side / h) * 100;
+  if (rect) {
+    const { pw, ph } = chairPct(rect);
     tile.style.width = `${pw}%`;
     tile.style.height = `${ph}%`;
     tile.style.left = dc < 0 ? '0' : dc > 0 ? `${100 - pw}%` : `${(100 - pw) / 2}%`;
@@ -803,31 +800,63 @@ function placeChairTile(tile, rot, rect) {
  *  top/bottom band for a vertical facing (hugging the tile), or the far half
  *  (full height) beside a side-facing chair, whose label reads vertically once
  *  the element is turned by the facing. The DOM twin of the output's chairLabelBox. */
-function placeChairLabels(el, rot) {
+function placeChairLabels(el, rot, rect) {
   const [dr, dc] = serverHalf(rot);
-  if (dr < 0) { el.style.left = '0'; el.style.width = '100%'; el.style.top = '50%'; el.style.height = '50%'; el.style.justifyContent = 'flex-start'; }
-  else if (dr > 0) { el.style.left = '0'; el.style.width = '100%'; el.style.top = '0'; el.style.height = '50%'; el.style.justifyContent = 'flex-end'; }
+  // Start where the PIECE ends, not at an assumed half: the chair is capped by its
+  // square now, so on a thinned square it is more than half and a band pinned to the
+  // half would run underneath it. The export's chairLabelBox measures the same way.
+  const p = chairPct(rect);
+  if (dr < 0) { el.style.left = '0'; el.style.width = '100%'; el.style.top = `${p.ph}%`; el.style.height = `${100 - p.ph}%`; el.style.justifyContent = 'flex-start'; }
+  else if (dr > 0) { el.style.left = '0'; el.style.width = '100%'; el.style.top = '0'; el.style.height = `${100 - p.ph}%`; el.style.justifyContent = 'flex-end'; }
   else { placeVertFurnitureLabels(el, dc); }
 }
 
-/** Hang a square's names in a band directly BELOW it, upright and centred — the grid
- *  twin of the export's hangingLabelBox. The square is too small to hold them, so they
- *  live in the space under it (the cell lifts its overflow via .cell--floatlabel). */
-function hangLabelsBelow(cellEl, labelsEl, data, rot) {
+/** The share of its square a chair takes, as percentages — the grid's read of
+ *  chairSize, shared by the tile, its labels and a floated name. */
+function chairPct(rect) {
+  if (!rect) return { pw: 50, ph: 50 };
+  const w = Math.max(2, rect.w - CELL_GAP), h = Math.max(2, rect.h - CELL_GAP);
+  const side = chairSize({ w, h }, Math.max(2, layoutUnit() - CELL_GAP));
+  return { pw: (side / w) * 100, ph: (side / h) * 100 };
+}
+
+/** Hang a square's names OUTSIDE it, in the same band an ordinary label gets: opposite
+ *  the piece, on the side the facing implies, centred on the square across the other
+ *  axis. The grid twin of the export's hangingLabelBox — it is the standard placement
+ *  reaching past the square's edge, not a placement of its own. */
+function hangLabelsBelow(cellEl, labelsEl, data, rot, rect) {
   labelsEl.classList.add('cell__furniturelabels--hang');
-  // It turns with its square like any other label, and it sits on the PAGE rather than
-  // on the square's fill — so its ink is contrasted against the surface, not the fill
-  // (the export's labelColorOnBg makes the same choice).
-  labelsEl.style.transform = `translateX(-50%) rotate(${rot || 0}deg)`;
+  const [dr, dc] = serverHalf(rot);
+  if (dc) {
+    // Side facing: the name reads DOWN the square, so it keeps the standard far half
+    // beside the piece and grows its run past the top and bottom.
+    const { pw } = chairPct(rect);
+    labelsEl.style.width = `${100 - pw}%`;
+    labelsEl.style.height = 'max(180%, 96px)';
+    labelsEl.style.top = '50%';
+    labelsEl.style.left = dc < 0 ? `${pw}%` : '0';
+    labelsEl.style.transform = `translateY(-50%) rotate(${rot || 0}deg)`;
+  } else {
+    // Up/down facing: the depth a stack needs is what the thinned square lost, so the
+    // band steps just outside that edge, centred on the square.
+    labelsEl.style.width = 'max(180%, 96px)';
+    labelsEl.style.height = '100%';
+    labelsEl.style.left = '50%';
+    // From the piece's edge, so a floated name sits the same distance from its icon as
+    // one kept inside (the export's hangingLabelBox starts at the same place).
+    const { ph } = chairPct(rect);
+    labelsEl.style.top = dr > 0 ? 'auto' : `${ph}%`;
+    labelsEl.style.bottom = dr > 0 ? `${ph}%` : 'auto';
+    labelsEl.style.transform = `translateX(-50%) rotate(${rot || 0}deg)`;
+  }
+  labelsEl.style.justifyContent = dr > 0 ? 'flex-end' : 'flex-start';
+  labelsEl.style.alignItems = 'center';
+  // It sits on the PAGE, not on the square's fill, so its ink is contrasted against the
+  // surface (the export's labelColorOnBg makes the same choice).
   const lines = (data.labels || []).filter((l) => l.text);
   labelsEl.querySelectorAll('.cell__label').forEach((span, i) => {
     if (lines[i]) span.style.color = surfaceLabelColor(lines[i].color);
   });
-  labelsEl.style.left = '50%';
-  labelsEl.style.top = '100%';
-  labelsEl.style.width = 'max(180%, 96px)';
-  labelsEl.style.height = 'auto';
-  labelsEl.style.justifyContent = 'center';
 }
 
 /** A turned (side-facing) furniture label: a full-height strip whose centre — the
@@ -1363,10 +1392,10 @@ function buildCell(r, c, rects) {
         // of sharing the inside of a square that has no room for it. The export's
         // hangingLabelBox is the same placement.
         if (floatingHere) {
-          hangLabelsBelow(el, labelsEl, data, rot);
+          hangLabelsBelow(el, labelsEl, data, rot, rects && rects.get(key));
         } else {
           if (furniture === 'server') placeServerLabels(labelsEl, rot, rects && rects.get(key));
-          else placeChairLabels(labelsEl, rot);
+          else placeChairLabels(labelsEl, rot, rects && rects.get(key));
           labelsEl.style.transform = `rotate(${rot}deg)`; // labels turn with the piece
         }
         el.appendChild(labelsEl);

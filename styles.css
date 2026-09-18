@@ -1107,9 +1107,11 @@ body {
    sit above its neighbours so the name is not painted over. */
 .cell--floatlabel { overflow: visible; z-index: 4; }
 .cell__furniturelabels--hang {
-  /* transform is set inline (it carries the square's facing too). */
-  transform-origin: 50% 0;
-  margin-top: 2px;
+  /* Position and transform are set inline: the band sits on the side the facing
+     implies and carries the square's rotation, like any other label. */
+  position: absolute;
+  display: flex;
+  flex-direction: column;
   pointer-events: none;
   white-space: nowrap;
 }

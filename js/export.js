@@ -912,23 +912,51 @@ function chairGeometry(rectOf, item) {
   const floating = anyLabelFloats(data, shrunk);
   return {
     cx, cy, w: size, h: size,
-    labelBox: floating ? hangingLabelBox(rect) : chairLabelBox(rect, dr, dc),
+    labelBox: floating ? hangingLabelBox(rect, dr, dc, size) : chairLabelBox(rect, dr, dc, size),
     full: floating ? layoutUnit() : Math.min(rect.w, rect.h),
     floating,
   };
 }
 
-/** The band a floating name is drawn in: directly under the square, a half-unit deep
- *  so a stack of lines has room, hugging the square's underside. */
-function hangingLabelBox(rect) {
-  // Wider than the square it belongs to: a hung name has open space either side, so
-  // clamping it to a thin square's width would truncate a name that plainly fits.
-  // Generous on BOTH axes: a name that turns with its square runs along the box's
-  // HEIGHT, and drawLabelBox truncates against whichever axis the text runs along, so
-  // a shallow box clipped a turned name to a couple of letters. The 'top' anchor keeps
-  // the stack hugging the square's underside however deep the box is.
-  const run = Math.max(rect.w, layoutUnit() * 1.8);
-  return { x: rect.x + rect.w / 2 - run / 2, y: rect.y + rect.h, w: run, h: run, anchor: 'top' };
+/** The band a floating name is drawn in: the SAME band a label always gets, grown past
+ *  the square's edge only on the axis the square is short of. A side-facing name reads
+ *  down the square, so it keeps the standard far HALF beside the piece and grows its
+ *  run past the top and bottom; an up/down facing name needs depth the thinned square
+ *  no longer has, so it steps just outside that edge. Either way it stays centred on
+ *  the square and anchored to the edge nearest the piece, exactly as chairLabelBox
+ *  places it. */
+function hangingLabelBox(rect, dr = -1, dc = 0, size = null) {
+  const unit = layoutUnit() || Math.max(rect.w, rect.h);
+  const depth = unit * 0.5;                            // room a stack of lines needs
+  const s = size != null ? size : Math.min(rect.w, rect.h);
+  const midX = rect.x + rect.w / 2, midY = rect.y + rect.h / 2;
+  // It starts at the PIECE's edge, exactly where the standard band starts, so a floated
+  // name sits the same distance from its icon as one kept inside. Only its far edge
+  // moves, out past the square, to give the stack the room the square no longer has.
+  if (dc) {
+    const run = Math.max(rect.h, unit * 1.8);
+    return dc < 0
+      ? { x: rect.x + s,                y: midY - run / 2, w: depth, h: run, anchor: 'left' }
+      : { x: rect.x + rect.w - s - depth, y: midY - run / 2, w: depth, h: run, anchor: 'right' };
+  }
+  const run = Math.max(rect.w, unit * 1.8);
+  return dr > 0
+    ? { x: midX - run / 2, y: rect.y + rect.h - s - depth, w: run, h: depth, anchor: 'bottom' }
+    : { x: midX - run / 2, y: rect.y + s,                  w: run, h: depth, anchor: 'top' };
+}
+
+/** The facing step a label placement reads, collapsed the way the furniture does. */
+function facingStepOf(data) {
+  let [dr, dc] = FACING_STEP[data.rotation || 0] || FACING_STEP[0];
+  if (dr && dc) dc = 0;
+  return [dr, dc];
+}
+
+/** The facing step a label placement reads, collapsed the way the furniture does. */
+function facingStepOf(data) {
+  let [dr, dc] = FACING_STEP[data.rotation || 0] || FACING_STEP[0];
+  if (dr && dc) dc = 0;
+  return [dr, dc];
 }
 
 /** How deep a server's slab is along the axis it faces: half a full square, capped by
@@ -953,11 +981,15 @@ function chairSize(rect, unitOverride) {
 /** Where a chair's labels are drawn, opposite the tile: a full-width top/bottom
  *  half hugging a vertical-facing chair, or the far half (full height) beside a
  *  side-facing chair, whose label reads vertically once turned. */
-function chairLabelBox(rect, dr, dc) {
-  if (dr < 0) return { x: rect.x, y: rect.y + rect.h / 2, w: rect.w, h: rect.h / 2, anchor: 'top' };    // tile top → hug just below
-  if (dr > 0) return { x: rect.x, y: rect.y, w: rect.w, h: rect.h / 2, anchor: 'bottom' };              // tile bottom → hug just above
-  if (dc < 0) return { x: rect.x + rect.w / 2, y: rect.y, w: rect.w / 2, h: rect.h, anchor: 'left' };   // faces left → right half, hug left
-  return { x: rect.x, y: rect.y, w: rect.w / 2, h: rect.h, anchor: 'right' };                            // faces right → left half, hug right
+function chairLabelBox(rect, dr, dc, size) {
+  // Measured off where the PIECE actually ends, not off an assumed half: the piece is
+  // capped by its square now, so on a thinned square it is bigger than half and a band
+  // starting at the half would run underneath it.
+  const s = size != null ? size : Math.min(rect.w, rect.h) / 2;
+  if (dr < 0) return { x: rect.x, y: rect.y + s, w: rect.w, h: Math.max(0, rect.h - s), anchor: 'top' };
+  if (dr > 0) return { x: rect.x, y: rect.y, w: rect.w, h: Math.max(0, rect.h - s), anchor: 'bottom' };
+  if (dc < 0) return { x: rect.x + s, y: rect.y, w: Math.max(0, rect.w - s), h: rect.h, anchor: 'left' };
+  return { x: rect.x, y: rect.y, w: Math.max(0, rect.w - s), h: rect.h, anchor: 'right' };
 }
 
 /** A chair: standalone furniture drawn at a fixed fraction of its full-size
@@ -988,7 +1020,7 @@ function drawStairs(ctx, item, imgCache, plan, subIndex, splitRows, splitCols, h
   // Stairs fill their square and carry no label box of their own, so a floating name
   // is the only name they can show — hung below, like a chair's.
   if (hanging && anyLabelFloats(item.data, rectIsShrunk(rect))) {
-    const box = hangingLabelBox(rect);
+    const box = hangingLabelBox(rect, ...facingStepOf(item.data), Math.min(rect.w, rect.h));
     hanging.push(() => drawLabelBox(ctx, box, item.data, plan, layoutUnit(), item.data.rotation || 0));
   }
   const { x, y, w, h } = rect;
@@ -1087,7 +1119,7 @@ function serverGeometry(rectOf, { r, c, data }) {
   const floating = anyLabelFloats(data, shrunk);
   if (floating) {
     box = { x: rect.x, y: rect.y, w: rect.w, h: rect.h };
-    labelBox = hangingLabelBox(rect);
+    labelBox = hangingLabelBox(rect, dr, dc, half(dr ? rect.h : rect.w));
   }
   return {
     rect, box, labelBox,
