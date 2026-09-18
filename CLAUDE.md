@@ -361,9 +361,13 @@ and push it; don't stack new work directly on `main`.
   `floatsOutside` / `anyLabelFloats` / `canFloatLabels` / `rectIsShrunk` / `layoutUnit`
   / `FLOAT_BAND` (js/layout.js) are the one decision both renderers read: a line hangs
   out only when the setting allows it, the line is not opted out, AND the square really
-  has no room. `sizedByWeight` lets a labelled special square shrink once every line
-  floats. A server RACK is excluded (`canFloatLabels`) — its names live in its own
-  slabs.
+  has no room. `sizedByWeight` is now simply "is it a special icon" — any of them takes
+  its row/column size. **Keeping a name inside does not force a full square:**
+  `floorUnits` / `labelRoomUnits` give the square a FLOOR of the room its kept-inside
+  text needs (the piece's half plus its stack), so the row extends just far enough to
+  hold the text — one line thins to 0.74 of a square, two to 0.92, rather than jumping
+  back to 1. A server RACK is excluded from floating (`canFloatLabels`) — its names live
+  in its own slabs.
   **Overlap or hold the space** (`config.reserveFloatSpace`, the second toggle): by
   default a hung name lies over whatever is beneath it, which is wanted — the layout is
   spaced by hand. Turned on, `reserveUnits` makes the column's WALK advance by
@@ -374,12 +378,21 @@ and push it; don't stack new work directly on `main`.
   the draw and painted LAST (step 6 of renderToCanvas) so the next row cannot bury it;
   `hangLabelsBelow` + `.cell--floatlabel` (grid), which lifts the cell's
   `overflow: hidden` and raises it above its neighbours.
-  **A hung name is still a LABEL and keeps every label rule.** It turns with its
-  square's facing (forcing it upright ignored the facing), and it is contrasted against
-  the PAGE, not against the square's fill, because that is where it sits —
-  `labelColorOnBg` in the export, `surfaceLabelColor` in the grid. Its box is generous
-  on BOTH axes: `drawLabelBox` truncates against whichever axis the text RUNS along, so
-  a box only as deep as the band clipped a turned name to a couple of letters.
+  **A hung name is the STANDARD label band reaching past the square's edge** — not a
+  placement of its own. `hangingLabelBox` takes the same facing step `chairLabelBox`
+  does, starts at the same place (the PIECE's edge, so a floated name sits the same
+  distance from its icon as one kept inside — measured 4.3 vs 4.9px) and keeps the same
+  edge anchor, so it stays centred on its square. Only its far edge moves outward, and
+  only on the axis the square is short of: a side-facing name keeps the standard far
+  half beside the piece and grows its run past the top and bottom; an up/down facing one
+  steps just outside that edge. `drawLabelBox` truncates against whichever axis the text
+  RUNS along, which is why the RUN has to grow rather than the depth.
+  **Both bands measure off the PIECE, not an assumed half** (`chairLabelBox`'s `size`,
+  `chairPct` in the grid): the piece is capped by its square now, so on a thinned square
+  it is MORE than half and a band pinned to the half ran underneath it.
+  A hung name also turns with its square's facing, and is contrasted against the PAGE
+  rather than the square's fill, because that is where it sits — `labelColorOnBg` in the
+  export, `surfaceLabelColor` in the grid.
   In the editor the colour drags from its own SWATCH (`attachLabelDrag`'s `deferred`
   mode, which waits for travel so the picker still opens) and the freed grip is the
   per-line **Float** toggle (`floatToggle`); the printer row drops the grip entirely,
