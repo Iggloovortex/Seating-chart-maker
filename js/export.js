@@ -870,7 +870,10 @@ function chairInRect(rect, data, rows, cols) {
 function chairGeometry(rectOf, item) {
   const { r, c, data } = item;
   const rect = rectOf(r, c);
-  const size = Math.min(rect.w, rect.h) * CHAIR_SCALE;
+  // A chair is half a FULL square — but never bigger than the square it is in. In a
+  // thinned walkway that means it fills the walkway's depth rather than taking half of
+  // it: it must not shrink further than the row already has.
+  const size = chairSize(rect);
 
   // Sit flush against the edge the chair faces, so it tucks up to the desk or
   // table in that direction instead of floating in the middle of its square. A
@@ -922,6 +925,18 @@ function hangingLabelBox(rect) {
   // clamping it to a thin square's width would truncate a name that plainly fits.
   const w = Math.max(rect.w, layoutUnit() * 1.8);
   return { x: rect.x + rect.w / 2 - w / 2, y: rect.y + rect.h, w, h: layoutUnit() / 2, anchor: 'top' };
+}
+
+/** A chair's side: half a full square, capped by the square it sits in. Squared off
+ *  the SHORT side, so a thinned square gives a smaller chair but never a flattened
+ *  one. Shared by both renderers via layoutUnit(). */
+function chairSize(rect, unitOverride) {
+  // `unitOverride` is what a FULL square measures in the caller's own boxes — the grid
+  // insets every square by a gap the export does not have, so it passes its own figure
+  // and a full-size chair keeps the size it has always had in each renderer.
+  const unit = unitOverride != null ? unitOverride : layoutUnit();
+  const cap = Math.min(rect.w, rect.h);
+  return unit > 0 ? Math.min(unit * CHAIR_SCALE, cap) : cap * CHAIR_SCALE;
 }
 
 /** Where a chair's labels are drawn, opposite the tile: a full-width top/bottom

@@ -379,10 +379,17 @@ and push it; don't stack new work directly on `main`.
   mode, which waits for travel so the picker still opens) and the freed grip is the
   per-line **Float** toggle (`floatToggle`); the printer row drops the grip entirely,
   since its labels draw inside its own overlay.
-  - **Not built:** in a shrunken square the icon still draws at a chair's ½ rather than
-    taking the FULL square height (`chairGeometry` / `renderMergeFurniture`). Stairs
-    tile a whole cell, so a stairs square squashes into a band; excluding stairs, or a
-    per-kind floor, is the fix if that reads badly.
+  **A chair never shrinks further than its square already has** (`chairSize`,
+  js/export.js): half a FULL square, capped by the square it is in. So a chair in a
+  0.35 walkway fills the walkway's depth instead of taking half of it, a mild squeeze
+  (0.7) leaves it untouched, and a full square is exactly as before. `chairSize` takes
+  a `unitOverride` because a full square means different px in each renderer — the grid
+  insets every square by `CELL_GAP` and the export does not, so each passes its own
+  figure and neither's full-size chair changes. The grid also measures the tile against
+  the ELEMENT's box rather than the layout rect (`placeChairTile`): the CSS 50%/50% is
+  half of EACH axis, which on a thinned square is not a square at all but a wide bar.
+  - **Not built:** stairs tile a whole cell, so a stairs square squashes into a band;
+    excluding stairs, or a per-kind floor, is the fix if that reads badly.
 - **2-column labels** for the KVM and Dual Monitor icons — a per-row optional 2nd
   column, activating when any row has 2nd-column content. Touches the label data
   model, editor, both renderers, and TSV. (Scoped, not started.)

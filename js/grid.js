@@ -774,9 +774,27 @@ function buildPrinterOverlay(data, bgFill) {
 /** Position a chair's furniture tile (50% of the square) against the edge it
  *  faces, centred on the other axis — the DOM twin of chairGeometry in the
  *  output. Diagonal facings tuck into the matching corner. */
-function placeChairTile(tile, rot) {
+function placeChairTile(tile, rot, rect) {
   const n = ((Math.round(rot / 45) * 45) % 360 + 360) % 360;
   const [dr, dc] = FACING_STEP[n] || FACING_STEP[0];
+  // The CSS 50%/50% is half of each axis, which on a thinned square is not a square
+  // at all — it flattens into a wide bar. Size it off the SHORT side instead: half a
+  // full square, capped by the square it is in, so a walkway chair fills the walkway's
+  // depth and never shrinks past it. The export's chairSize is the same measure.
+  // Measure against the box the ELEMENT will have, not the layout rect: buildCell
+  // insets every square by a gap, and taking percentages of the un-inset rect made
+  // the two axes disagree, so the "square" came out oblong.
+  const w = rect ? Math.max(2, rect.w - CELL_GAP) : 0;
+  const h = rect ? Math.max(2, rect.h - CELL_GAP) : 0;
+  const side = rect ? chairSize({ w, h }, Math.max(2, layoutUnit() - CELL_GAP)) : 0;
+  if (side > 0) {
+    const pw = (side / w) * 100, ph = (side / h) * 100;
+    tile.style.width = `${pw}%`;
+    tile.style.height = `${ph}%`;
+    tile.style.left = dc < 0 ? '0' : dc > 0 ? `${100 - pw}%` : `${(100 - pw) / 2}%`;
+    tile.style.top = dr < 0 ? '0' : dr > 0 ? `${100 - ph}%` : `${(100 - ph) / 2}%`;
+    return;
+  }
   tile.style.left = dc < 0 ? '0' : dc > 0 ? '50%' : '25%';
   tile.style.top = dr < 0 ? '0' : dr > 0 ? '50%' : '25%';
 }
@@ -1303,7 +1321,7 @@ function buildCell(r, c, rects) {
       tile.style.background = data.fill;
       tile.style.borderColor = data.border;
       if (furniture === 'server') placeServerTile(tile, rot);
-      else placeChairTile(tile, rot);
+      else placeChairTile(tile, rot, rects && rects.get(key));
       tile.appendChild(content);
       el.classList.add('cell--furniturehost');
       el.appendChild(tile);
