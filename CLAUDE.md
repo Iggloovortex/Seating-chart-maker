@@ -119,6 +119,17 @@ and push it; don't stack new work directly on `main`.
   the bar offers follows WHAT is picked: loose pieces get Shape / Centered (choosing
   `submergeKindChoice`) + **Merge**; a picked MERGED piece gets Shape / Centered
   reading and writing that merge's own kind + **Unmerge**.
+  **A piece's text and icon are struck from a whole CELL, then shrunk only as far as
+  the piece requires** — in BOTH renderers. The grid does it in `fitSubcellLabels`
+  (which sizes the icon FIRST, since at its CSS size an icon is a share of the piece's
+  WIDTH and on a wide, short piece measured taller than it will be, squeezing the
+  labels to the 6px floor); the export passes `drawSplit`'s `cellRef` as `drawContent`'s
+  `base`, since sizing off the piece's own short side gave a half-height piece
+  half-height text however much room it needed. `renderMerges` re-runs
+  `fitSubcellLabels` because a DESK split is built there, after the grid's own pass —
+  without it those pieces keep the CSS icon ceiling and the CSS 9px labels.
+  `fitText` truncates against the axis the text runs along (height when turned a
+  quarter), so a turned label is not cut to the box's width.
   Under a table a split shows only its pieces' content overlaid (no piece boxes),
   like any covered square (js/export.js).
 - **Merge — DONE.** Two kinds, from the `#btn-table-merge` menu on a ≥2-square

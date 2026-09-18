@@ -177,6 +177,11 @@ function fitSubcellLabels() {
 
     const w = sc.clientWidth - PAD, h = sc.clientHeight - PAD;
     if (w <= 0 || h <= 0) continue;
+    // Size the icon BEFORE measuring what it leaves for the labels. At its CSS size
+    // an icon is a share of the piece's WIDTH (capped), so on a wide, short piece it
+    // measured taller than the icon will actually be and squeezed the labels to the
+    // 6px floor.
+    sizeSubcellIcon(sc, spans.length);
     const iconEl = sc.querySelector('.cell__icon');
     const iconExtent = iconEl
       ? (vertical ? iconEl.getBoundingClientRect().width : iconEl.getBoundingClientRect().height)
@@ -202,7 +207,6 @@ function fitSubcellLabels() {
       s.style.fontSize = `${px}px`;
       s.style.maxWidth = vertical ? '' : `${Math.max(0, availLen)}px`;
     }
-    sizeSubcellIcon(sc, spans.length);
   }
   // A piece with an icon but no labels still needs the icon sized to the piece.
   for (const sc of chart.querySelectorAll('.subcell')) {
@@ -1792,9 +1796,12 @@ function renderMerges() {
       }
     }
   }
-  // A desk split is built here, after the grid's own pass, so its unit pieces are
-  // squared off now that their blocks have a size.
+  // A desk split is BUILT here, after the grid's own fitting pass has already run —
+  // so its pieces have to be squared off and fitted now, or their icons keep the CSS
+  // ceiling and their labels the CSS 9px while an ordinary split square's are sized
+  // to the piece.
   sizeUnitSubmerges();
+  fitSubcellLabels();
 }
 
 /** One 'unit' merge: a single square (one cell in size) centred in the block, so

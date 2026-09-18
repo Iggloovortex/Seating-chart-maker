@@ -668,6 +668,8 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan, span = { rows: 1, cols: 1 })
   const rect = rectOf(sp.r, sp.c);
   const { rows, cols } = sp.data.split;
   const cw = rect.w / cols, ch = rect.h / rows;
+  // One CELL's short side — the reference a piece's text and icon are struck from.
+  const cellRef = Math.min(rect.w / Math.max(1, span.cols || 1), rect.h / Math.max(1, span.rows || 1));
   const hidden = new Set();
   const rectMerges = [];
   const polyMerges = [];
@@ -723,8 +725,11 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan, span = { rows: 1, cols: 1 })
     ctx.strokeStyle = sub.border || '#2f6feb';
     ctx.lineWidth = Math.max(1, Math.min(bw, bh) * 0.04);
     ctx.strokeRect(box.x, box.y, bw, bh);
+    // Struck from a CELL, not the piece: `span` says how many cells the split is
+    // drawn across, so this is one cell however the split got there (a desk split
+    // covers the whole merge). drawContent then shrinks to fit the piece.
     drawContent(ctx, box.x + bw / 2, box.y + bh / 2, bw, bh, sub, imgCache, false, plan,
-                undefined, 0, sub.fill || '#dbe7ff');
+                undefined, 0, sub.fill || '#dbe7ff', cellRef);
     if (hasPrinter(sub) && isPrinterSecondary(sub)) drawPrinterOverlay(ctx, box.x, box.y, bw, bh, sub, imgCache);
   }
   for (const sm of polyMerges) drawSubmerge(ctx, rect, sp.data, sm, cw, ch, imgCache, plan);
@@ -1219,7 +1224,12 @@ function coveredGeometry(rectOf, { r, c }, footprints) {
 
 /** Draw a seat's icon (above) and label lines (each its own color), rotated.
  *  When `forceChair` and the seat is otherwise empty, draw a chair icon. */
-function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, extraRot = 0, labelBg = null) {
+/** `base` is the reference size the icon and text are struck from, when it should
+ *  NOT be the box being drawn into: a split piece starts at a whole square's sizes
+ *  and only shrinks as far as the piece requires, which is the rule the grid's
+ *  fitSubcellLabels follows. Without it a half-height piece got half-height text
+ *  however much room the text actually needed. */
+function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, extraRot = 0, labelBg = null, base = null) {
   const labels = labelsOf(data);
   let iconId = data.icon;
   let printerAsIcon = false;
@@ -1232,13 +1242,37 @@ function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, 
   const s = Math.min(w, h);
   // Labelled squares share the chart-wide sizes; an icon on its own has the
   // whole square to itself and keeps its generous size.
-  const iconSize = s * (labels.length ? plan.iconFrac : 0.6);
-  const lineH = s * plan.lineFrac;
-  const totalH = (hasIcon ? iconSize : 0) + labels.length * lineH;
+  const ref = base || s;
+  let iconSize = ref * (labels.length ? plan.iconFrac : 0.6);
+  let lineH = ref * plan.lineFrac;
+  let totalH = (hasIcon ? iconSize : 0) + labels.length * lineH;
 
   // Keep the stack inside `clip` when one is given (a table's drawn shape). The
   // stack runs down the square, or across it once rotated a quarter turn.
   const rot = (data.rotation || 0) + extraRot;   // a table's angle carries through
+
+  // A quarter-turned label reads along the box's HEIGHT and its lines stack across
+  // the WIDTH; upright it is the other way round.
+  const quarter = (((Math.round(rot / 90) * 90) % 360) + 360) % 360;
+  const vertical = quarter === 90 || quarter === 270;
+
+  if (base) {
+    // Struck from a whole square; now shrink only as far as THIS box requires. The
+    // stack runs down the box, or across it once turned a quarter — the same
+    // rotation-aware fit the grid does per piece.
+    const availStack = (vertical ? w : h) * 0.94;
+    const availLen = (vertical ? h : w) * 0.94;
+    let k = totalH > availStack && totalH > 0 ? availStack / totalH : 1;
+    if (labels.length) {
+      ctx.save();
+      ctx.font = contentFont(lineH * k * FONT_OF_LINE);
+      let widest = 0;
+      for (const line of labels) widest = Math.max(widest, ctx.measureText(line.text).width);
+      ctx.restore();
+      if (widest > availLen) k *= availLen / widest;
+    }
+    if (k < 1) { iconSize *= k; lineH *= k; totalH *= k; }
+  }
   if (clip) {
     const half = totalH / 2;
     if (rot === 90 || rot === 270) cx = within(cx, clip.left + half, clip.right - half);
@@ -1269,7 +1303,9 @@ function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, 
     // On a filled square (desk/seat) keep the label legible against its own fill;
     // a table-covered square passes no bg and keeps its chosen colour.
     ctx.fillStyle = labelBg ? contrastLabelColor(line.color, labelBg) : (line.color || '#1f2933');
-    ctx.fillText(fitText(ctx, line.text, w * LABEL_WIDTH), 0, cursorY + lineH / 2);
+    // Truncate against the axis the text actually runs along, not always the width —
+    // a turned label has the box's height to fill.
+    ctx.fillText(fitText(ctx, line.text, (vertical ? h : w) * LABEL_WIDTH), 0, cursorY + lineH / 2);
     cursorY += lineH;
   }
 
