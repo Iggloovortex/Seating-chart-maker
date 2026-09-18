@@ -1162,13 +1162,15 @@ body {
 .piece-shape rect { pointer-events: auto; }
 .piece-btn__on { position: absolute; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 2px; pointer-events: auto; }
-.piece-btn--unit { pointer-events: auto; }
+
 /* Gives its row a tile's height, in the tiles' own units, so a row covered end to end
    by a merge still lines up with a plain one. It shares its cell with whatever is
    there and is never seen or hit. */
 .piece-rowspacer { aspect-ratio: 1; width: 100%; visibility: hidden; pointer-events: none; }
-/* A Centered piece merge: one square in the middle of its block, as on the chart. */
-.piece-btn--unit { aspect-ratio: 1; place-self: center; }
+/* A Centered piece merge is drawn in the shape SVG now — its centred square and the
+   footprint under it — so the button is just the block, like a Shape merge's. Sizing
+   it square here instead forced the whole ROW square (a 1x3 block came out 388x388). */
+.piece-btn--unit { aspect-ratio: auto; }
 .piece-btn__icon { width: 40%; max-width: 26px; height: auto; aspect-ratio: 1; }
 .piece-btn__cap {
   max-width: 100%;

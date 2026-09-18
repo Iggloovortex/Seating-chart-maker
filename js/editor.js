@@ -888,21 +888,14 @@ function piecesGroup(cell, rerender) {
         // A Centered merge is ONE square in the middle of its block, here as on the
         // chart. The tiles are square, so the block's short side is whichever span is
         // smaller: pin that side and let the 1:1 ratio give the other.
-        if (unit) {
-          btn.classList.add('piece-btn--unit');
-          if (rect.rowSpan <= rect.colSpan) { btn.style.height = '100%'; btn.style.width = 'auto'; }
-          else { btn.style.width = '100%'; btn.style.height = 'auto'; }
-        } else {
-          // A Shape merge takes its EXACT shape here too, traced over the block the
-          // way buildSubmergeOverlay traces it on the chart. A plain button filling
-          // the block is the bounding box, so an L or T covered the free pieces in
-          // its own notch — the list stopped matching the chart, and those pieces
-          // could not be seen or clicked.
-          btn.classList.add('piece-btn--poly');
-          btn.style.width = '100%';
-          btn.style.height = '100%';
-          paintPieceShape(btn, cell, sm, rect, sub, submergeSelection.has(i));
-        }
+        // BOTH kinds are drawn, not boxed. A plain button filling the block IS the
+        // bounding box, so an L or T covered the free pieces in its own notch — they
+        // could be neither seen nor clicked, and the list stopped matching the chart.
+        btn.classList.add('piece-btn--poly');
+        if (unit) btn.classList.add('piece-btn--unit');
+        btn.style.width = '100%';
+        btn.style.height = '100%';
+        paintPieceShape(btn, cell, sm, rect, sub, submergeSelection.has(i));
       }
       if (submergeSelection.has(i)) btn.classList.add('piece-btn--sel');
       // The same mouse language as the chart: a plain click fills or empties the
@@ -1118,15 +1111,25 @@ function attachPieceLongPress(btn, run) {
 
 /** One button in the piece list: a preview of the sub-cell's fill/border with its
  *  label/icon, opening that piece's editor. */
-/** Trace a Shape (poly) merge over its bounding box in the Pieces list: a fill per
- *  member piece and an outline on the edges that face out of the merge — the pane's
- *  twin of buildSubmergeOverlay, so the list and the chart show the same object. The
- *  button keeps the bounding box (that is its grid area) but paints only the shape,
- *  and only the shape answers the pointer, so a free piece in an L's notch is still
- *  visible and still clickable. */
+/** Draw a merged piece over its bounding box in the Pieces list: a fill per member
+ *  piece and an outline on the edges that face out of the merge — the pane's twin of
+ *  buildSubmergeOverlay, so the list and the chart show the same object. The button
+ *  keeps the bounding box (that is its grid area) but paints only the merge, and only
+ *  what it paints answers the pointer, so a free piece in an L's notch is still
+ *  visible and still clickable.
+ *
+ *  A CENTERED merge is one 1:1 square on the chart, and that square is centred in the
+ *  BOUNDING BOX — which on a notched shape reaches over a piece the merge does not
+ *  own. The chart is right to draw it there; a list cannot, because the pieces it is
+ *  listing are the thing being covered. So the list shows the merge's real footprint
+ *  faintly, with the centred square solid inside it and clipped to the pieces the
+ *  merge actually holds: the same object, minus the overhang. A rectangular merge —
+ *  every Centered merge the shape picker can make without a notch — is unaffected,
+ *  since there is nothing outside its own footprint to clip. */
 function paintPieceShape(btn, cell, sm, rect, sub, selected) {
   const { rows, cols } = cell.split;
   const plan = submergePlan(sm, rows, cols);
+  const unit = submergeKind(sm) === 'unit';
   const fill = sub.enabled ? (sub.fill || '#dbe7ff') : 'transparent';
   const border = selected ? 'var(--accent)' : (sub.border || 'var(--line)');
   const NS = 'http://www.w3.org/2000/svg';
@@ -1135,13 +1138,41 @@ function paintPieceShape(btn, cell, sm, rect, sub, selected) {
   svg.setAttribute('viewBox', `0 0 ${rect.colSpan} ${rect.rowSpan}`);
   svg.setAttribute('preserveAspectRatio', 'none');
   const lw = selected ? 0.05 : 0.025;
-  for (const idx of sm.indices) {
-    const sr = Math.floor(idx / cols) - rect.r, sc = (idx % cols) - rect.c;
+  const local = (idx) => [Math.floor(idx / cols) - rect.r, (idx % cols) - rect.c];
+  const cellRect = (sr, sc, attrs) => {
     const box = document.createElementNS(NS, 'rect');
     box.setAttribute('x', sc); box.setAttribute('y', sr);
     box.setAttribute('width', 1); box.setAttribute('height', 1);
-    box.setAttribute('fill', fill);
-    svg.appendChild(box);
+    for (const [k, v] of Object.entries(attrs)) box.setAttribute(k, v);
+    return box;
+  };
+  if (unit) {
+    // The footprint: which pieces the merge holds. Faint, because the desk itself is
+    // the centred square — this is the ground it stands on, as the bare surround is
+    // on the chart.
+    const clip = document.createElementNS(NS, 'clipPath');
+    clip.setAttribute('id', `pcshape-${sm.id}`);
+    for (const idx of sm.indices) {
+      const [sr, sc] = local(idx);
+      svg.appendChild(cellRect(sr, sc, { fill, 'fill-opacity': 0.3 }));
+      clip.appendChild(cellRect(sr, sc, {}));
+    }
+    svg.appendChild(clip);
+    const side = Math.min(rect.colSpan, rect.rowSpan);
+    const sq = document.createElementNS(NS, 'rect');
+    sq.setAttribute('x', (rect.colSpan - side) / 2);
+    sq.setAttribute('y', (rect.rowSpan - side) / 2);
+    sq.setAttribute('width', side); sq.setAttribute('height', side);
+    sq.setAttribute('fill', fill);
+    sq.setAttribute('stroke', border);
+    sq.setAttribute('stroke-width', lw);
+    sq.setAttribute('clip-path', `url(#pcshape-${sm.id})`);
+    svg.appendChild(sq);
+  } else {
+    for (const idx of sm.indices) {
+      const [sr, sc] = local(idx);
+      svg.appendChild(cellRect(sr, sc, { fill }));
+    }
   }
   for (const idx of sm.indices) {
     const ar = Math.floor(idx / cols), ac = idx % cols;
@@ -1159,15 +1190,24 @@ function paintPieceShape(btn, cell, sm, rect, sub, selected) {
     if (!plan.has(ar, ac - 1)) seg(sc, sr, sc, sr + 1);
   }
   btn.prepend(svg);
-  // Icon and caption sit on the merge's widest run, as they do on the chart, rather
-  // than in the middle of a bounding box the shape may not even cover.
+  // Icon and caption sit where the merge's content sits: on the centred square for a
+  // Centered merge, on the widest run for a Shape one — never in the middle of a
+  // bounding box the merge may not even cover.
   const run = plan.labelRun || { sr: rect.r, scStart: rect.c, len: rect.colSpan };
+  const side = Math.min(rect.colSpan, rect.rowSpan);
   const on = document.createElement('span');
   on.className = 'piece-btn__on';
-  on.style.left = `${((run.scStart - rect.c) / rect.colSpan) * 100}%`;
-  on.style.top = `${((run.sr - rect.r) / rect.rowSpan) * 100}%`;
-  on.style.width = `${(run.len / rect.colSpan) * 100}%`;
-  on.style.height = `${(1 / rect.rowSpan) * 100}%`;
+  if (unit) {
+    on.style.left = `${((rect.colSpan - side) / 2 / rect.colSpan) * 100}%`;
+    on.style.top = `${((rect.rowSpan - side) / 2 / rect.rowSpan) * 100}%`;
+    on.style.width = `${(side / rect.colSpan) * 100}%`;
+    on.style.height = `${(side / rect.rowSpan) * 100}%`;
+  } else {
+    on.style.left = `${((run.scStart - rect.c) / rect.colSpan) * 100}%`;
+    on.style.top = `${((run.sr - rect.r) / rect.rowSpan) * 100}%`;
+    on.style.width = `${(run.len / rect.colSpan) * 100}%`;
+    on.style.height = `${(1 / rect.rowSpan) * 100}%`;
+  }
   while (btn.childNodes.length > 1) on.appendChild(btn.childNodes[1]);
   btn.appendChild(on);
 }

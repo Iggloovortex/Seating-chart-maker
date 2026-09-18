@@ -140,7 +140,19 @@ and push it; don't stack new work directly on `main`.
   and the content answer the pointer, and their clicks bubble to the button, so a free
   piece under the bbox is reachable (hit-tested: an L's three cells answer as the merge,
   the notch as its own piece). A selected poly shows the accent on its outline rather
-  than an outline round the bbox. A unit stays one square centred in the block.
+  than an outline round the bbox.
+  **A Centered merge is drawn there too, not boxed.** Its square is centred in the
+  BOUNDING BOX, which on a notched shape reaches over a piece the merge does not own —
+  the chart is right to draw it there (the surround is bare), but a LIST cannot, because
+  the pieces it is listing are the thing being covered. So the list shows the merge's
+  real footprint faintly and the centred square solid inside it, clipped to the pieces
+  the merge actually holds: the same object, minus the overhang, and the free piece
+  stays visible and clickable. A rectangular Centered merge is unaffected — there is
+  nothing outside its own footprint to clip — and a 1×3 reads as it does on the chart,
+  one tile centred in a faint three-cell run. `.piece-btn--unit` must NOT carry
+  `aspect-ratio: 1` any more: the square is drawn in the SVG now, and sizing the button
+  square instead forced the whole ROW square (a 1×3 block came out 388×388). **The chart
+  and the export are unchanged** — this is a pane-only accommodation, by request.
   The Pieces list speaks the chart's mouse language: a plain click fills or empties
   the piece, right-click / long-press edits it, dragging one onto another swaps their
   content (`attachPieceDrag` → `swapContentSlots`, the pane's twin of the chart's
