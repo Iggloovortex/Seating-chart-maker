@@ -379,6 +379,11 @@ and push it; don't stack new work directly on `main`.
   mode, which waits for travel so the picker still opens) and the freed grip is the
   per-line **Float** toggle (`floatToggle`); the printer row drops the grip entirely,
   since its labels draw inside its own overlay.
+  **A SERVER's slab is capped the same way** (`slabDepth`): half a full square along the
+  axis it faces, never more than the square itself, so a slab in a thinned walkway fills
+  its depth. The name then gets whatever the slab LEFT, which is no longer simply the
+  other half once the cap has bitten — both renderers compute the remainder rather than
+  assuming a half.
   **A chair never shrinks further than its square already has** (`chairSize`,
   js/export.js): half a FULL square, capped by the square it is in. So a chair in a
   0.35 walkway fills the walkway's depth instead of taking half of it, a mild squeeze

@@ -927,6 +927,13 @@ function hangingLabelBox(rect) {
   return { x: rect.x + rect.w / 2 - w / 2, y: rect.y + rect.h, w, h: layoutUnit() / 2, anchor: 'top' };
 }
 
+/** How deep a server's slab is along the axis it faces: half a full square, capped by
+ *  the square it sits in, so it fills a thinned walkway instead of halving it again. */
+function slabDepth(extent, unitOverride) {
+  const unit = unitOverride != null ? unitOverride : layoutUnit();
+  return unit > 0 ? Math.min(unit * 0.5, extent) : extent / 2;
+}
+
 /** A chair's side: half a full square, capped by the square it sits in. Squared off
  *  the SHORT side, so a thinned square gives a smaller chair but never a flattened
  *  one. Shared by both renderers via layoutUnit(). */
@@ -1044,20 +1051,31 @@ function serverGeometry(rectOf, { r, c, data }) {
   const rect = rectOf(r, c);
   let [dr, dc] = FACING_STEP[data.rotation || 0] || FACING_STEP[0];
   if (dr && dc) dc = 0;
-  const half = (v) => v / 2;
+  // Half a FULL square, never more than the square itself — the chair's rule applied
+  // to the slab. Without the cap a slab in a 0.35 walkway came out at half of 0.35,
+  // shrinking twice: once with the row, again by its own half-a-square rule.
+  const half = (v) => slabDepth(v);
+  // The slab takes `d` along the faced axis; the name gets whatever is LEFT, which is
+  // no longer simply the other half once the cap has bitten.
   let box, labelBox;
-  if (dr < 0) {        // faces up → slab on top, label hugs just below it
-    box =      { x: rect.x, y: rect.y,               w: rect.w, h: half(rect.h) };
-    labelBox = { x: rect.x, y: rect.y + half(rect.h), w: rect.w, h: half(rect.h), anchor: 'top' };
-  } else if (dr > 0) { // faces down → slab on bottom
-    box =      { x: rect.x, y: rect.y + half(rect.h), w: rect.w, h: half(rect.h) };
-    labelBox = { x: rect.x, y: rect.y,               w: rect.w, h: half(rect.h), anchor: 'bottom' };
-  } else if (dc < 0) { // faces left → slab on the left
-    box =      { x: rect.x,               y: rect.y, w: half(rect.w), h: rect.h };
-    labelBox = { x: rect.x + half(rect.w), y: rect.y, w: half(rect.w), h: rect.h, anchor: 'left' };
-  } else {             // faces right → slab on the right
-    box =      { x: rect.x + half(rect.w), y: rect.y, w: half(rect.w), h: rect.h };
-    labelBox = { x: rect.x,               y: rect.y, w: half(rect.w), h: rect.h, anchor: 'right' };
+  if (dr) {                              // vertical facing → slab on top or bottom
+    const d = half(rect.h), rest = Math.max(0, rect.h - d);
+    if (dr < 0) {                        // faces up → slab on top, label hugs below it
+      box =      { x: rect.x, y: rect.y,     w: rect.w, h: d };
+      labelBox = { x: rect.x, y: rect.y + d, w: rect.w, h: rest, anchor: 'top' };
+    } else {                             // faces down → slab on the bottom
+      box =      { x: rect.x, y: rect.y + rest, w: rect.w, h: d };
+      labelBox = { x: rect.x, y: rect.y,        w: rect.w, h: rest, anchor: 'bottom' };
+    }
+  } else {                               // side facing → slab on the left or right
+    const d = half(rect.w), rest = Math.max(0, rect.w - d);
+    if (dc < 0) {                        // faces left → slab on the left
+      box =      { x: rect.x,     y: rect.y, w: d,    h: rect.h };
+      labelBox = { x: rect.x + d, y: rect.y, w: rest, h: rect.h, anchor: 'left' };
+    } else {                             // faces right → slab on the right
+      box =      { x: rect.x + rest, y: rect.y, w: d,    h: rect.h };
+      labelBox = { x: rect.x,        y: rect.y, w: rest, h: rect.h, anchor: 'right' };
+    }
   }
   // Floating names hang below the square, as a chair's do, and the SLAB takes the
   // whole square rather than half of it — there is no label half left to leave free.

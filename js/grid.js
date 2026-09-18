@@ -846,18 +846,43 @@ function serverHalf(rot) {
 }
 
 /** Position a server's half-square slab against the edge it faces. */
-function placeServerTile(tile, rot) {
+function placeServerTile(tile, rot, rect) {
   const [dr, dc] = serverHalf(rot);
+  // Half of the faced axis — but never more than the square itself, so a slab in a
+  // thinned walkway fills its depth instead of halving it again (the chair's rule; the
+  // export's slabDepth is the same measure). Measured against the ELEMENT's box, which
+  // buildCell insets by a gap.
+  const unit = Math.max(2, layoutUnit() - CELL_GAP);
+  const w = rect ? Math.max(2, rect.w - CELL_GAP) : 0;
+  const h = rect ? Math.max(2, rect.h - CELL_GAP) : 0;
+  const pct = (axis) => (rect ? (slabDepth(axis, unit) / axis) * 100 : 50);
+
   if (dr || !dc) { tile.style.width = '100%'; tile.style.left = '0'; }
-  if (dc) { tile.style.width = '50%'; tile.style.left = dc < 0 ? '0' : '50%'; tile.style.height = '100%'; tile.style.top = '0'; }
-  if (dr) { tile.style.height = '50%'; tile.style.top = dr < 0 ? '0' : '50%'; }
+  if (dc) {
+    const p = pct(w);
+    tile.style.width = `${p}%`;
+    tile.style.left = dc < 0 ? '0' : `${100 - p}%`;
+    tile.style.height = '100%'; tile.style.top = '0';
+  }
+  if (dr) {
+    const p = pct(h);
+    tile.style.height = `${p}%`;
+    tile.style.top = dr < 0 ? '0' : `${100 - p}%`;
+  }
 }
 
 /** Position a server's labels in the other half of the square. */
-function placeServerLabels(el, rot) {
+function placeServerLabels(el, rot, rect) {
   const [dr, dc] = serverHalf(rot);
-  if (dc) { placeVertFurnitureLabels(el, dc); }
-  else { el.style.width = '100%'; el.style.left = '0'; el.style.height = '50%'; el.style.top = dr < 0 ? '50%' : '0'; }
+  if (dc) { placeVertFurnitureLabels(el, dc); return; }
+  // Whatever the slab left, which is no longer simply the other half once the cap on
+  // the slab's depth has bitten.
+  const unit = Math.max(2, layoutUnit() - CELL_GAP);
+  const h = rect ? Math.max(2, rect.h - CELL_GAP) : 0;
+  const slab = rect ? (slabDepth(h, unit) / h) * 100 : 50;
+  el.style.width = '100%'; el.style.left = '0';
+  el.style.height = `${Math.max(0, 100 - slab)}%`;
+  el.style.top = dr < 0 ? `${slab}%` : '0';
 }
 
 /** A rack of servers: the square split into one slab per non-empty label,
@@ -1320,7 +1345,7 @@ function buildCell(r, c, rects) {
       tile.className = `cell__furniture cell__${furniture}`;
       tile.style.background = data.fill;
       tile.style.borderColor = data.border;
-      if (furniture === 'server') placeServerTile(tile, rot);
+      if (furniture === 'server') placeServerTile(tile, rot, rects && rects.get(key));
       else placeChairTile(tile, rot, rects && rects.get(key));
       tile.appendChild(content);
       el.classList.add('cell--furniturehost');
@@ -1333,7 +1358,7 @@ function buildCell(r, c, rects) {
         if (floatingHere) {
           hangLabelsBelow(el, labelsEl);
         } else {
-          if (furniture === 'server') placeServerLabels(labelsEl, rot);
+          if (furniture === 'server') placeServerLabels(labelsEl, rot, rects && rects.get(key));
           else placeChairLabels(labelsEl, rot);
           labelsEl.style.transform = `rotate(${rot}deg)`; // labels turn with the piece
         }
