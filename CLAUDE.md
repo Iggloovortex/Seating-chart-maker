@@ -370,11 +370,16 @@ and push it; don't stack new work directly on `main`.
   `FLOAT_BAND` past a floating square while the square keeps its own height, so the
   next row is pushed down and nothing overlaps. It is the advance that grows, never
   the square.
-  Both renderers hang names identically: `hangingLabelBox` (export, wider than the
-  square since a hung name has open space either side) collected during the draw and
-  painted LAST (step 6 of renderToCanvas) so the next row cannot bury it;
+  Both renderers hang names identically: `hangingLabelBox` (export) collected during
+  the draw and painted LAST (step 6 of renderToCanvas) so the next row cannot bury it;
   `hangLabelsBelow` + `.cell--floatlabel` (grid), which lifts the cell's
   `overflow: hidden` and raises it above its neighbours.
+  **A hung name is still a LABEL and keeps every label rule.** It turns with its
+  square's facing (forcing it upright ignored the facing), and it is contrasted against
+  the PAGE, not against the square's fill, because that is where it sits —
+  `labelColorOnBg` in the export, `surfaceLabelColor` in the grid. Its box is generous
+  on BOTH axes: `drawLabelBox` truncates against whichever axis the text RUNS along, so
+  a box only as deep as the band clipped a turned name to a couple of letters.
   In the editor the colour drags from its own SWATCH (`attachLabelDrag`'s `deferred`
   mode, which waits for travel so the picker still opens) and the freed grip is the
   per-line **Float** toggle (`floatToggle`); the printer row drops the grip entirely,

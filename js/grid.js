@@ -813,9 +813,16 @@ function placeChairLabels(el, rot) {
 /** Hang a square's names in a band directly BELOW it, upright and centred — the grid
  *  twin of the export's hangingLabelBox. The square is too small to hold them, so they
  *  live in the space under it (the cell lifts its overflow via .cell--floatlabel). */
-function hangLabelsBelow(cellEl, labelsEl) {
+function hangLabelsBelow(cellEl, labelsEl, data, rot) {
   labelsEl.classList.add('cell__furniturelabels--hang');
-  labelsEl.style.transform = '';
+  // It turns with its square like any other label, and it sits on the PAGE rather than
+  // on the square's fill — so its ink is contrasted against the surface, not the fill
+  // (the export's labelColorOnBg makes the same choice).
+  labelsEl.style.transform = `translateX(-50%) rotate(${rot || 0}deg)`;
+  const lines = (data.labels || []).filter((l) => l.text);
+  labelsEl.querySelectorAll('.cell__label').forEach((span, i) => {
+    if (lines[i]) span.style.color = surfaceLabelColor(lines[i].color);
+  });
   labelsEl.style.left = '50%';
   labelsEl.style.top = '100%';
   labelsEl.style.width = 'max(180%, 96px)';
@@ -1356,7 +1363,7 @@ function buildCell(r, c, rects) {
         // of sharing the inside of a square that has no room for it. The export's
         // hangingLabelBox is the same placement.
         if (floatingHere) {
-          hangLabelsBelow(el, labelsEl);
+          hangLabelsBelow(el, labelsEl, data, rot);
         } else {
           if (furniture === 'server') placeServerLabels(labelsEl, rot, rects && rects.get(key));
           else placeChairLabels(labelsEl, rot);

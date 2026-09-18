@@ -923,8 +923,12 @@ function chairGeometry(rectOf, item) {
 function hangingLabelBox(rect) {
   // Wider than the square it belongs to: a hung name has open space either side, so
   // clamping it to a thin square's width would truncate a name that plainly fits.
-  const w = Math.max(rect.w, layoutUnit() * 1.8);
-  return { x: rect.x + rect.w / 2 - w / 2, y: rect.y + rect.h, w, h: layoutUnit() / 2, anchor: 'top' };
+  // Generous on BOTH axes: a name that turns with its square runs along the box's
+  // HEIGHT, and drawLabelBox truncates against whichever axis the text runs along, so
+  // a shallow box clipped a turned name to a couple of letters. The 'top' anchor keeps
+  // the stack hugging the square's underside however deep the box is.
+  const run = Math.max(rect.w, layoutUnit() * 1.8);
+  return { x: rect.x + rect.w / 2 - run / 2, y: rect.y + rect.h, w: run, h: run, anchor: 'top' };
 }
 
 /** How deep a server's slab is along the axis it faces: half a full square, capped by
@@ -971,7 +975,7 @@ function drawChair(ctx, item, imgCache, plan, hanging) {
   drawIconOnly(ctx, cx, cy, size, item.data, imgCache);
   if (!labelBox) return;
   const paint = () => drawLabelBox(ctx, labelBox, item.data, plan,
-                                   full || Math.min(labelBox.w, labelBox.h), floating ? 0 : (item.data.rotation || 0));
+                                   full || Math.min(labelBox.w, labelBox.h), item.data.rotation || 0);
   if (floating && hanging) hanging.push(paint); else paint();
 }
 
@@ -985,7 +989,7 @@ function drawStairs(ctx, item, imgCache, plan, subIndex, splitRows, splitCols, h
   // is the only name they can show — hung below, like a chair's.
   if (hanging && anyLabelFloats(item.data, rectIsShrunk(rect))) {
     const box = hangingLabelBox(rect);
-    hanging.push(() => drawLabelBox(ctx, box, item.data, plan, layoutUnit(), 0));
+    hanging.push(() => drawLabelBox(ctx, box, item.data, plan, layoutUnit(), item.data.rotation || 0));
   }
   const { x, y, w, h } = rect;
   const variant = resolveStairType(item.data, item.r, item.c, subIndex, splitRows, splitCols);
@@ -1108,7 +1112,7 @@ function drawServer(ctx, item, imgCache, plan, hanging) {
   ctx.stroke();
   drawIconOnly(ctx, x + w / 2, y + h / 2, Math.min(w, h), item.data, imgCache);
   if (!labelBox) return;
-  const paint = () => drawLabelBox(ctx, labelBox, item.data, plan, full, floating ? 0 : (item.data.rotation || 0));
+  const paint = () => drawLabelBox(ctx, labelBox, item.data, plan, full, item.data.rotation || 0);
   if (floating && hanging) hanging.push(paint); else paint();
 }
 

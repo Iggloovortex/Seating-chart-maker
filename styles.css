@@ -1107,7 +1107,8 @@ body {
    sit above its neighbours so the name is not painted over. */
 .cell--floatlabel { overflow: visible; z-index: 4; }
 .cell__furniturelabels--hang {
-  transform: translateX(-50%);
+  /* transform is set inline (it carries the square's facing too). */
+  transform-origin: 50% 0;
   margin-top: 2px;
   pointer-events: none;
   white-space: nowrap;
