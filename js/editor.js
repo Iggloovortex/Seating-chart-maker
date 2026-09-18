@@ -834,9 +834,6 @@ function splitOptionButton(o, active, onClick) {
 }
 
 let submergeSelection = new Set();
-/** Which kind the next piece merge will be — the Shape / Centered pair beside
- *  "Select to merge", mirroring the grid's own merge menu. */
-let submergeKindChoice = 'poly';
 
 /** The Pieces list for a split square (also shown inside the merge pane when a
  *  desk is split). `rerender` re-draws whichever pane hosts it, so the submerge
@@ -961,8 +958,9 @@ function piecesGroup(cell, rerender) {
         });
         bar.appendChild(unmergeBtn);
       } else if (picked.length >= 2) {
-        kindPair((k) => submergeKindChoice === k, (k) => { submergeKindChoice = k; rerender(); });
-
+        // Loose pieces get MERGE alone. Shape / Centered belong to a merge that
+        // exists — picking the merged piece afterwards is where they live, so the
+        // kind is chosen by looking at the result rather than guessed beforehand.
         const valid = isConnectedSubcells(picked, cell.split.rows, cell.split.cols);
         const mergeBtn = document.createElement('button');
         mergeBtn.type = 'button';
@@ -971,7 +969,7 @@ function piecesGroup(cell, rerender) {
         mergeBtn.disabled = !valid;
         mergeBtn.title = valid ? 'Merge selected pieces' : 'Selection must be connected pieces';
         mergeBtn.addEventListener('click', () => {
-          addSubmerge(current.r, current.c, picked, submergeKindChoice);
+          addSubmerge(current.r, current.c, picked);
           submergeSelection.clear();
           rerender();
         });

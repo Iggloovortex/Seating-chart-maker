@@ -1242,9 +1242,11 @@ function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, 
   const s = Math.min(w, h);
   // Labelled squares share the chart-wide sizes; an icon on its own has the
   // whole square to itself and keeps its generous size.
-  const ref = base || s;
-  let iconSize = ref * (labels.length ? plan.iconFrac : 0.6);
-  let lineH = ref * plan.lineFrac;
+  // An ICON keeps the share of its box that a square's icon takes of the square, so a
+  // split piece reads like a small square. Only the TEXT is struck from `base`, since
+  // text does not want scaling down with the box while it still fits.
+  let iconSize = s * (labels.length ? plan.iconFrac : 0.6);
+  let lineH = (base || s) * plan.lineFrac;
   let totalH = (hasIcon ? iconSize : 0) + labels.length * lineH;
 
   // Keep the stack inside `clip` when one is given (a table's drawn shape). The

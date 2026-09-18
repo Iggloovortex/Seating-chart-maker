@@ -88,9 +88,7 @@ initRows();
 initInsertGuides(document.getElementById('stage'));
 
 // Grid view options
-const trueSizeBtn = document.getElementById('btn-true-size');
-trueSizeBtn.addEventListener('click', () => toggleTrueSizes());
-subscribe(() => trueSizeBtn.setAttribute('aria-pressed', String(state.showTrueSizes)));
+// True sizes are always on, so the toolbar has no toggle for them.
 document.getElementById('btn-reset-sizes').addEventListener('click', () => resetLineSizes());
 
 

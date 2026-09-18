@@ -225,7 +225,7 @@ const state = {
   manualAdd: new Set(),         // squares picked by hand
   manualDrop: new Set(),        // squares un-picked by hand, overriding filters
   tableSelection: new Set(),    // table ids highlighted in select mode
-  showTrueSizes: false,         // preview weighted row/col sizes in the grid
+  showTrueSizes: true,          // the grid always previews weighted row/col sizes
   config: JSON.parse(JSON.stringify(DEFAULT_CONFIG)),   // app settings (see above)
 };
 
@@ -621,6 +621,8 @@ function setPaper(paper) { state.paper = paper; emit(); }
 
 /** Show the weighted row/column sizes in the editing grid (a view option, so
  *  it is not saved with the chart). */
+/** Kept for saved views and history, which still carry the flag; there is no longer
+ *  a control for it — the grid always shows true sizes. */
 function toggleTrueSizes() { state.showTrueSizes = !state.showTrueSizes; emit(); }
 
 /** Put every row and column back to the default size. */

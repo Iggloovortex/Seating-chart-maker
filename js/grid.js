@@ -181,7 +181,7 @@ function fitSubcellLabels() {
     // an icon is a share of the piece's WIDTH (capped), so on a wide, short piece it
     // measured taller than the icon will actually be and squeezed the labels to the
     // 6px floor.
-    sizeSubcellIcon(sc, spans.length);
+    sizeSubcellIcon(sc);
     const iconEl = sc.querySelector('.cell__icon');
     const iconExtent = iconEl
       ? (vertical ? iconEl.getBoundingClientRect().width : iconEl.getBoundingClientRect().height)
@@ -210,20 +210,25 @@ function fitSubcellLabels() {
   }
   // A piece with an icon but no labels still needs the icon sized to the piece.
   for (const sc of chart.querySelectorAll('.subcell')) {
-    if (!sc.querySelector('.cell__labels')) sizeSubcellIcon(sc, 0);
+    if (!sc.querySelector('.cell__labels')) sizeSubcellIcon(sc);
   }
 }
 
-/** Size a split piece's icon to the piece it sits in, rather than freezing it at a
- *  fixed ceiling — the icon twin of the label fit above. An icon is square, so it is
- *  measured against the piece's SHORT side; it gets more of that when there are no
- *  labels sharing the space. */
-function sizeSubcellIcon(sc, labelLines) {
+/** The share of its square an icon takes — `.cell__icon`'s 46% in styles.css, as a
+ *  number, so a split piece can be given the SAME proportion its square would have. */
+const ICON_FRAC = 0.46;
+
+/** Size a split piece's icon to the piece it sits in, rather than freezing it at the
+ *  fixed 38px ceiling — the icon twin of the label fit above. It takes the same share
+ *  of the piece that an ordinary square's icon takes of the square, so a piece reads
+ *  like a small square and not like a magnified one. An icon is square, so the share
+ *  is measured against the piece's SHORT side. */
+function sizeSubcellIcon(sc) {
   const icon = sc.querySelector('.cell__icon');
   if (!icon) return;
-  const base = Math.min(sc.clientWidth, sc.clientHeight) - 4;
+  const base = Math.min(sc.clientWidth, sc.clientHeight);
   if (base <= 0) return;
-  const size = Math.max(12, Math.round(base * (labelLines ? 0.58 : 0.74)));
+  const size = Math.max(8, Math.round(base * ICON_FRAC));
   icon.style.width = `${size}px`;
   icon.style.height = `${size}px`;
   icon.style.maxWidth = 'none';

@@ -67,6 +67,12 @@ design-token/theme/component baseline so new work matches the rest of the app.
   None, for the split-parent pane, which has no Format row), `specialSection`,
   `printerSection`, `fillControls` / `facingCompass` / `squareColors`.
 
+**True sizes are always on.** `state.showTrueSizes` starts true and the toolbar's
+"True size" toggle is gone, so the editing grid always previews the weighted
+row/column layout. The flag stays in state (saved views and history carry it) and
+"Reset sizes" stays in the toolbar; Settings → General still gates the edit pane's
+Size section (`config.showSizeSection`).
+
 ## Branch / state
 
 `main` holds everything (integration was merged in). Develop on a feature branch
@@ -108,17 +114,16 @@ and push it; don't stack new work directly on `main`.
   holds under "true sizes"), and the export centres the square in the block and
   paints unit anchors LAST so a neighbouring piece cannot paint over them. Its
   furniture is sized to the square's short side. Shape / Centered live in the
-  merged-piece pane's Unique section, beside Unmerge in the header, and the Pieces
-  list offers the same pair beside "Select to merge" to choose the kind BEFORE
-  merging (`submergeKindChoice` → `addSubmerge`'s `kind` argument); a Centered merge
-  shows there as a centred square too, so the list matches the chart.
+  merged-piece pane's Unique section, beside Unmerge in the header, and and in the Pieces
+  list's bar, which follows WHAT is picked: loose pieces get **Merge** alone (the kind
+  is chosen afterwards, by looking at the result); a picked MERGED piece gets Shape /
+  Centered reading and writing that merge's own kind, plus **Unmerge** in Merge's
+  place. A Centered merge shows in the list as a centred square too, so it matches
+  the chart.
   The Pieces list speaks the chart's mouse language: a plain click fills or empties
   the piece, right-click / long-press edits it, dragging one onto another swaps their
   content (`attachPieceDrag` → `swapContentSlots`, the pane's twin of the chart's
-  content drag), and Shift/Ctrl (or an open selection) gathers pieces to merge. What
-  the bar offers follows WHAT is picked: loose pieces get Shape / Centered (choosing
-  `submergeKindChoice`) + **Merge**; a picked MERGED piece gets Shape / Centered
-  reading and writing that merge's own kind + **Unmerge**.
+  content drag), and Shift/Ctrl (or an open selection) gathers pieces to merge.
   **A piece's text and icon are struck from a whole CELL, then shrunk only as far as
   the piece requires** — in BOTH renderers. The grid does it in `fitSubcellLabels`
   (which sizes the icon FIRST, since at its CSS size an icon is a share of the piece's
@@ -130,6 +135,10 @@ and push it; don't stack new work directly on `main`.
   without it those pieces keep the CSS icon ceiling and the CSS 9px labels.
   `fitText` truncates against the axis the text runs along (height when turned a
   quarter), so a turned label is not cut to the box's width.
+  An ICON is the exception: it keeps the share of its own BOX that a square's icon
+  takes of the square (`ICON_FRAC`, js/grid.js — `.cell__icon`'s 46% as a number; the
+  `s`-based branch of drawContent), so a piece reads like a small square rather than a
+  magnified one. Text is struck from the cell, the icon from the piece.
   Under a table a split shows only its pieces' content overlaid (no piece boxes),
   like any covered square (js/export.js).
 - **Merge — DONE.** Two kinds, from the `#btn-table-merge` menu on a ≥2-square
