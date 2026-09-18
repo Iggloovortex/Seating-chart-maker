@@ -491,28 +491,6 @@ function anyLabelFloats(cell, shrunk) {
   return (cell.labels || []).some((l) => l.text && l.text.trim() && floatsOutside(l, shrunk));
 }
 
-/** How far a split piece's hung name may spread, in split columns.
- *
- *  A piece is narrow, so a name pinned to its own column is cut short — but every
- *  piece in a row hangs the same way (up out of the square from the top half, down
- *  from the bottom half), so a band spanning the whole square lands on its
- *  neighbour's. The rule: the band takes its own column plus any adjacent column in
- *  the same piece-row whose own piece hangs nothing. So a lone floating name reads
- *  across the whole square, and two side by side each keep their half.
- *  Returns { start, span } in columns from the split's left edge. */
-function pieceHangSpan(cell, i, split) {
-  const cols = Math.max(1, split.cols), rows = Math.max(1, split.rows);
-  const pr = Math.floor(i / cols), pc = i % cols;
-  const floatsAt = (c) => {
-    const sub = (cell.subcells || [])[pr * cols + c];
-    return !!(sub && sub.enabled && anyLabelFloats(sub, true));
-  };
-  let start = pc, end = pc;
-  while (start > 0 && !floatsAt(start - 1)) start--;
-  while (end < cols - 1 && !floatsAt(end + 1)) end++;
-  return { start, span: end - start + 1, rows, cols };
-}
-
 /** Overall size of the layout in units: the widest row and the tallest column. */
 function layoutExtent({ wUnits, hUnits, reserveUnits }) {
   const { rows, cols } = state.grid;

@@ -161,10 +161,8 @@ function fitSubcellLabels() {
   const PAD = 4;
   for (const sc of chart.querySelectorAll('.subcell')) {
     // A piece whose name hangs OUTSIDE it is not competing for the piece's room, so it
-    // starts at a full square's text — but it is still shrunk as far as the RUN it was
-    // given requires, the same rule a piece's kept-inside text follows against the
-    // piece. Otherwise a name in a narrow run is simply cut off.
-    if (sc.classList.contains('subcell--floatlabel')) { fitHangBand(sc); continue; }
+    // keeps a full square's text rather than being shrunk to fit a space it left.
+    if (sc.classList.contains('subcell--floatlabel')) continue;
     const labelsEl = sc.querySelector('.cell__labels');
     if (!labelsEl) continue;
     const spans = labelsEl.querySelectorAll('.cell__label');
@@ -217,39 +215,6 @@ function fitSubcellLabels() {
   for (const sc of chart.querySelectorAll('.subcell')) {
     if (!sc.querySelector('.cell__labels') || sc.classList.contains('subcell--floatlabel')) sizeSubcellIcon(sc);
   }
-}
-
-/** Shrink a hung band's text until the longest name fits the run it was given, down to
- *  the same 6px floor the in-piece fit uses. The export's twin is fitHangBase. */
-function fitHangBand(sc) {
-  const BASE = 12;
-  const band = sc.querySelector('.cell__furniturelabels--hang');
-  if (!band) return;
-  const spans = band.querySelectorAll('.cell__label');
-  if (!spans.length) return;
-  const m = /rotate\(([-\d.]+)deg\)/.exec(band.style.transform || '');
-  const a = ((((Math.round((m ? parseFloat(m[1]) : 0) / 90) * 90) % 360) + 360) % 360);
-  const run = (a === 90 || a === 270) ? band.clientHeight : band.clientWidth;
-  if (run <= 0) return;
-  // Measured, not estimated: scrollWidth is the name's FULL width even once the span
-  // ellipsizes, so the scale is the one the export computes from real metrics rather
-  // than from a per-character guess (which cut names the export fitted).
-  const widest = () => { let w = 0; for (const s of spans) w = Math.max(w, s.scrollWidth); return w; };
-  let px = BASE;
-  for (const s of spans) { s.style.fontSize = `${px}px`; s.style.maxWidth = `${run}px`; }
-  // Step down until the longest name fits, re-measuring each time — the rounding of a
-  // single scale left names a pixel or two over their run, which is an ellipsis.
-  while (px > 6 && widest() > run) {
-    px = Math.max(6, px - 1);
-    for (const s of spans) s.style.fontSize = `${px}px`;
-  }
-  // At the floor a name is allowed to spill a hair past its run rather than be cut: the
-  // export draws it in full at that size, and the two renderers have to agree.
-  if (widest() > run) {
-    for (const s of spans) s.style.maxWidth = '';
-    band.style.width = 'max-content';   // the band is centred by transform, so it spills evenly
-  }
-  sizeSubcellIcon(sc);
 }
 
 /** The share of its square an icon takes — `.cell__icon`'s 46% in styles.css, as a
@@ -862,50 +827,29 @@ function chairPct(rect) {
  *  the piece, on the side the facing implies, centred on the square across the other
  *  axis. The grid twin of the export's hangingLabelBox — it is the standard placement
  *  reaching past the square's edge, not a placement of its own. */
-/** Which way a split piece's name hangs: up out of the square for a piece in the top
- *  half, down out of it for one in the bottom half, so the names leave the square
- *  rather than landing on the piece next door. */
-function pieceHangDir(i, split) {
-  const pr = Math.floor(i / Math.max(1, split.cols));
-  return pr < split.rows / 2 ? 1 : -1;      // +1 = above (dr>0), -1 = below
-}
-
-/** The run a split piece's name is laid across, in piece widths: how many columns
- *  pieceHangSpan grants it, and how far the run's centre sits from the piece's own
- *  (both measured in piece widths, so they read straight into CSS percentages). */
-function pieceHangRun(cell, i, split) {
-  const cols = Math.max(1, split.cols);
-  const { start, span } = pieceHangSpan(cell, i, split);
-  return { span, offset: (start + span / 2) - ((i % cols) + 0.5) };
-}
-
-function hangLabelsBelow(cellEl, labelsEl, data, rot, rect, startPct = null, forceDr = null, run = null) {
+function hangLabelsBelow(cellEl, labelsEl, data, rot, rect, startPct = null) {
   labelsEl.classList.add('cell__furniturelabels--hang');
-  let [dr, dc] = serverHalf(rot);
-  if (forceDr != null) { dr = forceDr; dc = 0; }
+  const [dr, dc] = serverHalf(rot);
   if (dc) {
     // Side facing: the name reads DOWN the square, so it keeps the standard far half
     // beside the piece and grows its run past the top and bottom.
     const pw = startPct != null ? startPct : chairPct(rect).pw;
-    labelsEl.style.width = `${Math.max(20, 100 - pw)}%`;
+    // Beside a square the band's depth is the half the piece left; a PIECE's content
+    // fills it, so there is no remainder and the band takes the piece's own width as
+    // its depth, lying outside the piece.
+    labelsEl.style.width = startPct != null ? '100%' : `${Math.max(20, 100 - pw)}%`;
     labelsEl.style.height = 'max(180%, 96px)';
     labelsEl.style.top = '50%';
     labelsEl.style.left = dc < 0 ? `${pw}%` : '0';
     labelsEl.style.transform = `translateY(-50%) rotate(${rot || 0}deg)`;
   } else {
     // Up/down facing: the depth a stack needs is what the thinned square lost, so the
-    // band steps just outside that edge, centred on the square.
-    // Beside a SQUARE the band spreads wider than its box, because there is open space
-    // either side. Beside a PIECE there is not — the next piece is — so it keeps to the
-    // piece's own width.
-    // A piece's band spreads over the whole SQUARE (cols pieces wide), so a name reads
-    // in full instead of being cut to a piece's width — it may meet a neighbour's, the
-    // same trade the square-level hang makes.
-    labelsEl.style.width = run ? `${run.span * 100}%` : 'max(180%, 96px)';
+    // band steps just outside that edge, centred on the square. It is the SAME band a
+    // square gets — a piece's name is allowed to lie over the piece or square beside
+    // it, exactly as a square's hung name lies over the row below.
+    labelsEl.style.width = 'max(180%, 96px)';
     labelsEl.style.height = '100%';
-    // Centred on the RUN, not on the piece — the run may reach into an empty column
-    // beside it, and the name has to sit in the middle of what it was given.
-    labelsEl.style.left = run ? `${50 + run.offset * 100}%` : '50%';
+    labelsEl.style.left = '50%';
     // From the piece's edge, so a floated name sits the same distance from its icon as
     // one kept inside (the export's hangingLabelBox starts at the same place).
     const ph = startPct != null ? startPct : chairPct(rect).ph;
@@ -1063,7 +1007,7 @@ function buildSplitGrid(r, c, data, span = { rows: 1, cols: 1 }) {
       return;
     }
     const sm = rectMerges.find((m) => m.anchor === i) || null;
-    const el = buildSubcell(sub, i, data.split, sm, r, c, span, data);
+    const el = buildSubcell(sub, i, data.split, sm, r, c, span);
     if (sm) {
       const rect = submergeRect(sm, cols);
       el.style.gridColumn = `${rect.c + 1} / span ${rect.colSpan}`;
@@ -1176,7 +1120,7 @@ function buildSubmergeOverlay(wrap, data, sm) {
 /** One sub-cell of a split square — a mini desk: fill/border when seated, its
  *  icon and labels turned to its own facing, faded when it holds content but is
  *  empty (the same ghost treatment a whole square gets). */
-function buildSubcell(sub, i, split, sm, parentR, parentC, span = { rows: 1, cols: 1 }, parent = null) {
+function buildSubcell(sub, i, split, sm, parentR, parentC, span = { rows: 1, cols: 1 }) {
   const el = document.createElement('div');
   el.className = 'subcell';
   el.dataset.sub = i;
@@ -1274,7 +1218,7 @@ function buildSubcell(sub, i, split, sm, parentR, parentC, span = { rows: 1, col
         // rather than over its own icon.
         if (anyLabelFloats(sub, true)) {
           el.classList.add('subcell--floatlabel');
-          hangLabelsBelow(el, labelsEl, sub, rot, null, 100, pieceHangDir(i, split), pieceHangRun(parent || { subcells: [] }, i, split));
+          hangLabelsBelow(el, labelsEl, sub, rot, null, 100);
         } else {
           if (furniture === 'server') placeServerLabels(labelsEl, rot); else placeChairLabels(labelsEl, rot);
           labelsEl.style.transform = `rotate(${rot}deg)`;
@@ -1292,7 +1236,7 @@ function buildSubcell(sub, i, split, sm, parentR, parentC, span = { rows: 1, col
         // piece in the top half of the split hangs above the square, one in the bottom
         // half below it. Hanging them all one way would stack every piece's name on
         // the piece beneath it.
-        hangLabelsBelow(el, labelsEl, sub, sub.rotation || 0, null, 100, pieceHangDir(i, split), pieceHangRun(parent || { subcells: [] }, i, split));
+        hangLabelsBelow(el, labelsEl, sub, sub.rotation || 0, null, 100);
         el.appendChild(content);
         el.appendChild(labelsEl);
       } else {

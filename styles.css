@@ -1107,7 +1107,11 @@ body {
    sit above its neighbours so the name is not painted over. */
 .cell--floatlabel { overflow: visible; z-index: 4; }
 /* A split piece hangs its floated name outside itself, so it needs the same licence. */
-.subcell--floatlabel { overflow: visible; z-index: 4; }
+/* No z-index here: a positioned box with one opens a stacking context, and the band
+   inside could then never rise above the NEXT piece, which paints later and buried it
+   (the export paints every hung name last, so the two have to agree). Overflow alone,
+   and the band itself lifts — see .cell__furniturelabels--hang's z-index. */
+.subcell--floatlabel { overflow: visible; }
 /* ...and the sub-grid it sits in must not clip it on the way out of the square. */
 .cell--floatlabel .cell__split { overflow: visible; }
 /* A hung piece name keeps a full square's text — it is not sharing the piece. */
@@ -1120,6 +1124,9 @@ body {
   flex-direction: column;
   pointer-events: none;
   white-space: nowrap;
+  /* Above every piece and square it may lie over — the export paints the hung names
+     last for the same reason, and a name buried by the next piece is not a name. */
+  z-index: 6;
 }
 
 /* Per-line Float toggle, in the slot the colour's drag grip used to hold. */

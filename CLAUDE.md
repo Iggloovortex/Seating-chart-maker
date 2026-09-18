@@ -414,21 +414,25 @@ and push it; don't stack new work directly on `main`.
   icon that can shrink. An ordinary desk never shrinks, and a server RACK keeps its
   names in its slabs, so neither shows the control rather than showing a dead one.
   **A split PIECE always shows it**, because a piece is already a small square: both
-  renderers hang its name outside the SQUARE (`buildSubcell`'s float branch + the
+  renderers hang its name outside the PIECE (`buildSubcell`'s float branch + the
   `hanging` pushes in `drawSplit`, for a plain piece and a furniture one alike), so it
-  is never shrunk into the piece or laid over its own icon. Which way it hangs comes
-  from WHERE the piece sits, not its facing — a piece in the top half of the split
-  hangs above the square, one in the bottom half below it (`pieceHangDir` grid /
-  `pieceHangStep` export) — because every piece facing the same way would otherwise
-  stack its name on the piece beneath it. How far it spreads sideways is
-  `pieceHangSpan` (js/layout.js): its own column plus any adjacent column in the same
-  piece-row whose piece hangs nothing, so a lone name reads across the whole square and
-  two side by side each keep their half. The name starts at a full CELL's text and is
-  then shrunk only as far as that run requires (`fitHangBand` grid / `fitHangBase`
-  export, both measured, floor 6px); at the floor it is allowed to spill past the run
-  rather than be cut, since the export draws it in full at that size.
-  **Not built:** a 3×3's MIDDLE row has nowhere to hang — it takes the bottom half's
-  rule and can meet the row below. Stairs in a piece keep their name inside.
+  is never shrunk into the piece or laid over its own icon.
+  **Float's whole rule is "outside, in the standard place".** A hung name takes the
+  SAME band, on the side the facing implies, at a full cell's text — the only thing
+  float changes is that the band starts at the piece's own edge and reaches past it. It
+  is ALLOWED to lie over the pieces and squares around it; that overlap is the point
+  (the layout is spaced by hand), so nothing may move a name somewhere else to avoid
+  it. Steering a piece's name by WHERE it sat rather than its facing, narrowing the
+  band to the columns beside it, or shrinking it to fit a run were all tried and are
+  all wrong — a name in an unexpected place is worse than a name over a neighbour.
+  What a PIECE does need is its own edge as the band's start: a plain piece's content
+  fills it, so `hangingLabelBox`'s `size` is the box's extent along the facing axis
+  (`min(w, h)` put the band mid-piece on an oblong one) and the grid passes
+  `startPct = 100`, which is the same thing in percentages. In the grid the band also
+  carries `z-index: 6` while `.subcell--floatlabel` carries NONE — a positioned box
+  with a z-index opens a stacking context, and the band inside it could then never
+  rise above the next piece, which paints later and buried it. The export paints every
+  hung name last (step 6) for exactly the same reason.
   **A SERVER's slab is capped the same way** (`slabDepth`): half a full square along the
   axis it faces, never more than the square itself, so a slab in a thinned walkway fills
   its depth. The name then gets whatever the slab LEFT, which is no longer simply the
