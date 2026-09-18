@@ -1103,6 +1103,16 @@ body {
 }
 .piece-btn:hover { border-color: var(--line-strong); }
 .piece-btn--sel { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* A square whose name hangs below it has to let that name out of its own box, and
+   sit above its neighbours so the name is not painted over. */
+.cell--floatlabel { overflow: visible; z-index: 4; }
+.cell__furniturelabels--hang {
+  transform: translateX(-50%);
+  margin-top: 2px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 /* Per-line Float toggle, in the slot the colour's drag grip used to hold. */
 .erow__grip--float { cursor: pointer; }
 .erow__grip--float.is-on { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }

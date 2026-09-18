@@ -427,7 +427,25 @@ function floatLabelSection() {
     seg.appendChild(b);
   }
   g.appendChild(seg);
-  g.appendChild(snote('Label lines marked "Float" in the edit pane hang outside the square when it is too small to hold them — a shrunken or split square. Full-size squares always keep their labels inside.'));
+  g.appendChild(snote('A label line hangs outside its square when the square is too small to hold it — a shrunken or split square. Full-size squares always keep their labels inside, and the "Float" toggle beside any line opts that line out.'));
+
+  // Second choice: let a hung name lie over whatever is beneath it, or hold that
+  // space open for it.
+  const seg2 = document.createElement('div');
+  seg2.className = 'seg settings-seg';
+  seg2.style.marginTop = '8px';
+  for (const [val, label] of [[false, 'Let it overlap'], [true, 'Hold the space']]) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'seg__btn';
+    b.textContent = label;
+    b.disabled = !state.config.floatLabels;
+    b.setAttribute('aria-pressed', String(!!state.config.reserveFloatSpace === val));
+    b.addEventListener('click', () => { setConfig({ reserveFloatSpace: val }); renderSettings(); emit(); });
+    seg2.appendChild(b);
+  }
+  g.appendChild(seg2);
+  g.appendChild(snote('A hung name reaches into the row below. "Hold the space" pushes that row down to make room, so nothing overlaps — at the cost of the thin row taking more space than its size says.'));
   return g;
 }
 

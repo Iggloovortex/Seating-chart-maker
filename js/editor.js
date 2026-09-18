@@ -1435,9 +1435,9 @@ function subLabelRow(line, index) {
   } };
   attachLabelDrag(grip, index, 'line', cfg);
   attachLabelDrag(color, index, 'color', { ...cfg, deferred: true });
-  const flt = floatToggle(!!line.float, () => {
+  const flt = floatToggle(line.float !== false, () => {
     const s2 = subCur(); if (!s2) return;
-    s2.labels[index].float = !s2.labels[index].float;
+    s2.labels[index].float = s2.labels[index].float === false;
     updateSubcell(current.r, current.c, current.sub, {});
     renderSubcellEditor();
   });
@@ -1786,13 +1786,13 @@ function bulkLabelRow(keys, index) {
   // One toggle for the whole selection: on unless every selected line already floats.
   const allFloat = keys.every((k) => {
     const [r, c] = parseKey(k); const cell = peekCell(r, c);
-    return cell && cell.labels[index] && cell.labels[index].float;
+    return cell && cell.labels[index] && cell.labels[index].float !== false;
   });
   const flt = floatToggle(allFloat, () => {
     batch(() => {
       for (const k of keys) {
         const [r, c] = parseKey(k); const cell = getCell(r, c);
-        if (cell.labels[index]) cell.labels[index].float = !allFloat;
+        if (cell.labels[index]) cell.labels[index].float = !allFloat ? undefined : false;
       }
     });
     renderBulk(keys);
@@ -1984,9 +1984,9 @@ function labelRow(line, index) {
   // The colour now drags from its own swatch, which frees the second grip to be the
   // per-line Float toggle.
   attachLabelDrag(color, index, 'color', { deferred: true });
-  const flt = floatToggle(!!line.float, () => {
+  const flt = floatToggle(line.float !== false, () => {
     const cell = getCell(current.r, current.c);
-    cell.labels[index].float = !cell.labels[index].float;
+    cell.labels[index].float = cell.labels[index].float === false;
     updateCell(current.r, current.c, {});
     render(peekCell(current.r, current.c));
   });

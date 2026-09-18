@@ -792,6 +792,19 @@ function placeChairLabels(el, rot) {
   else { placeVertFurnitureLabels(el, dc); }
 }
 
+/** Hang a square's names in a band directly BELOW it, upright and centred — the grid
+ *  twin of the export's hangingLabelBox. The square is too small to hold them, so they
+ *  live in the space under it (the cell lifts its overflow via .cell--floatlabel). */
+function hangLabelsBelow(cellEl, labelsEl) {
+  labelsEl.classList.add('cell__furniturelabels--hang');
+  labelsEl.style.transform = '';
+  labelsEl.style.left = '50%';
+  labelsEl.style.top = '100%';
+  labelsEl.style.width = 'max(180%, 96px)';
+  labelsEl.style.height = 'auto';
+  labelsEl.style.justifyContent = 'center';
+}
+
 /** A turned (side-facing) furniture label: a full-height strip whose centre — the
  *  rotation pivot — sits just outside the tile, so the vertical name hugs the
  *  piece rather than floating in the far half. dc<0 faces left (tile left), dc>0
@@ -1141,6 +1154,11 @@ function buildCell(r, c, rects) {
   el.setAttribute('role', 'gridcell');
   el.tabIndex = -1;
 
+  // Does this square's name hang outside it? Answered from the laid-out rect, the
+  // same test the export makes, so the two agree square for square.
+  const floatingHere = !!(rects && anyLabelFloats(data, rectIsShrunk(rects.get(key))));
+  if (floatingHere) el.classList.add('cell--floatlabel');
+
   // True-size mode positions each square itself. Half a gap of inset on every
   // side reproduces the grid's seams while keeping the true footprint.
   if (rects) {
@@ -1291,9 +1309,16 @@ function buildCell(r, c, rects) {
       el.appendChild(tile);
       if (labelsEl) {
         labelsEl.classList.add('cell__furniturelabels');
-        if (furniture === 'server') placeServerLabels(labelsEl, rot);
-        else placeChairLabels(labelsEl, rot);
-        labelsEl.style.transform = `rotate(${rot}deg)`; // labels turn with the piece
+        // A name that FLOATS hangs in a band just below the square, upright, instead
+        // of sharing the inside of a square that has no room for it. The export's
+        // hangingLabelBox is the same placement.
+        if (floatingHere) {
+          hangLabelsBelow(el, labelsEl);
+        } else {
+          if (furniture === 'server') placeServerLabels(labelsEl, rot);
+          else placeChairLabels(labelsEl, rot);
+          labelsEl.style.transform = `rotate(${rot}deg)`; // labels turn with the piece
+        }
         el.appendChild(labelsEl);
       }
     } else {

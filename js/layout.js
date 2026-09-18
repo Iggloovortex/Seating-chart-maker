@@ -403,12 +403,25 @@ function layoutRules() {
     const lines = (cell.labels || []).filter((l) => l.text && l.text.trim());
     if (!lines.length) return true;
     if (!canFloatLabels(cell)) return false;
-    return !!(state.config && state.config.floatLabels) && lines.every((l) => l.float);
+    return !!(state.config && state.config.floatLabels) && lines.every((l) => l.float !== false);
   };
   const wUnits = (r, c) => (sizedByWeight(r, c) ? colWeight(c) : 1); // cell width in units
   const hUnits = (r, c) => (sizedByWeight(r, c) ? rowWeight(r) : 1); // cell height in units
 
-  return { footprints, insideAnyFootprint, seatTableOf, sizedByWeight, wUnits, hUnits };
+  // A square is SHRUNK when it takes a weight and that weight is under a full unit —
+  // answerable without the rects, which is what the reserve below needs.
+  const isShrunk = (r, c) => sizedByWeight(r, c) && (rowWeight(r) < 1 || colWeight(c) < 1);
+
+  // With "hold the space" on, a square whose name hangs below it pushes the next row
+  // down by the band that name needs, instead of the name lying over whatever is
+  // there. It is the ADVANCE that grows, never the square: the square stays as thin
+  // as its weight says.
+  const reserveUnits = (r, c) => {
+    if (!state.config || !state.config.reserveFloatSpace) return 0;
+    return anyLabelFloats(peekCell(r, c), isShrunk(r, c)) ? FLOAT_BAND : 0;
+  };
+
+  return { footprints, insideAnyFootprint, seatTableOf, sizedByWeight, wUnits, hUnits, reserveUnits };
 }
 
 // The full-square size of the most recent layout, in whatever px the caller asked
@@ -429,8 +442,13 @@ function rectIsShrunk(rect) {
  *  square really has no room — shrunk by its weight, or a split piece. A full-size
  *  square always keeps its labels in. */
 function floatsOutside(line, shrunk) {
-  return !!(shrunk && line && line.float && state.config && state.config.floatLabels);
+  // A line floats unless it has been turned OFF — so a named chair shrinks out of the
+  // box, which is the behaviour asked for. `float: false` is what the toggle stores.
+  return !!(shrunk && line && line.float !== false && state.config && state.config.floatLabels);
 }
+
+/** How much room a hung name needs below its square, in units. */
+const FLOAT_BAND = 0.5;
 
 /** A server RACK lays each of its names in its own slab, so it has no name to float
  *  and no half to free — it is the one special icon floating does not apply to. */
@@ -447,7 +465,7 @@ function anyLabelFloats(cell, shrunk) {
 }
 
 /** Overall size of the layout in units: the widest row and the tallest column. */
-function layoutExtent({ wUnits, hUnits }) {
+function layoutExtent({ wUnits, hUnits, reserveUnits }) {
   const { rows, cols } = state.grid;
   let w = 1, h = 1;
   for (let r = 0; r < rows; r++) {
@@ -457,7 +475,7 @@ function layoutExtent({ wUnits, hUnits }) {
   }
   for (let c = 0; c < cols; c++) {
     let s = 0;
-    for (let r = 0; r < rows; r++) s += hUnits(r, c);
+    for (let r = 0; r < rows; r++) s += hUnits(r, c) + (reserveUnits ? reserveUnits(r, c) : 0);
     h = Math.max(h, s);
   }
   return { w, h };
@@ -466,7 +484,7 @@ function layoutExtent({ wUnits, hUnits }) {
 /** Rectangle for every square, keyed by "r,c". x accumulates left→right within
  *  each row and y accumulates top→bottom within each column — two independent
  *  walks, so one thinned square offsets its neighbours in both directions. */
-function layoutRects({ wUnits, hUnits }, unit, originX, originY) {
+function layoutRects({ wUnits, hUnits, reserveUnits }, unit, originX, originY) {
   LAYOUT_UNIT = unit;
   const { rows, cols } = state.grid;
   const rects = new Map();
@@ -484,7 +502,9 @@ function layoutRects({ wUnits, hUnits }, unit, originX, originY) {
       const rect = rects.get(keyOf(r, c));
       rect.y = y;
       rect.h = hUnits(r, c) * unit;
-      y += rect.h;
+      // The square keeps its own height; only the walk moves on further, so the space
+      // a hung name needs stays empty instead of the name lying over the next row.
+      y += rect.h + (reserveUnits ? reserveUnits(r, c) * unit : 0);
     }
   }
   return rects;

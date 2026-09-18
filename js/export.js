@@ -918,7 +918,10 @@ function chairGeometry(rectOf, item) {
 /** The band a floating name is drawn in: directly under the square, a half-unit deep
  *  so a stack of lines has room, hugging the square's underside. */
 function hangingLabelBox(rect) {
-  return { x: rect.x, y: rect.y + rect.h, w: Math.max(rect.w, layoutUnit()), h: layoutUnit() / 2, anchor: 'top' };
+  // Wider than the square it belongs to: a hung name has open space either side, so
+  // clamping it to a thin square's width would truncate a name that plainly fits.
+  const w = Math.max(rect.w, layoutUnit() * 1.8);
+  return { x: rect.x + rect.w / 2 - w / 2, y: rect.y + rect.h, w, h: layoutUnit() / 2, anchor: 'top' };
 }
 
 /** Where a chair's labels are drawn, opposite the tile: a full-width top/bottom

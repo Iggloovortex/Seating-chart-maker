@@ -346,57 +346,43 @@ and push it; don't stack new work directly on `main`.
   table keeps the data:** `removeTable` (the ✕) empties the covered squares
   (unseats them, content intact) and leaves them selected in select mode, so a
   second delete clears the content.
-- **Floating labels on small squares (Phases 1-5; Phase 1 DONE).** Chosen shape:
-  "Option A" — a special-icon square shrinks, and the icon shrinks with it (no floor).
-  - **Phase 1 — DONE.** `sizedByWeight` (js/layout.js) now returns true for a square
-    holding NOTHING BUT a special icon (`furnitureKind` and no label text), so it
-    takes its row/column weight like an empty one. Previously every filled square
-    claimed a full unit, so a walkway row could not close up: the empty spaces beside
-    a chair shrank while the chair's square did not, leaving the row ragged. A square
-    WITH labels still claims a full unit — the text is what needs the room — until
-    Phase 3 gives that text somewhere else to go. Both renderers read the one rule, so
-    they stay in step. Note stairs tile a whole cell, so a stairs-only square now
-    squashes into a band; excluding stairs (or a per-kind floor, the rejected
-    "Option B") is the fix if that reads badly.
-  - **Phases 3-5 (data, export, editor, setting) — PARTLY BUILT, off by default.**
-    `line.float` per label line + `config.floatLabels` (Settings → General, "Labels on
-    small squares"). `floatsOutside` / `anyLabelFloats` / `canFloatLabels` /
-    `rectIsShrunk` / `layoutUnit` (js/layout.js) are the one decision both renderers
-    read: a line hangs out only when the setting allows it, the line is marked, AND
-    the square really has no room. `sizedByWeight` therefore lets a LABELLED special
-    square shrink too, once every line floats — the text has somewhere else to go,
-    which is the whole point. A server RACK is excluded (`canFloatLabels`): its names
-    live in its own slabs. In the editor the colour now drags from its own SWATCH
-    (`attachLabelDrag`'s `deferred` mode, which waits for travel so the picker still
-    opens) and the freed grip is the per-line **Float** toggle (`floatToggle`); the
-    printer row drops the grip entirely, since its labels draw inside its overlay.
-    The export hangs a name in a band below the square (`hangingLabelBox`) at a full
-    square's text size, collected during the draw and painted LAST (step 6 of
-    renderToCanvas) so the next row does not bury it.
-  - **Phase 2 — not built.** In a shrunken square the icon takes the FULL square
-    height instead of a chair's ½, with the name moved out: the chair's own
-    arrangement with the piece grown to fill. Touches `chairGeometry` /
-    `renderMergeFurniture`.
-  - **STILL OPEN, and why it is off by default:** the GRID renderer does not hang
-    labels yet (export only), and a name hung below a square lands ON TOP of whatever
-    occupies the row beneath — nothing reserves space for it. Placement needs a
-    decision before this can be turned on.
-  - **Phase 3 — not built.** A per-line `line.float` flag (so it travels with saves,
-    share links, copy/paste and presets beside `text`/`color`). When the square is too
-    small to hold the line, that line prints OUTSIDE the square at the same gap a
-    chair's name sits at (`placeChairLabels` / `chairGeometry`'s `labelBox` are the
-    reference spacing).
-  - **Phase 4 — not built.** The colour drag moves onto the swatch itself
-    (`attachLabelDrag` already takes any element as its handle); the freed hamburger
-    grip becomes the per-line **Float** toggle. Four label-row builders to update
-    (single, bulk, piece, preset).
-  - **Phase 5 — not built.** One Settings → General toggle for all squares that takes
-    effect ONLY on shrunken and split squares.
-  - **Open decisions:** which side a floating name goes (below-always is the proposal);
-    whether the page bounds grow for floating labels (nothing reserves space today, so
-    a name can be clipped at the page edge or overlap an occupied square); and whether
-    the Phase 5 toggle should be chart data rather than `state.config`, which never
-    enters `serialize()` and so would not travel with a share link.
+- **Floating labels on small squares — DONE.** A square holding a special icon
+  (chair / server / stairs) takes its row/column weight like an empty one instead of
+  claiming a full unit, and its name hangs in a band BELOW it. Before this, every
+  filled square claimed a full unit, so a walkway row could not close up: the empty
+  spaces beside a chair shrank while the chair's square did not, leaving the row
+  ragged. "Option A" — the icon shrinks with the square, no per-kind floor.
+  **The two halves are one feature:** the square may shrink *because* the name has
+  somewhere else to go. Splitting them (shrink only when there are no labels) makes
+  the whole thing useless for the case that prompted it, a named chair in a walkway.
+  Model: `line.float` per label line — **on unless turned off** (`float !== false`), so
+  a named chair shrinks out of the box — plus `config.floatLabels` (Settings → General,
+  "Labels on small squares") and `config.reserveFloatSpace`.
+  `floatsOutside` / `anyLabelFloats` / `canFloatLabels` / `rectIsShrunk` / `layoutUnit`
+  / `FLOAT_BAND` (js/layout.js) are the one decision both renderers read: a line hangs
+  out only when the setting allows it, the line is not opted out, AND the square really
+  has no room. `sizedByWeight` lets a labelled special square shrink once every line
+  floats. A server RACK is excluded (`canFloatLabels`) — its names live in its own
+  slabs.
+  **Overlap or hold the space** (`config.reserveFloatSpace`, the second toggle): by
+  default a hung name lies over whatever is beneath it, which is wanted — the layout is
+  spaced by hand. Turned on, `reserveUnits` makes the column's WALK advance by
+  `FLOAT_BAND` past a floating square while the square keeps its own height, so the
+  next row is pushed down and nothing overlaps. It is the advance that grows, never
+  the square.
+  Both renderers hang names identically: `hangingLabelBox` (export, wider than the
+  square since a hung name has open space either side) collected during the draw and
+  painted LAST (step 6 of renderToCanvas) so the next row cannot bury it;
+  `hangLabelsBelow` + `.cell--floatlabel` (grid), which lifts the cell's
+  `overflow: hidden` and raises it above its neighbours.
+  In the editor the colour drags from its own SWATCH (`attachLabelDrag`'s `deferred`
+  mode, which waits for travel so the picker still opens) and the freed grip is the
+  per-line **Float** toggle (`floatToggle`); the printer row drops the grip entirely,
+  since its labels draw inside its own overlay.
+  - **Not built:** in a shrunken square the icon still draws at a chair's ½ rather than
+    taking the FULL square height (`chairGeometry` / `renderMergeFurniture`). Stairs
+    tile a whole cell, so a stairs square squashes into a band; excluding stairs, or a
+    per-kind floor, is the fix if that reads badly.
 - **2-column labels** for the KVM and Dual Monitor icons — a per-row optional 2nd
   column, activating when any row has 2nd-column content. Touches the label data
   model, editor, both renderers, and TSV. (Scoped, not started.)
