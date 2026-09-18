@@ -131,7 +131,16 @@ and push it; don't stack new work directly on `main`.
   row lines up with a plain one exactly, gaps included — and the spacers are why the
   placement has to be explicit, since they take a cell and auto-placement would push
   every piece along by one. A merged piece then sits in a `.piece-block` spanning its
-  tiles: a poly fills the block, a unit is one square centred in it.
+  tiles, and **a Shape (poly) merge is traced, not boxed** (`paintPieceShape`, the
+  pane's twin of `buildSubmergeOverlay`): a fill per member piece and an outline on the
+  edges facing out of the merge, over the bounding box the block occupies. A plain
+  button filling the block IS the bounding box, so an L or T covered the free pieces in
+  its own notch — they could be neither seen nor clicked, and the list stopped matching
+  the chart. The block and the button are `pointer-events: none`; only the traced shape
+  and the content answer the pointer, and their clicks bubble to the button, so a free
+  piece under the bbox is reachable (hit-tested: an L's three cells answer as the merge,
+  the notch as its own piece). A selected poly shows the accent on its outline rather
+  than an outline round the bbox. A unit stays one square centred in the block.
   The Pieces list speaks the chart's mouse language: a plain click fills or empties
   the piece, right-click / long-press edits it, dragging one onto another swaps their
   content (`attachPieceDrag` → `swapContentSlots`, the pane's twin of the chart's

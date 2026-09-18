@@ -1150,7 +1150,19 @@ body {
 .piece-btn--merged { aspect-ratio: auto; }
 /* The block a merged piece sits in: it spans the tiles and carries their shape, so a
    row a merge covers end to end still has a height. */
-.piece-block { display: flex; align-items: center; justify-content: center; min-width: 0; }
+.piece-block { display: flex; align-items: center; justify-content: center; min-width: 0;
+  pointer-events: none; }
+/* A Shape merge paints only its traced shape, so the block's empty corners let the
+   free pieces under them show and be clicked. Only the shape and the content answer
+   the pointer; both bubble their clicks to the button. */
+.piece-btn--poly { background: transparent; border-color: transparent; padding: 0;
+  pointer-events: none; }
+.piece-btn--poly.piece-btn--sel { outline: none; }
+.piece-shape { position: absolute; inset: 0; width: 100%; height: 100%; }
+.piece-shape rect { pointer-events: auto; }
+.piece-btn__on { position: absolute; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 2px; pointer-events: auto; }
+.piece-btn--unit { pointer-events: auto; }
 /* Gives its row a tile's height, in the tiles' own units, so a row covered end to end
    by a merge still lines up with a plain one. It shares its cell with whatever is
    there and is never seen or hit. */

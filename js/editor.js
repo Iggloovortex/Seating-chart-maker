@@ -893,8 +893,15 @@ function piecesGroup(cell, rerender) {
           if (rect.rowSpan <= rect.colSpan) { btn.style.height = '100%'; btn.style.width = 'auto'; }
           else { btn.style.width = '100%'; btn.style.height = 'auto'; }
         } else {
+          // A Shape merge takes its EXACT shape here too, traced over the block the
+          // way buildSubmergeOverlay traces it on the chart. A plain button filling
+          // the block is the bounding box, so an L or T covered the free pieces in
+          // its own notch — the list stopped matching the chart, and those pieces
+          // could not be seen or clicked.
+          btn.classList.add('piece-btn--poly');
           btn.style.width = '100%';
           btn.style.height = '100%';
+          paintPieceShape(btn, cell, sm, rect, sub, submergeSelection.has(i));
         }
       }
       if (submergeSelection.has(i)) btn.classList.add('piece-btn--sel');
@@ -1111,6 +1118,60 @@ function attachPieceLongPress(btn, run) {
 
 /** One button in the piece list: a preview of the sub-cell's fill/border with its
  *  label/icon, opening that piece's editor. */
+/** Trace a Shape (poly) merge over its bounding box in the Pieces list: a fill per
+ *  member piece and an outline on the edges that face out of the merge — the pane's
+ *  twin of buildSubmergeOverlay, so the list and the chart show the same object. The
+ *  button keeps the bounding box (that is its grid area) but paints only the shape,
+ *  and only the shape answers the pointer, so a free piece in an L's notch is still
+ *  visible and still clickable. */
+function paintPieceShape(btn, cell, sm, rect, sub, selected) {
+  const { rows, cols } = cell.split;
+  const plan = submergePlan(sm, rows, cols);
+  const fill = sub.enabled ? (sub.fill || '#dbe7ff') : 'transparent';
+  const border = selected ? 'var(--accent)' : (sub.border || 'var(--line)');
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('class', 'piece-shape');
+  svg.setAttribute('viewBox', `0 0 ${rect.colSpan} ${rect.rowSpan}`);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  const lw = selected ? 0.05 : 0.025;
+  for (const idx of sm.indices) {
+    const sr = Math.floor(idx / cols) - rect.r, sc = (idx % cols) - rect.c;
+    const box = document.createElementNS(NS, 'rect');
+    box.setAttribute('x', sc); box.setAttribute('y', sr);
+    box.setAttribute('width', 1); box.setAttribute('height', 1);
+    box.setAttribute('fill', fill);
+    svg.appendChild(box);
+  }
+  for (const idx of sm.indices) {
+    const ar = Math.floor(idx / cols), ac = idx % cols;
+    const sr = ar - rect.r, sc = ac - rect.c;
+    const seg = (x1, y1, x2, y2) => {
+      const l = document.createElementNS(NS, 'line');
+      l.setAttribute('x1', x1); l.setAttribute('y1', y1);
+      l.setAttribute('x2', x2); l.setAttribute('y2', y2);
+      l.setAttribute('stroke', border); l.setAttribute('stroke-width', lw);
+      svg.appendChild(l);
+    };
+    if (!plan.has(ar - 1, ac)) seg(sc, sr, sc + 1, sr);
+    if (!plan.has(ar, ac + 1)) seg(sc + 1, sr, sc + 1, sr + 1);
+    if (!plan.has(ar + 1, ac)) seg(sc, sr + 1, sc + 1, sr + 1);
+    if (!plan.has(ar, ac - 1)) seg(sc, sr, sc, sr + 1);
+  }
+  btn.prepend(svg);
+  // Icon and caption sit on the merge's widest run, as they do on the chart, rather
+  // than in the middle of a bounding box the shape may not even cover.
+  const run = plan.labelRun || { sr: rect.r, scStart: rect.c, len: rect.colSpan };
+  const on = document.createElement('span');
+  on.className = 'piece-btn__on';
+  on.style.left = `${((run.scStart - rect.c) / rect.colSpan) * 100}%`;
+  on.style.top = `${((run.sr - rect.r) / rect.rowSpan) * 100}%`;
+  on.style.width = `${(run.len / rect.colSpan) * 100}%`;
+  on.style.height = `${(1 / rect.rowSpan) * 100}%`;
+  while (btn.childNodes.length > 1) on.appendChild(btn.childNodes[1]);
+  btn.appendChild(on);
+}
+
 function pieceButton(sub, i, sm) {
   const btn = document.createElement('button');
   btn.type = 'button';
