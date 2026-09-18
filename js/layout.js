@@ -387,10 +387,18 @@ function layoutRules() {
     return best;
   };
 
-  // Only empty squares take their row/column weight. A filled square — desk,
-  // chair or seat — always claims one full unit; a chair simply draws a small
-  // piece of furniture inside its full square rather than shrinking the square.
-  const sizedByWeight = (r, c) => !isEnabled(r, c);
+  // Empty squares take their row/column weight — and so does a square holding
+  // NOTHING BUT a special icon (chair, server, stairs). Such a square has no text
+  // needing room, so forcing it to a full unit only stopped a walkway row closing
+  // up: the empty spaces beside it shrank while it did not, leaving the row ragged.
+  // A square with labels still claims a full unit, because the text is what needs
+  // the space.
+  const sizedByWeight = (r, c) => {
+    if (!isEnabled(r, c)) return true;
+    const cell = peekCell(r, c);
+    if (!furnitureKind(cell)) return false;
+    return !(cell.labels || []).some((l) => l.text && l.text.trim());
+  };
   const wUnits = (r, c) => (sizedByWeight(r, c) ? colWeight(c) : 1); // cell width in units
   const hUnits = (r, c) => (sizedByWeight(r, c) ? rowWeight(r) : 1); // cell height in units
 

@@ -346,6 +346,38 @@ and push it; don't stack new work directly on `main`.
   table keeps the data:** `removeTable` (the ✕) empties the covered squares
   (unseats them, content intact) and leaves them selected in select mode, so a
   second delete clears the content.
+- **Floating labels on small squares (Phases 1-5; Phase 1 DONE).** Chosen shape:
+  "Option A" — a special-icon square shrinks, and the icon shrinks with it (no floor).
+  - **Phase 1 — DONE.** `sizedByWeight` (js/layout.js) now returns true for a square
+    holding NOTHING BUT a special icon (`furnitureKind` and no label text), so it
+    takes its row/column weight like an empty one. Previously every filled square
+    claimed a full unit, so a walkway row could not close up: the empty spaces beside
+    a chair shrank while the chair's square did not, leaving the row ragged. A square
+    WITH labels still claims a full unit — the text is what needs the room — until
+    Phase 3 gives that text somewhere else to go. Both renderers read the one rule, so
+    they stay in step. Note stairs tile a whole cell, so a stairs-only square now
+    squashes into a band; excluding stairs (or a per-kind floor, the rejected
+    "Option B") is the fix if that reads badly.
+  - **Phase 2 — not built.** In a shrunken square the icon takes the FULL square
+    height instead of a chair's ½, with the name moved out: the chair's own
+    arrangement with the piece grown to fill. Touches `chairGeometry` /
+    `renderMergeFurniture`.
+  - **Phase 3 — not built.** A per-line `line.float` flag (so it travels with saves,
+    share links, copy/paste and presets beside `text`/`color`). When the square is too
+    small to hold the line, that line prints OUTSIDE the square at the same gap a
+    chair's name sits at (`placeChairLabels` / `chairGeometry`'s `labelBox` are the
+    reference spacing).
+  - **Phase 4 — not built.** The colour drag moves onto the swatch itself
+    (`attachLabelDrag` already takes any element as its handle); the freed hamburger
+    grip becomes the per-line **Float** toggle. Four label-row builders to update
+    (single, bulk, piece, preset).
+  - **Phase 5 — not built.** One Settings → General toggle for all squares that takes
+    effect ONLY on shrunken and split squares.
+  - **Open decisions:** which side a floating name goes (below-always is the proposal);
+    whether the page bounds grow for floating labels (nothing reserves space today, so
+    a name can be clipped at the page edge or overlap an occupied square); and whether
+    the Phase 5 toggle should be chart data rather than `state.config`, which never
+    enters `serialize()` and so would not travel with a share link.
 - **2-column labels** for the KVM and Dual Monitor icons — a per-row optional 2nd
   column, activating when any row has 2nd-column content. Touches the label data
   model, editor, both renderers, and TSV. (Scoped, not started.)
