@@ -830,40 +830,56 @@ function chairPct(rect) {
 function hangLabelsBelow(cellEl, labelsEl, data, rot, rect, startPct = null) {
   labelsEl.classList.add('cell__furniturelabels--hang');
   const [dr, dc] = serverHalf(rot);
+  const lines = (data.labels || []).filter((l) => l.text);
+  // The export's numbers, in grid px: drawLabelBox steps the stack a fixed 0.35 of a
+  // LINE past the piece's edge and advances BASE_LINE per line. The grid used to lie
+  // flush against the edge with whatever leading the CSS line box gave, which put a
+  // hung name about 0.07 of a square higher than the exported one.
+  const lineH = (layoutUnit() || 0) * BASE_LINE;
+  const pad = lineH * 0.35;
+  const stack = Math.max(1, lines.length) * lineH;
+  // The band IS the stack, and it is placed so its centre lands exactly where the
+  // export's stackX/stackY does. That is what makes the rotation agree: the export
+  // turns the text about the stack's own centre, while a band merely big enough to
+  // hold the text, with the text pinned to one end, swings it a band's length away —
+  // which is why every facing but "up" used to land somewhere else than the export.
+  // +1px because an absolutely-positioned offset in % resolves against the PADDING box,
+  // while the export measures from the square's edge — its border box. Cell and subcell
+  // both carry a 1px border, so that is the whole of the difference.
+  const from = (pct) => (lineH ? `calc(${pct}% + ${pad + 1}px)` : `${pct}%`);
+  labelsEl.style.top = labelsEl.style.bottom = labelsEl.style.left = labelsEl.style.right = 'auto';
   if (dc) {
-    // Side facing: the name reads DOWN the square, so it keeps the standard far half
-    // beside the piece and grows its run past the top and bottom.
+    // Side facing: the name reads DOWN the square, beside the piece.
     const pw = startPct != null ? startPct : chairPct(rect).pw;
-    // Beside a square the band's depth is the half the piece left; a PIECE's content
-    // fills it, so there is no remainder and the band takes the piece's own width as
-    // its depth, lying outside the piece.
-    labelsEl.style.width = startPct != null ? '100%' : `${100 - pw}%`;
+    labelsEl.style.width = lineH ? `${stack}px` : `${100 - pw}%`;
     labelsEl.style.height = 'max(180%, 96px)';
     labelsEl.style.top = '50%';
-    labelsEl.style.left = dc < 0 ? `${pw}%` : '0';
+    if (dc < 0) labelsEl.style.left = from(pw); else labelsEl.style.right = from(pw);
     labelsEl.style.transform = `translateY(-50%) rotate(${rot || 0}deg)`;
   } else {
-    // Up/down facing: the depth a stack needs is what the thinned square lost, so the
-    // band steps just outside that edge, centred on the square. It is the SAME band a
-    // square gets — a piece's name is allowed to lie over the piece or square beside
-    // it, exactly as a square's hung name lies over the row below.
-    labelsEl.style.width = 'max(180%, 96px)';
-    labelsEl.style.height = '100%';
-    labelsEl.style.left = '50%';
-    // From the piece's edge, so a floated name sits the same distance from its icon as
-    // one kept inside (the export's hangingLabelBox starts at the same place).
+    // Up/down facing: the band steps just outside the edge the piece is tucked to,
+    // centred on the square. It may lie over the piece or square beyond it — that
+    // overlap is float's whole point, so nothing moves the name to avoid it.
     const ph = startPct != null ? startPct : chairPct(rect).ph;
-    labelsEl.style.top = dr > 0 ? 'auto' : `${ph}%`;
-    labelsEl.style.bottom = dr > 0 ? `${ph}%` : 'auto';
+    labelsEl.style.width = 'max(180%, 96px)';
+    labelsEl.style.height = lineH ? `${stack}px` : '100%';
+    labelsEl.style.left = '50%';
+    if (dr > 0) labelsEl.style.bottom = from(ph); else labelsEl.style.top = from(ph);
     labelsEl.style.transform = `translateX(-50%) rotate(${rot || 0}deg)`;
   }
-  labelsEl.style.justifyContent = dr > 0 ? 'flex-end' : 'flex-start';
+  labelsEl.style.justifyContent = 'center';
   labelsEl.style.alignItems = 'center';
   // It sits on the PAGE, not on the square's fill, so its ink is contrasted against the
   // surface (the export's labelColorOnBg makes the same choice).
-  const lines = (data.labels || []).filter((l) => l.text);
   labelsEl.querySelectorAll('.cell__label').forEach((span, i) => {
     if (lines[i]) span.style.color = surfaceLabelColor(lines[i].color);
+    // On the span, not the band: `.subcell .cell__label` sets its own line-height, which
+    // a line-height inherited from the band would lose to. The stack has to step by the
+    // export's line for the second and later names to land where the export puts them.
+    if (lineH) span.style.lineHeight = `${lineH}px`;
+    // A turned band is only a stack WIDE, so the name must be free to run past it —
+    // along the screen's other axis once the band is rotated.
+    if (dc) { span.style.maxWidth = 'none'; span.style.overflow = 'visible'; }
   });
 }
 
