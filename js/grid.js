@@ -837,7 +837,7 @@ function hangLabelsBelow(cellEl, labelsEl, data, rot, rect, startPct = null) {
     // Beside a square the band's depth is the half the piece left; a PIECE's content
     // fills it, so there is no remainder and the band takes the piece's own width as
     // its depth, lying outside the piece.
-    labelsEl.style.width = startPct != null ? '100%' : `${Math.max(20, 100 - pw)}%`;
+    labelsEl.style.width = startPct != null ? '100%' : `${100 - pw}%`;
     labelsEl.style.height = 'max(180%, 96px)';
     labelsEl.style.top = '50%';
     labelsEl.style.left = dc < 0 ? `${pw}%` : '0';
