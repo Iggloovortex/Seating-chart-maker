@@ -731,7 +731,7 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan, span = { rows: 1, cols: 1 },
       // A furniture piece floats its name the same way a plain one does: the piece
       // keeps its square, the name steps out of it and is painted late. Per LINE — a
       // piece can keep one name beside its icon and hang another.
-      const fParts = splitFloatLines(sub, true);
+      const fParts = splitFloatLines(sub, true, true);
       geo.kept = fParts.kept;
       geo.hung = hanging ? fParts.hung : [];
       if (!hanging) geo.kept = fParts.kept.concat(fParts.hung);
@@ -755,7 +755,7 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan, span = { rows: 1, cols: 1 },
     // painted in the late pass so the pieces after it cannot bury it.
     // Per LINE: the kept names are drawn inside the piece with its icon, and only the
     // floating ones step out, in the late pass so the pieces after cannot bury them.
-    const pParts = hanging ? splitFloatLines(sub, true) : { kept: labelsOf(sub), hung: [] };
+    const pParts = hanging ? splitFloatLines(sub, true, true) : { kept: labelsOf(sub), hung: [] };
     drawContent(ctx, box.x + bw / 2, box.y + bh / 2, bw, bh, { ...sub, labels: pParts.kept },
                 imgCache, false, plan, undefined, 0, sub.fill || '#dbe7ff', cellRef);
     if (pParts.hung.length) {

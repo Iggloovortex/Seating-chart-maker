@@ -397,11 +397,22 @@ and push it; don't stack new work directly on `main`.
   Model: `line.float` per label line — **on unless turned off** (`float !== false`), so
   a named chair shrinks out of the box — plus `config.floatLabels` (Settings → General,
   "Labels on small squares") and `config.reserveFloatSpace`.
-  `floatsOutside` / `anyLabelFloats` / `canFloatLabels` / `rectIsShrunk` / `layoutUnit`
-  / `FLOAT_BAND` (js/layout.js) are the one decision both renderers read: a line hangs
-  out only when the setting allows it, the line is not opted out, AND the square really
-  has no room. `sizedByWeight` is now simply "is it a special icon" — any of them takes
-  its row/column size. **Keeping a name inside does not force a full square:**
+  `splitFloatLines` / `floatsOutside` / `anyLabelFloats` / `canFloatLabels` /
+  `rectIsShrunk` / `layoutUnit` / `FLOAT_BAND` (js/layout.js) are the one decision both
+  renderers read: a line hangs out only when the setting allows it, the line is not
+  opted out, AND the square really has no room.
+  **EVERY square takes its row/column weight** (`sizedByWeight` is just `true`) — empty,
+  desk, split, merged, anything. It used to be only empties and special icons, on the
+  reasoning that a desk is all text with no piece to shrink around; the effect was that
+  the Size section did nothing on the squares people most wanted to resize, and a row
+  could not be thinned wherever a desk sat in it. A desk's text shrinks to fit in both
+  renderers, so the weight can simply be the size. `floorUnits` stays gated to squares
+  where float is on offer: an ordinary desk has nowhere else to put its text, so a floor
+  there would be a floor on every desk and the weight would stop meaning anything.
+  **The renderers use the same float gate the CONTROL does** (`floatApplies` for a whole
+  square, `canFloatLabels` for a piece — `splitFloatLines`' `isPiece`). Letting every
+  square take a weight made a plain desk "shrunken", and without this a desk started
+  floating a name the editor offers no way to switch off. **Keeping a name inside does not force a full square:**
   `floorUnits` / `labelRoomUnits` give the square a FLOOR of the room its kept-inside
   text needs (the piece's half plus its stack), so the row extends just far enough to
   hold the text — one line thins to 0.74 of a square, two to 0.92, rather than jumping
@@ -416,7 +427,11 @@ and push it; don't stack new work directly on `main`.
   Both renderers hang names identically: `hangingLabelBox` (export) collected during
   the draw and painted LAST (step 6 of renderToCanvas) so the next row cannot bury it;
   `hangLabelsBelow` + `.cell--floatlabel` (grid), which lifts the cell's
-  `overflow: hidden` and raises it above its neighbours.
+  `overflow: hidden`. **The BAND is what carries the z-index (40), not the cell.** The
+  cell used to sit at 4, so two floating squares tied and DOM order decided — the next
+  row down always painted over the name hanging into it and the name vanished outright.
+  A z-index on the cell would also open a stacking context the band could never climb
+  out of. Raising the band is the grid's version of the export's step 6.
   **A hung name is the STANDARD label band reaching past the square's edge** — not a
   placement of its own. `hangingLabelBox` takes the same facing step `chairLabelBox`
   does, starts at the same place (the PIECE's edge, so a floated name sits the same
@@ -444,8 +459,22 @@ and push it; don't stack new work directly on `main`.
   over the line the reorder just gave it — the source colour survives and another is
   lost.
   **Float is only offered where it can act** (`floatApplies`, js/layout.js): a special
-  icon that can shrink. An ordinary desk never shrinks, and a server RACK keeps its
-  names in its slabs, so neither shows the control rather than showing a dead one.
+  icon, which is the only thing with a piece to hang a name beside. A server RACK keeps
+  its names in its slabs, so neither it nor an ordinary desk shows the control — and
+  since the renderers read the same gate, neither one floats a name behind your back.
+  **Float is per LINE, in both renderers** (`splitFloatLines`): a square can keep one
+  name inside and hang another. Both used to ask `anyLabelFloats` and then move the
+  WHOLE stack, which made the toggle all-or-nothing. The grid builds two label stacks
+  rather than moving one; the export gives the chair, the server, the stairs and a split
+  piece a kept box AND a hung box. Where lines fall on both sides of the toggle the hung
+  band starts past the kept stack (`keptDepth`) — both bands begin at the piece's edge,
+  so they landed on top of each other. A server's slab takes the whole square only when
+  NOTHING is kept inside; keep one name and the standard split stands.
+  **Every per-line setting is copied by `cloneLabel`** (js/state.js) and nowhere else.
+  `float` is opt-OUT, so the seven places that rebuilt a line as `{text, color}` —
+  copy, paste, paste-into-a-piece, swap, preset, clone — silently turned floating back
+  ON, which is why a line switched off long ago came back after a paste or an undo of
+  one. Add per-line settings to `cloneLabel`, not to the call sites.
   **A DESK SPLIT's pieces float too**, and both renderers had to be let at them: the
   export now passes its deferred `hanging` list through `drawMerge` into `drawSplit`
   (without it a merged desk's names simply stayed inside), and in the grid
