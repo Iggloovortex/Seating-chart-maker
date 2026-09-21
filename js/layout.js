@@ -1,10 +1,11 @@
 // layout.js — the geometry rules shared by the canvas output and the grid's
 // "true sizes" preview, so the two can never drift apart.
 //
-// EVERY square takes its row/column weight — empty, desk, split, merged. A square
-// keeping a name INSIDE only thins as far as that name needs (floorUnits), and only
-// where float is on offer to begin with; one whose name floats thins all the way and
-// hangs the name outside (see hangingLabelBox in js/export.js).
+// A DESK claims one full unit — it is all text, with no piece to shrink around.
+// Empty squares, and squares holding a special icon, take their row/column weight,
+// which is what lets a row be thinned into a walkway. A square keeping a name INSIDE
+// only thins as far as that name needs (floorUnits); one whose name floats thins all
+// the way and hangs the name outside (see hangingLabelBox in js/export.js).
 
 
 /** Bounding box of a set of "r,c" keys. */
@@ -400,19 +401,12 @@ function layoutRules() {
   // up: the empty spaces beside it shrank while it did not, leaving the row ragged.
   // A square with labels still claims a full unit, because the text is what needs
   // the space.
-  // EVERY square takes its row/column size — empty, a desk, a split, a member of a
-  // merge, anything. It used to be only empties and special icons, on the reasoning
-  // that a desk is all text with no piece to shrink around; the effect was that the
-  // Size section did nothing at all on the squares people most wanted to resize, and a
-  // row could not be thinned wherever a desk sat in it. A desk's text shrinks to fit
-  // its square in both renderers, so the weight can simply be the size.
-  const sizedByWeight = () => true;
+  // Any special icon takes its row/column size. An ordinary desk still claims a full
+  // unit — it is all text, and there is no piece to shrink around.
+  const sizedByWeight = (r, c) => isEnabled(r, c) ? !!furnitureKind(peekCell(r, c)) : true;
 
   // ...but a square keeping its names INSIDE only thins as far as those names need, so
   // "Keep inside" extends the row to fit the text instead of forcing a full square.
-  // Only where float is on offer: an ordinary desk has nowhere else to put its text,
-  // so a floor there would be a floor on every desk and the weight would stop meaning
-  // anything. A desk shrinks to its weight and its text shrinks with it.
   const floorUnits = (r, c) => {
     if (!isEnabled(r, c)) return 0;
     const cell = peekCell(r, c);
@@ -492,27 +486,9 @@ function floatApplies(cell) {
 }
 
 /** True when any of a square's labels would hang outside it. */
-function anyLabelFloats(cell, shrunk, isPiece = false) {
-  return splitFloatLines(cell, shrunk, isPiece).hung.length > 0;
-}
-
-/** Split a square's label lines into the ones that stay INSIDE it and the ones that
- *  hang outside. `float` is per LINE, so a square can do both at once — one name in the
- *  band, another kept in the box. Both renderers used to test `anyLabelFloats` and then
- *  move the whole stack, which made the per-line toggle all-or-nothing: turning one line
- *  off still sent it outside with the rest. This is the one decision they now share. */
-function splitFloatLines(cell, shrunk, isPiece = false) {
-  const lines = (cell && cell.labels || []).filter((l) => l.text && l.text.trim());
-  // The renderers use the SAME gate the Float control does, or a square would float a
-  // name the editor offers no way to switch off. For a whole square that is
-  // floatApplies (a special icon, which is the only thing with a piece to hang a name
-  // beside); a split PIECE always qualifies, because a piece IS a small square.
-  const allowed = isPiece ? canFloatLabels(cell) : floatApplies(cell);
-  if (!allowed) return { kept: lines, hung: [] };
-  return {
-    kept: lines.filter((l) => !floatsOutside(l, shrunk)),
-    hung: lines.filter((l) => floatsOutside(l, shrunk)),
-  };
+function anyLabelFloats(cell, shrunk) {
+  if (!canFloatLabels(cell)) return false;
+  return (cell.labels || []).some((l) => l.text && l.text.trim() && floatsOutside(l, shrunk));
 }
 
 /** Overall size of the layout in units: the widest row and the tallest column. */

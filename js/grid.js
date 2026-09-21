@@ -827,7 +827,7 @@ function chairPct(rect) {
  *  the piece, on the side the facing implies, centred on the square across the other
  *  axis. The grid twin of the export's hangingLabelBox — it is the standard placement
  *  reaching past the square's edge, not a placement of its own. */
-function hangLabelsBelow(cellEl, labelsEl, data, rot, rect, startPct = null, skip = 0) {
+function hangLabelsBelow(cellEl, labelsEl, data, rot, rect, startPct = null) {
   labelsEl.classList.add('cell__furniturelabels--hang');
   const [dr, dc] = serverHalf(rot);
   const lines = (data.labels || []).filter((l) => l.text);
@@ -846,9 +846,7 @@ function hangLabelsBelow(cellEl, labelsEl, data, rot, rect, startPct = null, ski
   // +1px because an absolutely-positioned offset in % resolves against the PADDING box,
   // while the export measures from the square's edge — its border box. Cell and subcell
   // both carry a 1px border, so that is the whole of the difference.
-  // `skip` is the room the KEPT lines already take: both bands start at the piece's
-  // edge, so with lines on both sides of the toggle they landed on top of each other.
-  const from = (pct) => (lineH ? `calc(${pct}% + ${pad + 1 + skip}px)` : `${pct}%`);
+  const from = (pct) => (lineH ? `calc(${pct}% + ${pad + 1}px)` : `${pct}%`);
   labelsEl.style.top = labelsEl.style.bottom = labelsEl.style.left = labelsEl.style.right = 'auto';
   if (dc) {
     // Side facing: the name reads DOWN the square, beside the piece.
@@ -1179,12 +1177,12 @@ function buildSubcell(sub, i, split, sm, parentR, parentC, span = { rows: 1, col
       svg.style.color = clr;
       content.appendChild(svg);
     }
-    // Per LINE here too: a piece can keep one name inside and hang another outside.
-    const mkLabels = (lines) => {
-      if (!lines.length) return null;
-      const box = document.createElement('div');
-      box.className = 'cell__labels';
-      for (const line of lines) {
+    let labelsEl = null;
+    if (sub.labels && sub.labels.some((l) => l.text)) {
+      labelsEl = document.createElement('div');
+      labelsEl.className = 'cell__labels';
+      for (const line of sub.labels) {
+        if (!line.text) continue;
         const span = document.createElement('span');
         span.className = 'cell__label';
         span.textContent = line.text;
@@ -1192,21 +1190,9 @@ function buildSubcell(sub, i, split, sm, parentR, parentC, span = { rows: 1, col
         span.style.color = (furniture || ghost)
           ? surfaceLabelColor(line.color)
           : contrastLabelColor(line.color, sub.fill || '#dbe7ff');
-        box.appendChild(span);
+        labelsEl.appendChild(span);
       }
-      return box;
-    };
-    const parts = splitFloatLines(sub, true, true);   // a piece is always a small square
-    const keptSkip = keptDepth(parts.kept);
-    const labelsEl = mkLabels(parts.kept);
-    const hangEl = mkLabels(parts.hung);
-    const hangHere = (rot) => {
-      if (!hangEl) return;
-      el.classList.add('subcell--floatlabel');
-      hangEl.classList.add('cell__furniturelabels');
-      hangLabelsBelow(el, hangEl, { ...sub, labels: parts.hung }, rot, null, 100, keptSkip);
-      el.appendChild(hangEl);
-    };
+    }
 
     if (furniture === 'stairs') {
       // Fill the sub-cell edge to edge — the sub-cell's own fill shows behind the
@@ -1244,21 +1230,35 @@ function buildSubcell(sub, i, split, sm, parentR, parentC, span = { rows: 1, col
       el.appendChild(tile);
       if (labelsEl) {
         labelsEl.classList.add('cell__furniturelabels');
-        if (furniture === 'server') placeServerLabels(labelsEl, rot); else placeChairLabels(labelsEl, rot);
-        labelsEl.style.transform = `rotate(${rot}deg)`;
+        // A furniture piece floats its name like a plain one: out of the square
+        // rather than over its own icon.
+        if (anyLabelFloats(sub, true)) {
+          el.classList.add('subcell--floatlabel');
+          hangLabelsBelow(el, labelsEl, sub, rot, null, 100);
+        } else {
+          if (furniture === 'server') placeServerLabels(labelsEl, rot); else placeChairLabels(labelsEl, rot);
+          labelsEl.style.transform = `rotate(${rot}deg)`;
+        }
         el.appendChild(labelsEl);
       }
-      // A furniture piece floats its name like a plain one: out of the square rather
-      // than over its own icon.
-      hangHere(rot);
     } else {
       // A piece IS a small square: a name marked to float hangs outside it rather than
       // being shrunk into it. The piece's content fills it, so the band starts at its
-      // edge (100%) — the same rule a shrunken square follows. Per LINE, so a piece can
-      // keep one name inside and hang another.
-      if (labelsEl) content.appendChild(labelsEl);
-      el.appendChild(content);
-      hangHere(sub.rotation || 0);
+      // edge (100%) — the same rule a shrunken square follows.
+      if (labelsEl && anyLabelFloats(sub, true)) {
+        el.classList.add('subcell--floatlabel');
+        labelsEl.classList.add('cell__furniturelabels');
+        // Which way it hangs is decided by WHERE the piece sits, not by its facing: a
+        // piece in the top half of the split hangs above the square, one in the bottom
+        // half below it. Hanging them all one way would stack every piece's name on
+        // the piece beneath it.
+        hangLabelsBelow(el, labelsEl, sub, sub.rotation || 0, null, 100);
+        el.appendChild(content);
+        el.appendChild(labelsEl);
+      } else {
+        if (labelsEl) content.appendChild(labelsEl);
+        el.appendChild(content);
+      }
     }
     if (hasPrinter(sub) && isPrinterSecondary(sub) && !ghost) {
       const po = buildPrinterOverlay(sub, sub.fill);
@@ -1282,7 +1282,7 @@ function buildCell(r, c, rects) {
   // Does this square's name hang outside it? Answered from the laid-out rect, the
   // same test the export makes, so the two agree square for square.
   const floatingHere = !!(rects && anyLabelFloats(data, rectIsShrunk(rects.get(key))))
-    || !!(isSplit(data) && (data.subcells || []).some((sc) => anyLabelFloats(sc, true, true)));
+    || !!(isSplit(data) && (data.subcells || []).some((sc) => anyLabelFloats(sc, true)));
   if (floatingHere) el.classList.add('cell--floatlabel');
 
   // True-size mode positions each square itself. Half a gap of inset on every
@@ -1365,14 +1365,12 @@ function buildCell(r, c, rects) {
       content.appendChild(svg);
     }
 
-    // Float is per LINE, so a square can do both at once: one name kept in the box and
-    // another hung outside it. Two stacks, not one moved — testing "does anything
-    // float" and then moving the whole stack is what made the toggle all-or-nothing.
-    const mkLabels = (lines) => {
-      if (!lines.length) return null;
-      const box = document.createElement('div');
-      box.className = 'cell__labels';
-      for (const line of lines) {
+    let labelsEl = null;
+    if (data.labels && data.labels.length && data.labels.some((l) => l.text)) {
+      labelsEl = document.createElement('div');
+      labelsEl.className = 'cell__labels';
+      for (const line of data.labels) {
+        if (!line.text) continue;
         const span = document.createElement('span');
         span.className = 'cell__label';
         span.textContent = line.text;
@@ -1381,14 +1379,9 @@ function buildCell(r, c, rects) {
         span.style.color = (furniture || ghost)
           ? surfaceLabelColor(line.color)
           : (typeof contrastLabelColor === 'function' ? contrastLabelColor(line.color, data.fill || '#dbe7ff') : line.color);
-        box.appendChild(span);
+        labelsEl.appendChild(span);
       }
-      return box;
-    };
-    const parts = splitFloatLines(data, rects ? rectIsShrunk(rects.get(key)) : false);
-    const keptSkip = keptDepth(parts.kept);
-    const labelsEl = mkLabels(parts.kept);
-    const hangEl = mkLabels(parts.hung);
+    }
 
     const labelCount = data.labels ? data.labels.filter((l) => l.text).length : 0;
 
@@ -1418,11 +1411,6 @@ function buildCell(r, c, rects) {
       el.classList.add('cell--stairs');
       el.appendChild(svg);
       if (labelsEl) { content.appendChild(labelsEl); el.appendChild(content); }
-      if (hangEl) {
-        hangEl.classList.add('cell__furniturelabels');
-        hangLabelsBelow(el, hangEl, { ...data, labels: parts.hung }, data.rotation || 0, rects && rects.get(key), null, keptSkip);
-        el.appendChild(hangEl);
-      }
     } else if (furniture === 'server' && labelCount >= 2) {
       // A rack of several servers: one slab per label, stacked and turned to the
       // facing — the DOM twin of drawServerRack. The server icon sits upright in
@@ -1447,28 +1435,21 @@ function buildCell(r, c, rects) {
       el.appendChild(tile);
       if (labelsEl) {
         labelsEl.classList.add('cell__furniturelabels');
-        if (furniture === 'server') placeServerLabels(labelsEl, rot, rects && rects.get(key));
-        else placeChairLabels(labelsEl, rot, rects && rects.get(key));
-        labelsEl.style.transform = `rotate(${rot}deg)`; // labels turn with the piece
+        // A name that FLOATS hangs in a band just below the square, upright, instead
+        // of sharing the inside of a square that has no room for it. The export's
+        // hangingLabelBox is the same placement.
+        if (floatingHere) {
+          hangLabelsBelow(el, labelsEl, data, rot, rects && rects.get(key));
+        } else {
+          if (furniture === 'server') placeServerLabels(labelsEl, rot, rects && rects.get(key));
+          else placeChairLabels(labelsEl, rot, rects && rects.get(key));
+          labelsEl.style.transform = `rotate(${rot}deg)`; // labels turn with the piece
+        }
         el.appendChild(labelsEl);
-      }
-      // A name that FLOATS hangs in a band just outside the square, instead of sharing
-      // the inside of a square that has no room for it. Only the lines that float move;
-      // the rest stay in the box above. The export's hangingLabelBox is the same
-      // placement.
-      if (hangEl) {
-        hangEl.classList.add('cell__furniturelabels');
-        hangLabelsBelow(el, hangEl, { ...data, labels: parts.hung }, rot, rects && rects.get(key), null, keptSkip);
-        el.appendChild(hangEl);
       }
     } else {
       if (labelsEl) content.appendChild(labelsEl);
       el.appendChild(content);
-      if (hangEl) {
-        hangEl.classList.add('cell__furniturelabels');
-        hangLabelsBelow(el, hangEl, { ...data, labels: parts.hung }, data.rotation || 0, rects && rects.get(key), null, keptSkip);
-        el.appendChild(hangEl);
-      }
     }
     if (hasPrinter(data) && isPrinterSecondary(data) && !ghost) {
       const po = buildPrinterOverlay(data, data.fill);
@@ -2153,7 +2134,7 @@ function renderMergeSplit(merge, box, ar, ac, anchorCell, border, selected, span
   // A piece that hangs its name outside itself needs the DESK to let it out, exactly as
   // a split square needs `.cell--floatlabel`: the overlay and the sub-grid inside it
   // both clip, so a desk-split merge's names were built and then cut off.
-  const floats = (anchorCell.subcells || []).some((sc) => anyLabelFloats(sc, true, true));
+  const floats = (anchorCell.subcells || []).some((sc) => anyLabelFloats(sc, true));
   container.className = 'merge-split' + (selected ? ' merge--selected' : '')
     + (floats ? ' merge-split--floatlabel' : '');
   container.dataset.mergeId = merge.id;

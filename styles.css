@@ -1110,12 +1110,13 @@ body {
 }
 .piece-btn:hover { border-color: var(--line-strong); }
 .piece-btn--sel { outline: 2px solid var(--accent); outline-offset: -2px; }
-/* A square whose name hangs below it has to let that name out of its own box. No
-   z-index on the CELL: two floating squares both sat at 4, so DOM order decided and
-   the next row down always painted over the name hanging into it — the name simply
-   vanished. A z-index here would also open a stacking context the band could never
-   climb out of. The band itself lifts instead, above every cell and overlay, which is
-   the grid's version of the export painting all hung names last (step 6). */
+/* A square whose name hangs below it has to let that name out of its own box, and
+   sit above its neighbours so the name is not painted over. */
+/* No z-index on the CELL: two floating squares both sat at 4, so DOM order decided and
+   the next row down painted over the name hanging into it — the name vanished. A
+   z-index here would also open a stacking context the band could never climb out of.
+   The band itself lifts instead, above every cell and overlay, which is the grid's
+   version of the export painting all hung names last. */
 .cell--floatlabel { overflow: visible; }
 .cell--floatlabel .cell__furniturelabels--hang { z-index: 40; }
 /* A split piece hangs its floated name outside itself, so it needs the same licence. */
