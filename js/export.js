@@ -1063,12 +1063,8 @@ function drawChair(ctx, item, imgCache, plan, hanging) {
  *  geometry handed over. */
 function paintSplitLabels(ctx, data, geo, plan, hanging, keptBox, keptFull) {
   const rot = data.rotation || 0;
-  // A geometry that says nothing about the split keeps EVERYTHING — chairInBox, which
-  // is how a merge shows a chair, builds no kept/hung lists, and reading geo.kept
-  // straight made a merged chair paint no name at all.
-  const kept = geo.kept || labelsOf(data);
-  if (keptBox && kept.length) {
-    drawLabelBox(ctx, keptBox, { ...data, labels: kept }, plan,
+  if (keptBox && geo.kept && geo.kept.length) {
+    drawLabelBox(ctx, keptBox, { ...data, labels: geo.kept }, plan,
                  keptFull || Math.min(keptBox.w, keptBox.h), rot);
   }
   if (geo.hangBox && geo.hung && geo.hung.length) {
