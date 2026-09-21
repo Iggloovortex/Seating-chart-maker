@@ -518,6 +518,32 @@ and push it; don't stack new work directly on `main`.
   half of EACH axis, which on a thinned square is not a square at all but a wide bar.
   - **Not built:** stairs tile a whole cell, so a stairs square squashes into a band;
     excluding stairs, or a per-kind floor, is the fix if that reads badly.
+- **Tables that end on a split's seam (halves, thirds) — ASSESSED, not built.**
+  Wanted: a table may stop part-way through a square, at the seam of a split that is
+  there — a half, a third. Two ways, and the cheap-looking one is the wrong one.
+  - **Splits as real grid lines (rejected).** Making a split's seams into columns and
+    rows of the whole chart is not merely expensive, it changes what a split MEANS: a
+    split is local to one square today, and a global line would subdivide every other
+    square in that row and column, re-cutting every existing chart. It also re-keys six
+    persistent structures at once — `state.cells`, `state.walls` (`"h:r,c"`),
+    `state.merges.keys`, `table.cellKeys`, the weight arrays and the selection — plus
+    the insert/delete-row/column remapping, across ~100 `keyOf`/`parseKey` sites.
+  - **Fractional table edges (recommended).** Keep `cellKeys` for membership and add an
+    optional per-edge inset, e.g. `table.edges = { top: 0, right: 0, bottom: 0.5,
+    left: 0 }`, as a fraction of the edge cell. `footprintOf` already gives the box and
+    both renderers already draw from it (`keysAreRect` → ellipse/rounded-rect, otherwise
+    `cellShapeLoops`), so the geometry change is: trim the box by those fractions before
+    drawing. The resize handle offers the seams of the edge square's `split` as snap
+    stops, which is where "thirds and halves when present" comes from — the stops exist
+    only where a split does. Touches `footprintOf`/`tableCoverage` (js/layout.js), the
+    two `drawTable` paths, and the resize handles; it does NOT touch walls, merges,
+    selection or the key space.
+  - **Why the merge experience does not argue for the rework.** The merge fixes were
+    almost all about INTERACTION — hit-testing a notch, hover, drag, selection, paste —
+    because a merge has to behave as one object under the pointer while being an overlay
+    over many cells. A table already is one object that way: it has no per-cell tap
+    meaning, just a move grip, resize handles and a ✕. The cost that made merge painful
+    is not waiting in tables.
 - **2-column labels** for the KVM and Dual Monitor icons — a per-row optional 2nd
   column, activating when any row has 2nd-column content. Touches the label data
   model, editor, both renderers, and TSV. (Scoped, not started.)
