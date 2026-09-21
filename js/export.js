@@ -729,12 +729,16 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan, span = { rows: 1, cols: 1 },
     if (scFurn) {
       const geo = chairInRect(box, sub, uRows, uCols);
       // A furniture piece floats its name the same way a plain one does: the piece
-      // keeps its square, the name steps out of it and is painted late.
-      if (hanging && anyLabelFloats(sub, true)) {
-        geo.labelBox = hangingLabelBox(box, ...facingStepOf(sub), geo.w);
-        geo.full = cellRef;
-        geo.floating = true;
-      }
+      // keeps its square, the name steps out of it and is painted late. Per LINE — a
+      // piece can keep one name beside its icon and hang another.
+      const fParts = splitFloatLines(sub, true);
+      geo.kept = fParts.kept;
+      geo.hung = hanging ? fParts.hung : [];
+      if (!hanging) geo.kept = fParts.kept.concat(fParts.hung);
+      if (geo.hung.length) geo.hangBox = hangingLabelBox(box, ...facingStepOf(sub), geo.w);
+      geo.hangFull = cellRef;
+      geo.full = cellRef;
+      if (!geo.kept.length) geo.labelBox = null;
       drawChair(ctx, { data: sub, geo }, imgCache, plan, hanging);
       continue;
     }
@@ -749,22 +753,20 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan, span = { rows: 1, cols: 1 },
     // A piece IS a small square, so a name marked to float hangs outside it exactly as
     // a shrunken square's does: the piece keeps its icon, the name steps out and is
     // painted in the late pass so the pieces after it cannot bury it.
-    if (hanging && anyLabelFloats(sub, true)) {
-      drawContent(ctx, box.x + bw / 2, box.y + bh / 2, bw, bh, { ...sub, labels: [] },
-                  imgCache, false, plan, undefined, 0, sub.fill || '#dbe7ff', cellRef);
-      // Up out of the square for a piece in the top half, down for one in the bottom
-      // half — the same rule the grid follows, so the names leave the square instead of
-      // landing on the piece next door.
+    // Per LINE: the kept names are drawn inside the piece with its icon, and only the
+    // floating ones step out, in the late pass so the pieces after cannot bury them.
+    const pParts = hanging ? splitFloatLines(sub, true) : { kept: labelsOf(sub), hung: [] };
+    drawContent(ctx, box.x + bw / 2, box.y + bh / 2, bw, bh, { ...sub, labels: pParts.kept },
+                imgCache, false, plan, undefined, 0, sub.fill || '#dbe7ff', cellRef);
+    if (pParts.hung.length) {
       const [fdr, fdc] = facingStepOf(sub);
       // A plain piece's content fills it, so its "piece" is the whole box: the band
       // starts at the box's edge on the axis it faces (min(w,h) started it mid-piece
       // on an oblong one) and reaches outward from there, free to lie over whatever
       // is next to it.
       const lbox = hangingLabelBox(box, fdr, fdc, fdc ? bw : bh);
-      hanging.push(() => drawLabelBox(ctx, lbox, sub, plan, cellRef, sub.rotation || 0));
-    } else {
-      drawContent(ctx, box.x + bw / 2, box.y + bh / 2, bw, bh, sub, imgCache, false, plan,
-                  undefined, 0, sub.fill || '#dbe7ff', cellRef);
+      hanging.push(() => drawLabelBox(ctx, lbox, { ...sub, labels: pParts.hung }, plan,
+                                      cellRef, sub.rotation || 0));
     }
     if (hasPrinter(sub) && isPrinterSecondary(sub)) drawPrinterOverlay(ctx, box.x, box.y, bw, bh, sub, imgCache);
   }
@@ -936,14 +938,29 @@ function chairGeometry(rectOf, item) {
   // inside of it, and keeps a full square's text size — that is the whole point of
   // letting a small square shrink. The 'top' anchor makes the stack hug the square's
   // underside at the same gap a chair's own name sits at.
+  // Float is per LINE, so a square can do both: the kept names stay in the standard
+  // band and only the floating ones step outside. One box each — reading
+  // "does anything float" and moving the whole stack made the toggle all-or-nothing.
   const shrunk = rectIsShrunk(rect);
-  const floating = anyLabelFloats(data, shrunk);
+  const parts = splitFloatLines(data, shrunk);
   return {
     cx, cy, w: size, h: size,
-    labelBox: floating ? hangingLabelBox(rect, dr, dc, size) : chairLabelBox(rect, dr, dc, size),
-    full: floating ? layoutUnit() : Math.min(rect.w, rect.h),
-    floating,
+    labelBox: parts.kept.length ? chairLabelBox(rect, dr, dc, size) : null,
+    hangBox: parts.hung.length ? hangingLabelBox(rect, dr, dc, size, keptDepth(parts.kept)) : null,
+    kept: parts.kept, hung: parts.hung,
+    full: Math.min(rect.w, rect.h),
+    hangFull: layoutUnit(),
+    floating: parts.hung.length > 0,
   };
+}
+
+/** How much room the lines KEPT inside already take, so a hung stack can start past
+ *  them instead of on top of them. Struck from a full square, like every other label
+ *  measure, plus drawLabelBox's 0.35-line pad. */
+function keptDepth(kept) {
+  if (!kept || !kept.length) return 0;
+  const lineH = (layoutUnit() || 0) * BASE_LINE;
+  return kept.length * lineH + lineH * 0.35;
 }
 
 /** The band a floating name is drawn in: the SAME band a label always gets, grown past
@@ -953,10 +970,13 @@ function chairGeometry(rectOf, item) {
  *  no longer has, so it steps just outside that edge. Either way it stays centred on
  *  the square and anchored to the edge nearest the piece, exactly as chairLabelBox
  *  places it. */
-function hangingLabelBox(rect, dr = -1, dc = 0, size = null) {
+function hangingLabelBox(rect, dr = -1, dc = 0, size = null, skip = 0) {
   const unit = layoutUnit() || Math.max(rect.w, rect.h);
   const depth = unit * 0.5;                            // room a stack of lines needs
-  const s = size != null ? size : Math.min(rect.w, rect.h);
+  // `skip` is the room the KEPT lines already take. Both bands start at the piece's
+  // edge, so with lines on both sides of the toggle they landed on top of each other —
+  // the hung stack has to begin where the kept one ends.
+  const s = (size != null ? size : Math.min(rect.w, rect.h)) + skip;
   const midX = rect.x + rect.w / 2, midY = rect.y + rect.h / 2;
   // It starts at the PIECE's edge, exactly where the standard band starts, so a floated
   // name sits the same distance from its icon as one kept inside. Only its far edge
@@ -1025,6 +1045,7 @@ function chairLabelBox(rect, dr, dc, size) {
  *  tucks up to the desk or table it belongs to. */
 function drawChair(ctx, item, imgCache, plan, hanging) {
   const { cx, cy, w: size, labelBox, full, floating } = item.geo;
+  const geo = item.geo;
   roundRect(ctx, cx - size / 2, cy - size / 2, size, size, size * 0.18);
   ctx.fillStyle = item.data.fill || '#dbe7ff';
   ctx.fill();
@@ -1033,10 +1054,24 @@ function drawChair(ctx, item, imgCache, plan, hanging) {
   ctx.stroke();
   // The furniture carries its icon and its labels, both turned to the facing.
   drawIconOnly(ctx, cx, cy, size, item.data, imgCache);
-  if (!labelBox) return;
-  const paint = () => drawLabelBox(ctx, labelBox, item.data, plan,
-                                   full || Math.min(labelBox.w, labelBox.h), item.data.rotation || 0);
-  if (floating && hanging) hanging.push(paint); else paint();
+  paintSplitLabels(ctx, item.data, geo, plan, hanging, labelBox, full);
+}
+
+/** Paint a piece's names: the KEPT lines in their standard band, the FLOATING ones in
+ *  the hung band and deferred to the late pass so nothing drawn after can bury them.
+ *  Shared by the chair and the server, since the only difference is which boxes the
+ *  geometry handed over. */
+function paintSplitLabels(ctx, data, geo, plan, hanging, keptBox, keptFull) {
+  const rot = data.rotation || 0;
+  if (keptBox && geo.kept && geo.kept.length) {
+    drawLabelBox(ctx, keptBox, { ...data, labels: geo.kept }, plan,
+                 keptFull || Math.min(keptBox.w, keptBox.h), rot);
+  }
+  if (geo.hangBox && geo.hung && geo.hung.length) {
+    const paint = () => drawLabelBox(ctx, geo.hangBox, { ...data, labels: geo.hung }, plan,
+                                     geo.hangFull || layoutUnit(), rot);
+    if (hanging) hanging.push(paint); else paint();
+  }
 }
 
 /** Stairs fill the square edge to edge — no fill, border or padding — so a run
@@ -1047,9 +1082,11 @@ function drawStairs(ctx, item, imgCache, plan, subIndex, splitRows, splitCols, h
   const { rect } = item.geo;
   // Stairs fill their square and carry no label box of their own, so a floating name
   // is the only name they can show — hung below, like a chair's.
-  if (hanging && anyLabelFloats(item.data, rectIsShrunk(rect))) {
+  const stairParts = splitFloatLines(item.data, rectIsShrunk(rect));
+  if (hanging && stairParts.hung.length) {
     const box = hangingLabelBox(rect, ...facingStepOf(item.data), Math.min(rect.w, rect.h));
-    hanging.push(() => drawLabelBox(ctx, box, item.data, plan, layoutUnit(), item.data.rotation || 0));
+    hanging.push(() => drawLabelBox(ctx, box, { ...item.data, labels: stairParts.hung }, plan,
+                                    layoutUnit(), item.data.rotation || 0));
   }
   const { x, y, w, h } = rect;
   const variant = resolveStairType(item.data, item.r, item.c, subIndex, splitRows, splitCols);
@@ -1144,16 +1181,21 @@ function serverGeometry(rectOf, { r, c, data }) {
   // Floating names hang below the square, as a chair's do, and the SLAB takes the
   // whole square rather than half of it — there is no label half left to leave free.
   const shrunk = rectIsShrunk(rect);
-  const floating = anyLabelFloats(data, shrunk);
-  if (floating) {
-    box = { x: rect.x, y: rect.y, w: rect.w, h: rect.h };
-    labelBox = hangingLabelBox(rect, dr, dc, half(dr ? rect.h : rect.w));
-  }
+  const parts = splitFloatLines(data, shrunk);
+  // The slab takes the WHOLE square only when nothing is kept inside — there is no
+  // label half to leave free. Keep one name in the box and the standard split stands,
+  // with just the floating lines hung outside.
+  const allOut = parts.hung.length > 0 && parts.kept.length === 0;
+  if (allOut) box = { x: rect.x, y: rect.y, w: rect.w, h: rect.h };
   return {
-    rect, box, labelBox,
-    full: floating ? layoutUnit() : Math.min(rect.w, rect.h),
+    rect, box,
+    labelBox: parts.kept.length ? labelBox : null,
+    hangBox: parts.hung.length ? hangingLabelBox(rect, dr, dc, half(dr ? rect.h : rect.w), keptDepth(parts.kept)) : null,
+    kept: parts.kept, hung: parts.hung,
+    full: Math.min(rect.w, rect.h),
+    hangFull: layoutUnit(),
     units: labelsOf(data).length,
-    floating,
+    floating: parts.hung.length > 0,
   };
 }
 
@@ -1171,9 +1213,7 @@ function drawServer(ctx, item, imgCache, plan, hanging) {
   ctx.strokeStyle = item.data.border || '#2f6feb';
   ctx.stroke();
   drawIconOnly(ctx, x + w / 2, y + h / 2, Math.min(w, h), item.data, imgCache);
-  if (!labelBox) return;
-  const paint = () => drawLabelBox(ctx, labelBox, item.data, plan, full, item.data.rotation || 0);
-  if (floating && hanging) hanging.push(paint); else paint();
+  paintSplitLabels(ctx, item.data, item.geo, plan, hanging, labelBox, full);
 }
 
 /** A server rack holding several servers: split into one slab per label, stacked

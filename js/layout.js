@@ -491,6 +491,20 @@ function anyLabelFloats(cell, shrunk) {
   return (cell.labels || []).some((l) => l.text && l.text.trim() && floatsOutside(l, shrunk));
 }
 
+/** Split a square's label lines into the ones that stay INSIDE it and the ones that
+ *  hang outside. `float` is per LINE, so a square can do both at once — one name in the
+ *  band, another kept in the box. Both renderers used to test `anyLabelFloats` and then
+ *  move the whole stack, which made the per-line toggle all-or-nothing: turning one line
+ *  off still sent it outside with the rest. This is the one decision they now share. */
+function splitFloatLines(cell, shrunk) {
+  const lines = (cell && cell.labels || []).filter((l) => l.text && l.text.trim());
+  if (!canFloatLabels(cell)) return { kept: lines, hung: [] };
+  return {
+    kept: lines.filter((l) => !floatsOutside(l, shrunk)),
+    hung: lines.filter((l) => floatsOutside(l, shrunk)),
+  };
+}
+
 /** Overall size of the layout in units: the widest row and the tallest column. */
 function layoutExtent({ wUnits, hUnits, reserveUnits }) {
   const { rows, cols } = state.grid;

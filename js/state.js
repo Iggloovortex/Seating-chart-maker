@@ -153,6 +153,17 @@ function defaultLabelColor(index) {
   return index <= 0 ? state.defaults.labelColor : state.defaults.labelColor2;
 }
 
+/** The one way a label line is copied. Every per-line setting has to survive a copy,
+ *  a paste, a swap, a preset and an undo — `float` is opt-OUT (a line floats unless it
+ *  says `float: false`), so a copy that rebuilt a line as just {text, color} silently
+ *  turned floating back ON. That is why a line the user had switched off came back on
+ *  after a paste or an undo of one. Add per-line settings HERE, not at the call sites. */
+function cloneLabel(l) {
+  const out = { text: String((l && l.text) || ''), color: (l && l.color) || DEFAULTS.labelColor };
+  if (l && l.float === false) out.float = false;
+  return out;
+}
+
 function makeCell() {
   // Newly created seats inherit the current default colors (see state.defaults);
   // the edit pane then overrides them per cell.
@@ -759,7 +770,7 @@ function copySubcell(r, c, i) {
     enabled: sub.enabled,
     fill: sub.fill, border: sub.border,
     icon: sub.icon, iconColor: sub.iconColor, rotation: sub.rotation, iconFill: sub.iconFill,
-    labels: (sub.labels || []).map((l) => ({ text: l.text, color: l.color })),
+    labels: (sub.labels || []).map(cloneLabel),
     split: null, subcells: null,
   };
   emit();
@@ -777,7 +788,7 @@ function pasteSquareToSubcell(r, c, i) {
   Object.assign(sub, {
     enabled: f.enabled, fill: f.fill, border: f.border,
     icon: f.icon, iconColor: f.iconColor, rotation: f.rotation, iconFill: f.iconFill,
-    labels: f.labels.map((l) => ({ text: l.text, color: l.color })),
+    labels: f.labels.map(cloneLabel),
   });
   emit();
   return true;
@@ -819,7 +830,7 @@ function swapContentSlots(a, b) {
   const grab = (s) => ({
     enabled: s.enabled, fill: s.fill, border: s.border,
     icon: s.icon, iconColor: s.iconColor, iconFill: s.iconFill, rotation: s.rotation,
-    labels: (s.labels || []).map((l) => ({ text: l.text, color: l.color })),
+    labels: (s.labels || []).map(cloneLabel),
     printer: clonePrinter(s.printer),
   });
   const A = grab(sa), B = grab(sb);
@@ -842,7 +853,7 @@ function copySquareFrom(r, c) {
     iconColor: cell.iconColor,
     rotation: cell.rotation,
     iconFill: cell.iconFill,
-    labels: (cell.labels || []).map((l) => ({ text: l.text, color: l.color })),
+    labels: (cell.labels || []).map(cloneLabel),
     split: cell.split ? { ...cell.split } : null,
     subcells: cell.subcells ? cell.subcells.map(cloneSubcell) : null,
   };
@@ -862,7 +873,7 @@ function cloneSubcell(s) {
     iconColor: s.iconColor || base.iconColor,
     iconFill: s.iconFill || null,
     rotation: s.rotation || 0,
-    labels: (s.labels || []).map((l) => ({ text: String(l.text || ''), color: l.color || DEFAULTS.labelColor })),
+    labels: (s.labels || []).map(cloneLabel),
     printer: clonePrinter(s.printer),
   };
   return out;
@@ -873,7 +884,7 @@ function clonePrinter(p) {
   return {
     color: !!p.color,
     compass: p.compass || 'se',
-    labels: (p.labels || []).map((l) => ({ text: String(l.text || ''), color: l.color || DEFAULTS.labelColor })),
+    labels: (p.labels || []).map(cloneLabel),
     size: p.size === 'small' ? 'small' : 'max',
   };
 }
@@ -916,7 +927,7 @@ function pasteSquareTo(keys) {
       cell.rotation = f.rotation;
       cell.iconFill = f.iconFill;
       // Fresh objects per target so squares never share label instances.
-      cell.labels = f.labels.map((l) => ({ text: l.text, color: l.color }));
+      cell.labels = f.labels.map(cloneLabel);
       // The split (and its sub-cells) travels too, deep-copied so pasted squares
       // never share sub-cell instances.
       if (f.split) { cell.split = { ...f.split }; cell.subcells = (f.subcells || []).map(cloneSubcell); }
@@ -2088,7 +2099,7 @@ function applyConfig(data) {
     fill: p.fill || DEFAULTS.fill,
     border: p.border || DEFAULTS.border,
     labels: Array.isArray(p.labels)
-      ? p.labels.map((l) => ({ text: String(l.text || ''), color: l.color || DEFAULTS.labelColor }))
+      ? p.labels.map(cloneLabel)
       : [],
   } : null;
   cfg.presets = { '1': okPreset(data.presets?.['1']), '2': okPreset(data.presets?.['2']) };

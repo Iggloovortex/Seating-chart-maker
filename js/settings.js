@@ -267,7 +267,7 @@ function applyPreset(n, keys) {
     fill: p.fill,
     border: p.border,
     enabled: true,               // applying a preset fills the square
-    labels: p.labels.map((l) => ({ text: l.text, color: l.color })),
+    labels: p.labels.map(cloneLabel),
   });
   return true;
 }
@@ -794,7 +794,7 @@ function applyPresetToSubcell(n, r, c, i) {
     fill: p.fill,
     border: p.border,
     enabled: true,
-    labels: p.labels.map((l) => ({ text: l.text, color: l.color })),
+    labels: p.labels.map(cloneLabel),
   });
   return true;
 }
