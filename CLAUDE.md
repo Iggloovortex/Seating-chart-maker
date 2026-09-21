@@ -394,10 +394,30 @@ and push it; don't stack new work directly on `main`.
   **The two halves are one feature:** the square may shrink *because* the name has
   somewhere else to go. Splitting them (shrink only when there are no labels) makes
   the whole thing useless for the case that prompted it, a named chair in a walkway.
-  Model: `line.float` per label line — **on unless turned off** (`float !== false`), so
-  a named chair shrinks out of the box — plus `config.floatLabels` (Settings → General,
-  "Labels on small squares") and `config.reserveFloatSpace`.
-  `splitFloatLines` / `floatsOutside` / `anyLabelFloats` / `canFloatLabels` /
+  Model: **`cell.float` per SQUARE (or split piece)** — on unless turned off
+  (`cellFloats`, js/state.js), so a named chair shrinks out of the box — plus
+  `config.floatLabels` (Settings → General, "Labels on small squares") and
+  `config.reserveFloatSpace`.
+  **It is ONE decision per square, not one per line.** Float used to live on each label
+  line, which let a square be asked to keep one name in and hang another out — something
+  neither renderer can honour, because both move the whole stack together. The pane
+  carries a single control (`floatRow`, js/editor.js: "Name when small — Keep inside /
+  Hang outside") in the Labels group of the square, piece and bulk panes, and the three
+  per-line grips are gone. Charts saved under the old model are folded onto the square
+  by `migrateFloat` on load: a square is OFF only if every name it shows was switched
+  off, which is what turning them off one at a time meant. The line flags are deleted
+  after, so they are never read again.
+  **EVERY square takes its row/column weight** (`sizedByWeight` is just `true`) — empty,
+  desk, split, merged. It used to be only empties and special icons, so the Size section
+  did nothing on the squares people most wanted to resize and a row could not be thinned
+  wherever a desk sat in it. A desk's text shrinks to fit in both renderers, so the
+  weight can simply be the size; `floorUnits` stays gated to squares where float is on
+  offer, or every desk would have a floor and the weight would stop meaning anything.
+  **The renderers read the same gate the control does** — `floatApplies` for a square,
+  `canFloatLabels` for a piece (`anyLabelFloats`' `isPiece`). Letting every square take
+  a weight makes a plain desk "shrunken", and without this a desk starts floating a name
+  the pane offers no way to switch off.
+  `floatsOutside` / `anyLabelFloats` / `canFloatLabels` /
   `rectIsShrunk` / `layoutUnit` / `FLOAT_BAND` (js/layout.js) are the one decision both
   renderers read: a line hangs out only when the setting allows it, the line is not
   opted out, AND the square really has no room.
@@ -448,9 +468,8 @@ and push it; don't stack new work directly on `main`.
   rather than the square's fill, because that is where it sits — `labelColorOnBg` in the
   export, `surfaceLabelColor` in the grid.
   In the editor the colour drags from its own SWATCH (`attachLabelDrag`'s `deferred`
-  mode, which waits for travel so the picker still opens) and the freed grip is the
-  per-line **Float** toggle (`floatToggle`); the printer row drops the grip entirely,
-  since its labels draw inside its own overlay.
+  mode, which waits for travel so the picker still opens); the freed grip slot is empty
+  now that Float is one control for the whole square rather than a toggle per line.
   **The swatch is not an inert handle.** It carries `bindColorInput`'s input/change/
   **blur** listeners and `enhanceColorInput`'s click-to-open popover, so a drag from it
   has to stand all three down: `input.dataset.dragging` / `dragged`, read by

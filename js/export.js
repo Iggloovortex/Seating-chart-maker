@@ -730,7 +730,7 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan, span = { rows: 1, cols: 1 },
       const geo = chairInRect(box, sub, uRows, uCols);
       // A furniture piece floats its name the same way a plain one does: the piece
       // keeps its square, the name steps out of it and is painted late.
-      if (hanging && anyLabelFloats(sub, true)) {
+      if (hanging && anyLabelFloats(sub, true, true)) {
         geo.labelBox = hangingLabelBox(box, ...facingStepOf(sub), geo.w);
         geo.full = cellRef;
         geo.floating = true;
@@ -749,7 +749,7 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan, span = { rows: 1, cols: 1 },
     // A piece IS a small square, so a name marked to float hangs outside it exactly as
     // a shrunken square's does: the piece keeps its icon, the name steps out and is
     // painted in the late pass so the pieces after it cannot bury it.
-    if (hanging && anyLabelFloats(sub, true)) {
+    if (hanging && anyLabelFloats(sub, true, true)) {
       drawContent(ctx, box.x + bw / 2, box.y + bh / 2, bw, bh, { ...sub, labels: [] },
                   imgCache, false, plan, undefined, 0, sub.fill || '#dbe7ff', cellRef);
       // Up out of the square for a piece in the top half, down for one in the bottom

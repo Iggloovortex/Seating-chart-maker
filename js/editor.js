@@ -325,6 +325,13 @@ function render(cell) {
       inputs[inputs.length - 1]?.focus();
     });
     g.appendChild(add);
+    const flt = floatRow(cellFloats(cell), floatApplies(cell), () => {
+      const c = getCell(current.r, current.c);
+      if (cellFloats(c)) c.float = false; else delete c.float;
+      updateCell(current.r, current.c, {});
+      render(peekCell(current.r, current.c));
+    });
+    if (flt) g.appendChild(flt);
   }));
 
   // Icon picker (Browse moves under Special, below).
@@ -394,7 +401,7 @@ function render(cell) {
       const note = document.createElement('p');
       note.className = 'egroup__note';
       note.style.marginTop = '6px';
-      note.textContent = 'In the output, this resizes only the empty spaces in this row/column — filled squares stay full size, which offsets them. The editing grid stays uniform.';
+      note.textContent = 'Resizes this row and column in the output — every square in them, filled or not. A name kept inside keeps its square tall enough to hold it.';
       g.appendChild(note);
     }));
   }
@@ -1374,6 +1381,14 @@ function renderSubcellEditor() {
       inputs[inputs.length - 1]?.focus();
     });
     g.appendChild(add);
+    // A piece is always a small square, so Float always has something to do here.
+    const flt = floatRow(cellFloats(sub), true, () => {
+      const s2 = subCur(); if (!s2) return;
+      if (cellFloats(s2)) s2.float = false; else delete s2.float;
+      updateSubcell(current.r, current.c, current.sub, {});
+      renderSubcellEditor();
+    });
+    if (flt) g.appendChild(flt);
   }));
 
   // Icon (+ library), like the square pane.
@@ -1566,14 +1581,8 @@ function subLabelRow(line, index) {
   } };
   attachLabelDrag(grip, index, 'line', cfg);
   attachLabelDrag(color, index, 'color', { ...cfg, deferred: true });
-  // A piece is always small, so Float always has something to do here.
-  const flt = floatToggle(line.float !== false, () => {
-    const s2 = subCur(); if (!s2) return;
-    s2.labels[index].float = s2.labels[index].float === false;
-    updateSubcell(current.r, current.c, current.sub, {});
-    renderSubcellEditor();
-  });
-  row.append(grip, text, color, flt, del);
+  // Float is one setting for the whole PIECE now (floatRow), not one per line.
+  row.append(grip, text, color, del);
   return row;
 }
 
@@ -1694,6 +1703,21 @@ function renderBulk(keys) {
       inputs[inputs.length - 1]?.focus();
     });
     g.appendChild(add);
+
+    // One Float setting for the whole selection, offered when any selected square
+    // could act on it. On unless EVERY applicable square already has it off.
+    const applic = keys.filter((k) => floatApplies(peekCell(...parseKey(k))));
+    const allOn = applic.length > 0 && applic.every((k) => cellFloats(peekCell(...parseKey(k))));
+    const flt = floatRow(allOn, applic.length > 0, () => {
+      batch(() => {
+        for (const k of applic) {
+          const cell = getCell(...parseKey(k));
+          if (allOn) cell.float = false; else delete cell.float;
+        }
+      });
+      renderBulk(keys);
+    });
+    if (flt) g.appendChild(flt);
 
     const note = document.createElement('p');
     note.className = 'egroup__title';
@@ -1915,22 +1939,8 @@ function bulkLabelRow(keys, index) {
   } };
   attachLabelDrag(grip, index, 'line', cfg);
   attachLabelDrag(color, index, 'color', { ...cfg, deferred: true });
-  // One toggle for the whole selection: on unless every selected line already floats.
-  const allFloat = keys.every((k) => {
-    const [r, c] = parseKey(k); const cell = peekCell(r, c);
-    return cell && cell.labels[index] && cell.labels[index].float !== false;
-  });
-  const anyApplies = keys.some((k) => { const [r, c] = parseKey(k); return floatApplies(peekCell(r, c)); });
-  const flt = !anyApplies ? null : floatToggle(allFloat, () => {
-    batch(() => {
-      for (const k of keys) {
-        const [r, c] = parseKey(k); const cell = getCell(r, c);
-        if (cell.labels[index]) cell.labels[index].float = !allFloat ? undefined : false;
-      }
-    });
-    renderBulk(keys);
-  });
-  row.append(grip, text, color, ...(flt ? [flt] : []), del);
+  // Float is one setting for the whole SQUARE now (floatRow), not one per line.
+  row.append(grip, text, color, del);
   return row;
 }
 
@@ -2029,6 +2039,39 @@ function attachLabelDrag(handle, index, kind, cfg) {
  *  freed now that the colour drags from its own swatch. On, the line hangs outside
  *  the square when the square is too small to hold it (Settings → Labels on small
  *  squares must allow it, and a full-size square never floats). */
+/** The square's (or piece's) ONE Float control: its names either hang outside when the
+ *  square is too small to hold them, or stay in. It used to be a grip per label line,
+ *  which meant a square could be asked to do both at once — and the renderers, which
+ *  move the whole stack together, could not honour that. One setting, one button.
+ *  Shown only where it can act: a special icon that can shrink (floatApplies), or a
+ *  split piece, which is always a small square. */
+function floatRow(on, applies, onToggle) {
+  if (!applies) return null;
+  const row = document.createElement('div');
+  row.className = 'erow erow--float';
+  const label = document.createElement('span');
+  label.className = 'erow__floatlabel';
+  label.textContent = 'Name when small';
+  const seg = document.createElement('div');
+  seg.className = 'seg';
+  const mk = (text, isOn, title) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'seg__btn' + (isOn === on ? ' is-on' : '');
+    b.textContent = text;
+    b.title = title;
+    b.setAttribute('aria-pressed', String(isOn === on));
+    b.addEventListener('click', () => { if (isOn !== on) onToggle(); });
+    return b;
+  };
+  seg.append(
+    mk('Keep inside', false, 'Keep the names inside the square; the row stays tall enough to hold them'),
+    mk('Hang outside', true, 'Let the names hang outside, so the square can shrink'),
+  );
+  row.append(label, seg);
+  return row;
+}
+
 function floatToggle(on, onToggle) {
   const b = document.createElement('button');
   b.type = 'button';
@@ -2122,17 +2165,8 @@ function labelRow(line, index) {
   // The colour now drags from its own swatch, which frees the second grip to be the
   // per-line Float toggle.
   attachLabelDrag(color, index, 'color', { deferred: true });
-  // Only offered where it can do something: a square that can actually shrink.
-  const flt = floatApplies(peekCell(current.r, current.c))
-    ? floatToggle(line.float !== false, () => {
-        const cell = getCell(current.r, current.c);
-        cell.labels[index].float = cell.labels[index].float === false;
-        updateCell(current.r, current.c, {});
-        render(peekCell(current.r, current.c));
-      })
-    : null;
-
-  row.append(grip, text, color, ...(flt ? [flt] : []), del);
+  // Float is one setting for the whole SQUARE now (floatRow), not one per line.
+  row.append(grip, text, color, del);
   return row;
 }
 

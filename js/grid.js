@@ -1232,7 +1232,7 @@ function buildSubcell(sub, i, split, sm, parentR, parentC, span = { rows: 1, col
         labelsEl.classList.add('cell__furniturelabels');
         // A furniture piece floats its name like a plain one: out of the square
         // rather than over its own icon.
-        if (anyLabelFloats(sub, true)) {
+        if (anyLabelFloats(sub, true, true)) {
           el.classList.add('subcell--floatlabel');
           hangLabelsBelow(el, labelsEl, sub, rot, null, 100);
         } else {
@@ -1245,7 +1245,7 @@ function buildSubcell(sub, i, split, sm, parentR, parentC, span = { rows: 1, col
       // A piece IS a small square: a name marked to float hangs outside it rather than
       // being shrunk into it. The piece's content fills it, so the band starts at its
       // edge (100%) — the same rule a shrunken square follows.
-      if (labelsEl && anyLabelFloats(sub, true)) {
+      if (labelsEl && anyLabelFloats(sub, true, true)) {
         el.classList.add('subcell--floatlabel');
         labelsEl.classList.add('cell__furniturelabels');
         // Which way it hangs is decided by WHERE the piece sits, not by its facing: a
@@ -1282,7 +1282,7 @@ function buildCell(r, c, rects) {
   // Does this square's name hang outside it? Answered from the laid-out rect, the
   // same test the export makes, so the two agree square for square.
   const floatingHere = !!(rects && anyLabelFloats(data, rectIsShrunk(rects.get(key))))
-    || !!(isSplit(data) && (data.subcells || []).some((sc) => anyLabelFloats(sc, true)));
+    || !!(isSplit(data) && (data.subcells || []).some((sc) => anyLabelFloats(sc, true, true)));
   if (floatingHere) el.classList.add('cell--floatlabel');
 
   // True-size mode positions each square itself. Half a gap of inset on every
@@ -2134,7 +2134,7 @@ function renderMergeSplit(merge, box, ar, ac, anchorCell, border, selected, span
   // A piece that hangs its name outside itself needs the DESK to let it out, exactly as
   // a split square needs `.cell--floatlabel`: the overlay and the sub-grid inside it
   // both clip, so a desk-split merge's names were built and then cut off.
-  const floats = (anchorCell.subcells || []).some((sc) => anyLabelFloats(sc, true));
+  const floats = (anchorCell.subcells || []).some((sc) => anyLabelFloats(sc, true, true));
   container.className = 'merge-split' + (selected ? ' merge--selected' : '')
     + (floats ? ' merge-split--floatlabel' : '');
   container.dataset.mergeId = merge.id;

@@ -153,15 +153,33 @@ function defaultLabelColor(index) {
   return index <= 0 ? state.defaults.labelColor : state.defaults.labelColor2;
 }
 
-/** The one way a label line is copied. Every per-line setting has to survive a copy,
- *  a paste, a swap, a preset and an undo — `float` is opt-OUT (a line floats unless it
- *  says `float: false`), so a copy that rebuilt a line as just {text, color} silently
- *  turned floating back ON. That is why a line the user had switched off came back on
- *  after a paste or an undo of one. Add per-line settings HERE, not at the call sites. */
+/** Does this square (or split piece) hang its names outside itself? ONE decision per
+ *  square — the pane's single Float button writes `cell.float = false` to turn it off,
+ *  and the absence of the key means on, so a named chair shrinks out of the box by
+ *  default. Charts saved when float was per LINE are migrated by migrateFloat below. */
+function cellFloats(cell) {
+  return !!cell && cell.float !== false;
+}
+
+/** Fold a pre-existing per-LINE float setting onto the square. Float used to live on
+ *  each label line; a square is off only if every name it shows was switched off, which
+ *  is what someone meant when they turned them off one at a time. Runs on load, so the
+ *  line flags never have to be read again. */
+function migrateFloat(cell) {
+  if (!cell || typeof cell.float === 'boolean') return cell;
+  const lines = (cell.labels || []).filter((l) => l && l.text && String(l.text).trim());
+  if (lines.length && lines.every((l) => l.float === false)) cell.float = false;
+  for (const l of (cell.labels || [])) if (l && 'float' in l) delete l.float;
+  for (const sc of (cell.subcells || [])) migrateFloat(sc);
+  return cell;
+}
+
+/** The one way a label line is copied. Anything a LINE carries has to survive a copy,
+ *  a paste, a swap, a preset and an undo, so add it here and not at the call sites —
+ *  the seven places that each rebuilt a line by hand are how `float` used to be lost.
+ *  (Float itself is a SQUARE setting now; see cellFloats.) */
 function cloneLabel(l) {
-  const out = { text: String((l && l.text) || ''), color: (l && l.color) || DEFAULTS.labelColor };
-  if (l && l.float === false) out.float = false;
-  return out;
+  return { text: String((l && l.text) || ''), color: (l && l.color) || DEFAULTS.labelColor };
 }
 
 function makeCell() {
@@ -771,6 +789,7 @@ function copySubcell(r, c, i) {
     fill: sub.fill, border: sub.border,
     icon: sub.icon, iconColor: sub.iconColor, rotation: sub.rotation, iconFill: sub.iconFill,
     labels: (sub.labels || []).map(cloneLabel),
+    float: cellFloats(sub) ? undefined : false,
     split: null, subcells: null,
   };
   emit();
@@ -789,6 +808,7 @@ function pasteSquareToSubcell(r, c, i) {
     enabled: f.enabled, fill: f.fill, border: f.border,
     icon: f.icon, iconColor: f.iconColor, rotation: f.rotation, iconFill: f.iconFill,
     labels: f.labels.map(cloneLabel),
+    ...(f.float === false ? { float: false } : {}),
   });
   emit();
   return true;
@@ -831,6 +851,7 @@ function swapContentSlots(a, b) {
     enabled: s.enabled, fill: s.fill, border: s.border,
     icon: s.icon, iconColor: s.iconColor, iconFill: s.iconFill, rotation: s.rotation,
     labels: (s.labels || []).map(cloneLabel),
+    ...(cellFloats(s) ? {} : { float: false }),
     printer: clonePrinter(s.printer),
   });
   const A = grab(sa), B = grab(sb);
@@ -854,6 +875,7 @@ function copySquareFrom(r, c) {
     rotation: cell.rotation,
     iconFill: cell.iconFill,
     labels: (cell.labels || []).map(cloneLabel),
+    float: cellFloats(cell) ? undefined : false,
     split: cell.split ? { ...cell.split } : null,
     subcells: cell.subcells ? cell.subcells.map(cloneSubcell) : null,
   };
@@ -867,6 +889,7 @@ function cloneSubcell(s) {
   const base = makeSubcell();
   const out = {
     enabled: !!s.enabled,
+    ...(cellFloats(s) ? {} : { float: false }),
     fill: s.fill || base.fill,
     border: s.border || base.border,
     icon: s.icon || null,
@@ -874,6 +897,7 @@ function cloneSubcell(s) {
     iconFill: s.iconFill || null,
     rotation: s.rotation || 0,
     labels: (s.labels || []).map(cloneLabel),
+    ...(cellFloats(s) ? {} : { float: false }),
     printer: clonePrinter(s.printer),
   };
   return out;
@@ -928,6 +952,8 @@ function pasteSquareTo(keys) {
       cell.iconFill = f.iconFill;
       // Fresh objects per target so squares never share label instances.
       cell.labels = f.labels.map(cloneLabel);
+      // Float is the square's own setting, so it travels with the content.
+      if (f.float === false) cell.float = false; else delete cell.float;
       // The split (and its sub-cells) travels too, deep-copied so pasted squares
       // never share sub-cell instances.
       if (f.split) { cell.split = { ...f.split }; cell.subcells = (f.subcells || []).map(cloneSubcell); }
@@ -1942,6 +1968,8 @@ function deserialize(data) {
     state.cells = new Map();
     for (const [k, v] of data.cells || []) {
       const cell = { ...makeCell(), ...v, labels: (v.labels || []).map((l) => ({ ...l })) };
+      // Float used to live on each label LINE; fold any such save onto the square.
+      migrateFloat(cell);
       // A split square carries a rows×cols block of sub-cells. Rebuild it with a
       // clean shape so a stale or hand-edited save can never break rendering.
       if (v && v.split && Array.isArray(v.subcells)) {
