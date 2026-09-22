@@ -266,7 +266,13 @@ and push it; don't stack new work directly on `main`.
   **Special/furniture content** (chair/server/rack/stairs) renders as furniture
   over the footprint with NO desk box, in both renderers: a chair stays a ½×½
   piece tucked to its facing (`chairInBox` export / `renderMergeFurniture` grid),
-  a server fills the desk as a rack (`drawServerRack` / `buildServerRack`), and
+  a server fills the desk as a rack (`drawServerRack` / `buildServerRack`) — **labels
+  or not**: with no names there are no slabs to fill, but there is still a desk, so a
+  nameless merged server is a plain filled desk with the server icon on it. The grid
+  asked for `labelCount >= 2` before drawing a rack while the export asked for `>= 1`,
+  so a merged server with NO names (and one with a single name) fell through to the
+  one-square "single server" path and the desk visibly shrank back to a single square.
+  Both renderers now agree at 0, 1 and 2+ names. And
   stairs tile the member cells with the run's start/middle/end variants and seams
   (`drawMergeStairs` / `renderMergeStairsGrid`, variant via `mergeStairVariant`).
   A desk-split merge keeps its Shape/Centered kind buttons and Pieces list in one

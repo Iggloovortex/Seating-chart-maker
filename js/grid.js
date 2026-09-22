@@ -2041,7 +2041,28 @@ function renderMergeFurniture(furn, data, box, rects, merge, selected) {
     area = { left: box.left + (boxW - s) / 2, top: box.top + (boxH - s) / 2, w: s, h: s }; }
   else area = { left: box.left, top: box.top, w: boxW, h: boxH };
 
-  if (furn === 'server' && labelCount >= 2) {
+  // A merged SERVER fills the desk, labels or not — it is a rack, not a piece tucked
+  // into one square. With nothing to put in the slabs there is still a desk to fill, so
+  // a nameless one is a plain filled desk with the server icon on it (the export has
+  // always drawn it that way; the grid fell through to the one-square path below and
+  // the desk visibly shrank back to a single square).
+  if (furn === 'server' && labelCount === 0) {
+    const host = mkFurnHost(area, merge, selected, 'cell--furniturehost merge-furniture--square');
+    clipHostToMerge(host, merge, rects, area);
+    host.style.background = data.fill;
+    host.style.borderColor = data.border;
+    const svg = iconUse('server', 'cell__icon', data.iconFill);
+    if (svg) {
+      svg.style.color = contrastLabelColor(data.iconColor || '#1f2933', data.fill || '#dbe7ff');
+      host.appendChild(svg);
+    }
+    chart.appendChild(host);
+    return;
+  }
+
+  // One name is still a rack — a one-slab one. The export has always used `>= 1`; the
+  // grid asked for two, so a single-named merged server shrank to one square too.
+  if (furn === 'server' && labelCount >= 1) {
     const host = mkFurnHost(area, merge, selected, 'cell--furniturehost');
     // The rack fills the desk, and its host is a plain box — so on an L or T it
     // would cover the free square in the notch AND swallow its clicks. Clip it to
