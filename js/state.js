@@ -1462,7 +1462,10 @@ function resizeTable(id, minR, minC, maxR, maxC, edges) {
   // is unchanged.
   if (edges) {
     const keep = {};
-    for (const k of ['n', 'e', 's', 'w']) if (edges[k] > 0 && edges[k] < 1) keep[k] = edges[k];
+    for (const k of ['n', 'e', 's', 'w']) {
+      const v = edges[k];
+      if (typeof v === 'number' && v > -1 && v < 1 && v !== 0) keep[k] = v;
+    }
     if (Object.keys(keep).length) t.edges = keep; else delete t.edges;
   }
   minR = Math.max(0, minR); minC = Math.max(0, minC);

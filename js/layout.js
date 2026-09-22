@@ -553,14 +553,32 @@ function layoutRects({ wUnits, hUnits, reserveUnits }, unit, originX, originY) {
   return rects;
 }
 
-/** How far a table reaches PAST its own squares, per side, as a fraction of the square
- *  just outside that side. 0 everywhere is the ordinary whole-square table. This is what
- *  lets a table stop on the seam of a split square beside it — a half, a third — rather
- *  than only ever on a square boundary. */
+/** Where each of a table's edges sits, as a signed fraction of ONE square. 0 is flush
+ *  with its own squares — the ordinary whole-square table. POSITIVE reaches that much
+ *  PAST them, into the square beyond. NEGATIVE pulls that much back INTO the table's own
+ *  edge square, which is how a table becomes half a square (or a third, or two thirds)
+ *  rather than never being smaller than the one square it sits on. Both directions stop
+ *  on the seams of a split, so it is one gesture with one set of stops. */
 function tableEdges(table) {
   const e = (table && table.edges) || {};
-  const f = (v) => (typeof v === 'number' && v > 0 && v < 1 ? v : 0);
+  const f = (v) => (typeof v === 'number' && v > -1 && v < 1 ? v : 0);
   return { n: f(e.n), e: f(e.e), s: f(e.s), w: f(e.w) };
+}
+
+/** The one place an edge's drawn position is worked out, for either direction and either
+ *  renderer. `own` is the table's own edge square and `beyond` the one past it; a
+ *  positive fraction is measured into `beyond` and a negative one back into `own`, both
+ *  from the seam the two share. Each renderer hands in its own boxes (measured cells in
+ *  the grid, layout rects in the export), so the edge lands in the same place in both. */
+function tableEdgePos(side, f, own, beyond) {
+  const sq = f > 0 ? beyond : own;
+  if (!sq) return null;
+  // Distance from the shared seam, always into whichever square this is.
+  const into = f > 0 ? f : -f;
+  if (side === 'e') return f > 0 ? sq.x + into * sq.w : sq.x + sq.w - into * sq.w;
+  if (side === 'w') return f > 0 ? sq.x + sq.w - into * sq.w : sq.x + into * sq.w;
+  if (side === 's') return f > 0 ? sq.y + into * sq.h : sq.y + sq.h - into * sq.h;
+  return f > 0 ? sq.y + sq.h - into * sq.h : sq.y + into * sq.h;   // 'n'
 }
 
 /** The fractions a table's edge may stop on, on one side: 0 (flush with the square) plus
@@ -603,30 +621,28 @@ function tableBox(table, rectOf) {
   if (!tl || !br) return null;
   const box = { x: tl.x, y: tl.y, w: br.x + br.w - tl.x, h: br.y + br.h - tl.y };
   const ed = keysAreRect(table.cellKeys) ? tableEdges(table) : { n: 0, e: 0, s: 0, w: 0 };
-  // The edge lands INSIDE the neighbouring square, so it is measured from that square's
-  // own box — not as a distance from the table's edge. In the grid the neighbour does
-  // not begin where the table's cells end: a gap sits between them, and reaching by a
-  // fraction of the neighbour's width from the wrong origin put the grid a whole gap
-  // short of the seam while the gapless export sat right on it. Anchoring on the
-  // neighbour is the same arithmetic in both, which is what makes it one measure.
-  const edgeAt = (side, r, c) => {
+  // The edge lands inside a real square — the one beyond when it reaches out, its own
+  // when it pulls in — so it is measured from THAT square's box, not as a distance from
+  // the table's edge. In the grid a CELL_GAP sits between squares, so the neighbour does
+  // not begin where the table's cells end, and offsetting from the wrong origin put the
+  // grid a whole gap short of the seam while the gapless export sat right on it.
+  const edgeAt = (side, own, beyond) => {
     const f = ed[side];
     if (!f) return null;
-    const n = rectOf(r, c);
-    if (!n) return null;
-    if (side === 'n') return n.y + n.h - f * n.h;
-    if (side === 's') return n.y + f * n.h;
-    if (side === 'w') return n.x + n.w - f * n.w;
-    return n.x + f * n.w;
+    return tableEdgePos(side, f, rectOf(own[0], own[1]), rectOf(beyond[0], beyond[1]));
   };
-  const top = edgeAt('n', fp.minR - 1, fp.minC);
-  const bottom = edgeAt('s', fp.maxR + 1, fp.minC);
-  const leftX = edgeAt('w', fp.minR, fp.minC - 1);
-  const rightX = edgeAt('e', fp.minR, fp.maxC + 1);
+  const top = edgeAt('n', [fp.minR, fp.minC], [fp.minR - 1, fp.minC]);
+  const bottom = edgeAt('s', [fp.maxR, fp.minC], [fp.maxR + 1, fp.minC]);
+  const leftX = edgeAt('w', [fp.minR, fp.minC], [fp.minR, fp.minC - 1]);
+  const rightX = edgeAt('e', [fp.minR, fp.maxC], [fp.minR, fp.maxC + 1]);
   const x0 = leftX === null ? box.x : leftX;
   const y0 = top === null ? box.y : top;
   const x1 = rightX === null ? box.x + box.w : rightX;
   const y1 = bottom === null ? box.y + box.h : bottom;
+  // Two edges pulled in can never meet: a table that has eaten itself is not a table,
+  // so an axis that came out non-positive keeps its plain, unpulled extent.
+  if (x1 - x0 <= 0) return { x: box.x, y: y0, w: box.w, h: Math.max(y1 - y0, box.h) };
+  if (y1 - y0 <= 0) return { x: x0, y: box.y, w: x1 - x0, h: box.h };
   return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 }
 

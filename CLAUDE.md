@@ -543,9 +543,27 @@ and push it; don't stack new work directly on `main`.
   into grid lines: `cellKeys` still means membership, so walls, merges, selection and
   the key space are untouched, and a square the table only reaches INTO is not covered
   or seated — it keeps its own content and its own pieces.
-  Model: an optional `table.edges = {n, e, s, w}`, each 0..<1, a fraction of the square
-  just outside that side; absent on an ordinary table. Carried by serialize/deserialize
-  and written by `resizeTable`'s 6th argument.
+  Model: an optional `table.edges = {n, e, s, w}`, each a SIGNED fraction of one square
+  in (-1, 1); absent on an ordinary table. Carried by serialize/deserialize and written
+  by `resizeTable`'s 6th argument.
+  **A table SHRINKS by the same edge moved the other way.** Positive reaches PAST the
+  table's own squares into the one beyond; negative pulls back INTO its own edge square,
+  which is how a table becomes half a square — or a third, or two thirds — rather than
+  never being smaller than the one square it sits on. Both directions stop on the seams
+  of a split, so it is one gesture with one set of stops and one geometry, not a second
+  mechanism: `tableEdgePos(side, f, own, beyond)` (js/layout.js) is the single place an
+  edge's position is worked out, picking `beyond` when the fraction is positive and
+  `own` when it is negative, and measuring from the seam the two share. `tableBox` and
+  the drag preview both call it, each handing in its own boxes.
+  The inward stops are read through `tableEdgeStops` as well — by asking what lies beyond
+  a footprint one square SHORTER, which is the table's own edge square. They are only
+  offered once the footprint can shrink no further (`wMin`): anywhere else, pulling into
+  a square is the same position as "one square fewer, reaching back into it", and the
+  whole-square form is preferred because it keeps membership honest.
+  A shrink is GEOMETRY only — the square stays in `cellKeys`, so it is still seated and
+  still covered. Two opposite edges can never eat each other: the drag offers no pull the
+  facing edge has no room for (`snapEdge`'s `room`), and `tableBox` falls back to the
+  plain extent on any axis that still came out non-positive.
   `tableBox(table, rectOf)` (js/layout.js) is the one measure both renderers grow by —
   the grid's `renderTables` feeds it measured cell boxes and the export's `tableRect`
   feeds it layout rects, so each reaches into the REAL size of the square it is eating

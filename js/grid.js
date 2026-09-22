@@ -2700,21 +2700,37 @@ function cellLocalRect(r, c) {
  *  a whole number of squares plus one of the seams the neighbour offers. Returns
  *  [whole squares, fraction into the next square]. With no split beside it the only
  *  fraction is 0, so the gesture is exactly the whole-square one it has always been. */
-function snapEdge(table, side, raw) {
+function snapEdge(table, side, raw, room = 1) {
   const fp = footprintOf(table.cellKeys);
+  const vertical = side === 'n' || side === 's';
+  const span = vertical ? fp.maxR - fp.minR + 1 : fp.maxC - fp.minC + 1;
+  const shift = (w) => {
+    const at = { ...fp };
+    if (side === 'n') at.minR -= w; else if (side === 's') at.maxR += w;
+    else if (side === 'w') at.minC -= w; else at.maxC += w;
+    return at;
+  };
   let best = [0, 0], bestD = Infinity;
+  const offer = (w, f) => {
+    const d = Math.abs(raw - (w + f));
+    if (d < bestD) { bestD = d; best = [w, f]; }
+  };
   // Try each whole-square step near the pointer. The seams on offer belong to the square
   // beyond the edge AT THAT STEP, not beyond where the table stands now, so dragging two
   // squares out reads the split of the square it has actually arrived beside.
   for (let w = Math.floor(raw) - 1; w <= Math.ceil(raw) + 1; w++) {
-    const at = { ...fp };
-    if (side === 'n') at.minR -= w; else if (side === 's') at.maxR += w;
-    else if (side === 'w') at.minC -= w; else at.maxC += w;
-    if (at.minR > at.maxR || at.minC > at.maxC) continue;
-    for (const f of tableEdgeStops(table, side, at)) {
-      const d = Math.abs(raw - (w + f));
-      if (d < bestD) { bestD = d; best = [w, f]; }
-    }
+    if (w <= -span) continue;              // a table cannot shed its last square
+    for (const f of tableEdgeStops(table, side, shift(w))) offer(w, f);
+  }
+  // Pulling INTO the last remaining square, which is how a table gets smaller than the
+  // one square it sits on. Anywhere else this is the same position as "one square fewer,
+  // reaching back into it", so it is only needed once the footprint can shrink no
+  // further. The stops are that square's own seams, read through the same function by
+  // asking what lies beyond a footprint one square shorter.
+  const wMin = -(span - 1);
+  for (const f of tableEdgeStops(table, side, shift(wMin - 1))) {
+    const pull = 1 - f;                    // f is measured from the square's far side
+    if (f > 0 && pull < room) offer(wMin, -pull);
   }
   return best;
 }
@@ -2754,8 +2770,13 @@ function attachResizeDrag(handle, table, dir) {
     // whole squares OUTWARD, and each caller moves its own edge by it: negating here as
     // well turned the edge inward, and the "never cross its opposite" clamp put it
     // straight back, so those two handles did nothing at all.
+    const OPPOSITE = { n: 's', s: 'n', e: 'w', w: 'e' };
     const apply = (side, raw, grow) => {
-      const [whole, frac] = snapEdge(table, side, grow ? raw : -raw);
+      // How much of the square is still free to pull into, once the edge facing this one
+      // has taken its own bite. Only a one-square-wide table can run out.
+      const other = edges[OPPOSITE[side]] || 0;
+      const room = other < 0 ? 1 + other : 1;
+      const [whole, frac] = snapEdge(table, side, grow ? raw : -raw, room);
       edges[side] = frac;
       return whole;
     };
@@ -2795,19 +2816,21 @@ function showResizePreview({ preview, next, nextEdges }) {
   // exactly as tableBox anchors it, so the dashed outline sits on the seam the table
   // will be drawn to.
   const ed = nextEdges || { n: 0, e: 0, s: 0, w: 0 };
-  const edgeAt = (side, r, c) => {
-    if (!ed[side]) return null;
-    const n = cellLocalRect(r, c);
-    if (!n) return null;
-    if (side === 'n') return n.top + n.height - ed.n * n.height;
-    if (side === 's') return n.top + ed.s * n.height;
-    if (side === 'w') return n.left + n.width - ed.w * n.width;
-    return n.left + ed.e * n.width;
+  // Through tableEdgePos, the same function the drawn table uses, so the dashed outline
+  // sits exactly where the table will land — reaching out or pulled in.
+  const boxAt = (r, c) => {
+    const b = cellLocalRect(r, c);
+    return b ? { x: b.left, y: b.top, w: b.width, h: b.height } : null;
   };
-  const t2 = edgeAt('n', next.minR - 1, next.minC); if (t2 !== null) top = t2;
-  const b2 = edgeAt('s', next.maxR + 1, next.minC); if (b2 !== null) bottom = b2;
-  const l2 = edgeAt('w', next.minR, next.minC - 1); if (l2 !== null) left = l2;
-  const r2 = edgeAt('e', next.minR, next.maxC + 1); if (r2 !== null) right = r2;
+  const edgeAt = (side, own, beyond) => (ed[side]
+    ? tableEdgePos(side, ed[side], boxAt(own[0], own[1]), boxAt(beyond[0], beyond[1]))
+    : null);
+  const t2 = edgeAt('n', [next.minR, next.minC], [next.minR - 1, next.minC]); if (t2 !== null) top = t2;
+  const b2 = edgeAt('s', [next.maxR, next.minC], [next.maxR + 1, next.minC]); if (b2 !== null) bottom = b2;
+  const l2 = edgeAt('w', [next.minR, next.minC], [next.minR, next.minC - 1]); if (l2 !== null) left = l2;
+  const r2 = edgeAt('e', [next.minR, next.maxC], [next.minR, next.maxC + 1]); if (r2 !== null) right = r2;
+  if (right - left <= 0) { left = a.left; right = z.left + z.width; }
+  if (bottom - top <= 0) { top = a.top; bottom = z.top + z.height; }
   preview.style.left = `${left}px`;
   preview.style.top = `${top}px`;
   preview.style.width = `${right - left}px`;
