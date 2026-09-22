@@ -488,6 +488,9 @@ function customIconFillLayer(inner, fill) {
  *  `fill` paints the space enclosed by the icon's strokes; leave it out and the
  *  icon stays an outline, which is the default. */
 function iconUse(id, className = 'cell__icon', fill = null) {
+  // Set below on whatever svg we return: `.cell__icon` declares `aspect-ratio: 1`, so a
+  // wide or tall glyph would be crushed into a square without this.
+  const shape = (svg) => { svg.style.aspectRatio = String(iconRatio(id)); return svg; };
   // Imported icons carry their own markup and fill with the icon colour
   // (currentColor), driven by the svg's `color` set by the caller.
   const custom = customIcon(id);
@@ -500,21 +503,43 @@ function iconUse(id, className = 'cell__icon', fill = null) {
     svg.innerHTML = fill
       ? customIconFillLayer(custom.inner, fill) + custom.inner
       : custom.inner; // sanitized shapes only
-    return svg;
+    return shape(svg);
   }
   const meta = ICONS[id];
   if (!meta) return null;
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('class', className);
-  svg.setAttribute('viewBox', '0 0 24 24');
+  // NO viewBox here on purpose. The <symbol> carries its own, which already maps its
+  // art into this svg's viewport; setting one here too applies the transform twice and
+  // crops the glyph. The svg's SHAPE comes from the inline aspect-ratio `shape()` sets.
   if (fill) svg.style.setProperty('--icon-fill', fill);
   const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
   use.setAttribute('href', `#${meta.symbol}`);
   svg.appendChild(use);
-  return svg;
+  return shape(svg);
 }
 
 /** A standalone SVG data-URL for a given icon + color — used by the canvas exporter. */
+/** An icon's own view box — the frame its art is drawn in. Read from the live
+ *  `<symbol>`, so the ONE place an icon declares its shape is that viewBox: tighten a
+ *  symbol's box around its ink and both renderers lay it out to that shape. Icons whose
+ *  art is wider or taller than it is square (the double monitor, the laptop) therefore
+ *  stop being squeezed into a square box. */
+function iconViewBox(id) {
+  const custom = customIcon(id);
+  if (custom) return custom.viewBox;
+  const meta = ICONS[id];
+  const sym = meta && typeof document !== 'undefined' ? document.getElementById(meta.symbol) : null;
+  return (sym && sym.getAttribute('viewBox')) || '0 0 24 24';
+}
+
+/** How wide an icon is for its height: >1 is a wide glyph, <1 a tall one, 1 a square. */
+function iconRatio(id) {
+  const n = String(iconViewBox(id)).split(/[\s,]+/).map(Number);
+  const w = n[2], h = n[3];
+  return (w > 0 && h > 0) ? w / h : 1;
+}
+
 function iconDataUrl(id, color, fill = null) {
   const custom = customIcon(id);
   if (custom) {
@@ -529,7 +554,11 @@ function iconDataUrl(id, color, fill = null) {
   const inner = SYMBOL_MARKUP[meta.symbol]
     .replaceAll('COLOR', color)
     .replaceAll('FILL', fill || 'none');
+  // The symbol's OWN box, not an assumed 24x24 — otherwise a tightened viewBox would
+  // reshape the icon in the grid and leave the export drawing the old square crop.
+  const box = iconViewBox(id);
+  const [, , vbW, vbH] = String(box).split(/[\s,]+/).map(Number);
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">${inner}</svg>`;
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box}" width="${vbW || 24}" height="${vbH || 24}">${inner}</svg>`;
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 }

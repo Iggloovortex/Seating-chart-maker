@@ -1278,10 +1278,14 @@ function drawIconOnly(ctx, cx, cy, size, data, imgCache) {
   const img = imgCache.get(iconKey(data.icon, data));
   if (!img) return;
   const iconSize = size * 0.64;
+  // The glyph's own shape: `iconSize` is its HEIGHT and the width follows the ratio, so
+  // a wide icon lays out wide instead of being squeezed into a square.
+  const ratio = iconRatio(data.icon);
+  const iw = iconSize * Math.max(1, ratio), ih = iconSize / Math.max(1, 1 / ratio);
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate(((data.rotation || 0) * Math.PI) / 180);
-  ctx.drawImage(img, -iconSize / 2, -iconSize / 2, iconSize, iconSize);
+  ctx.drawImage(img, -iw / 2, -ih / 2, iw, ih);
   ctx.restore();
 }
 
@@ -1464,7 +1468,11 @@ function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, 
       if (img) ctx.drawImage(img, -iconSize / 2, cursorY, iconSize, iconSize);
     } else {
       const img = imgCache.get(iconKey(iconId, data));
-      if (img) ctx.drawImage(img, -iconSize / 2, cursorY, iconSize, iconSize);
+      // `iconSize` is the glyph's HEIGHT; a wide glyph takes the width its own shape
+      // asks for (capped by the box, so it never runs out of the square it sits in).
+      const ratio = iconRatio(iconId);
+      const iw = Math.min(iconSize * Math.max(1, ratio), w * 0.94);
+      if (img) ctx.drawImage(img, -iw / 2, cursorY, iw, iconSize);
     }
     cursorY += iconSize;
   }

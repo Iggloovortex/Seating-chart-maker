@@ -2188,9 +2188,14 @@ function placeMergeContent(data, fill, box, which, ghost = false) {
   // desk (see mergeIconSize). Set inline so it overrides `.cell__icon`'s max-width.
   const icon = inner.querySelector('.cell__icon');
   if (icon) {
+    // mergeIconSize is the icon's HEIGHT — the export treats it that way too — and the
+    // WIDTH follows the glyph's own shape (the inline aspect-ratio iconUse sets), capped
+    // by the desk so a wide glyph cannot run off the end of it. Setting it as the width
+    // instead halved a 2:1 icon in the grid while the export drew it full size.
     const side = mergeIconSize(box.w, box.h);
-    icon.style.width = `${side}px`;
-    icon.style.maxWidth = `${side}px`;
+    icon.style.height = `${side}px`;
+    icon.style.width = 'auto';
+    icon.style.maxWidth = `${Math.max(8, box.w * 0.94)}px`;
   }
   wrap.appendChild(inner);
   chart.appendChild(wrap);

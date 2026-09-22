@@ -274,13 +274,28 @@ and push it; don't stack new work directly on `main`.
   grows until it hits either `ICON_SHARE` (0.46) of the LONG side or `ICON_ROOM` (0.70)
   of the SHORT side, whichever comes first: a 1×1 is unchanged (the short side binds, 34px),
   a 2×1 desk goes 38 → 56px, and a tall 1×3 also reaches 56 because its short side caps it.
-  **Not fixed by this:** a WIDE glyph still cannot use a wide desk's long axis. Every
-  symbol has a square `viewBox`, and `.cell__icon` forces `aspect-ratio: 1`, so the art
-  scales to the box's HEIGHT. `ic-monitor-double` draws two 10.4×7 screens inside that
-  square box (ink ~10 of 24 tall) where `ic-monitor` draws one 18×12 (ink ~16 of 24), so
-  at the same box size the double reads about 60% the size of the single — which is why
-  it looks scrunched on a 2×1. Fixing it means giving a glyph an intrinsic ratio (a
-  viewBox that bounds its ink) and letting the icon box take it instead of 1:1.
+  **An icon declares its SHAPE in its own viewBox**, and both renderers lay it out to
+  that (`iconViewBox` / `iconRatio`, js/icons.js). Tighten a `<symbol>`'s box around its
+  ink and it stops being squeezed into a square: `ic-monitor-double` drew two 10.4×7
+  screens inside a square 24×24 box, so at any box size it read ~60% the size of
+  `ic-monitor` — scrunched, and worst on a wide desk where it had width it could not
+  use. Its box is now `0 4 24 12` (≈2:1) and the laptop's `2 4 20 15`; every other
+  built-in measured ≈1.1:1, near enough square to leave alone.
+  Three places had to stop assuming a square: `iconDataUrl` hard-coded
+  `viewBox="0 0 24 24"` (so a tightened box would have reshaped the grid and left the
+  EXPORT drawing the old square crop), `.cell__icon`'s `aspect-ratio: 1` (now set inline
+  per glyph by `iconUse`), and the export's `drawImage` calls (which drew every icon
+  into a square).
+  **The size is the icon's HEIGHT in both renderers**, and the width follows the ratio,
+  capped by the box: `placeMergeContent` sets `height` + `maxWidth` and the export uses
+  `min(iconSize * ratio, w * 0.94)`. Setting it as the WIDTH in the grid (as it first
+  was) halved a 2:1 icon there while the export drew it full size.
+  For a `<use>` the outer `<svg>` must NOT carry a viewBox — the `<symbol>`'s own box
+  already maps its art into that viewport, and setting both applies the transform twice
+  and crops the glyph.
+  **Known nit:** a glyph in a tighter box scales more to reach the same height, so its
+  strokes come out heavier — the double monitor's are about twice the single's. The fix
+  is to thin that symbol's `stroke-width` to match, which is art, not layout.
 
   **Special/furniture content** (chair/server/rack/stairs) renders as furniture
   over the footprint with NO desk box, in both renderers: a chair stays a ½×½
