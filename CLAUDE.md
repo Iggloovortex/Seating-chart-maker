@@ -572,6 +572,13 @@ and push it; don't stack new work directly on `main`.
   dragging two squares out reads the split of the square it has arrived beside.
   `showResizePreview` shows the fraction too, so the dashed preview lands where the
   table will be drawn.
+  **Each edge grows the way it FACES.** The pointer's travel is positive right and down,
+  so for the west and north edges outward is the other way about and the travel is
+  negated going into `snapEdge`. What comes back is then always a count of whole squares
+  OUTWARD, and each caller moves its own edge by it (`minC -= w`, `maxC += w`). Negating
+  a second time on the way out turned those two edges INWARD, and the "never cross its
+  opposite" clamp put them straight back — so the west and north handles (and the
+  corners through them) did nothing at all, while east and south worked.
   **Rectangles only.** `tableEdgeStops` returns `[0]` and `tableBox` ignores `edges`
   unless `keysAreRect` — a notched L/T/+ is traced from its own squares by
   `cellShapeLoops`, so there is no box for a fraction to grow.

@@ -2748,10 +2748,16 @@ function attachResizeDrag(handle, table, dir) {
     const rawR = (e.clientY - drag.y) / drag.zoom / drag.stepY;
     const n = { ...drag.fp };
     const edges = { ...drag.edges };
+    // `raw` is the pointer's travel in squares, positive right and down. An edge GROWS
+    // the way it faces, so for the west and north edges that is the other way about —
+    // which is why the travel is negated going in. The answer is then always a count of
+    // whole squares OUTWARD, and each caller moves its own edge by it: negating here as
+    // well turned the edge inward, and the "never cross its opposite" clamp put it
+    // straight back, so those two handles did nothing at all.
     const apply = (side, raw, grow) => {
       const [whole, frac] = snapEdge(table, side, grow ? raw : -raw);
       edges[side] = frac;
-      return grow ? whole : -whole;
+      return whole;
     };
     if (dir.includes('w')) n.minC -= apply('w', rawC, false);
     if (dir.includes('e')) n.maxC += apply('e', rawC, true);
