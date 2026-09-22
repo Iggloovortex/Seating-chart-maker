@@ -223,13 +223,23 @@ and push it; don't stack new work directly on `main`.
   — a clipped region is neither painted nor hit-tested. Note the rack is laid across
   the bounding box, so on an L the clip visibly cuts the slabs that reach into the
   notch.
-  **A merge UNDER A TABLE is covered**, like any covered square: only its content
-  overlays the table — no desk box, no outline — and a desk-split merge overlays EVERY
-  piece's content. Both renderers decide it the same way (any member square inside a
-  table's footprint): `coveredByTable` in `drawMerge`, `deskCovered` in `renderMerges`.
-  The grid used to skip this check entirely, so the desk painted over the table and the
-  table could not be seen at all; the content is contrasted against the TABLE's colour,
-  which is what it now sits on.
+  **A merged desk layers exactly like a plain CELL does**, which is what puts it under a
+  table. A cell is positioned at z-index `auto`, so it opens no stacking context: its box
+  paints below the table (z 1) while its `.cell__content` (z 2) rises above it — which is
+  why a square on a table shows the table with the square's outline ring around it.
+  `.merge-shape` / `.merge-content` / `.merge-unit` / `.merge-split` used to carry
+  `z-index: 1`, which BOTH tied them with the table (DOM order then put the desk on top,
+  hiding the table completely) and opened a stacking context that trapped their
+  `.cell__content` underneath it. They carry no z-index now; being later siblings they
+  still paint above the cells. **Suppressing the desk box under a table is the wrong
+  fix** — it was tried, and it made a covered merge the only thing on the chart with no
+  outline ring, so it stopped matching a covered square. The EXPORT is the one that drops
+  the box (`coveredByTable` in `drawMerge`), because there a table is solid; the editing
+  grid's `.table-shape` is `opacity: .8` on purpose, so everything under a table shows
+  through and no renderer needs to hide anything.
+  `.merge-split--floatlabel` must not carry a z-index either, for the same reason the
+  float band's own rule gives: the BAND rides over the squares it lies on, not the desk.
+  Lifting the desk put a desk-split merge over any table it sat on.
   A selected merge shows
   ONE outline over the whole object (`.merge--selected`), not a tick per member
   (buildCell skips per-cell selection on merged cells). Walls are refused on a

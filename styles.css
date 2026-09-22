@@ -862,12 +862,18 @@ body {
 .cell--merged-inert { cursor: default; }
 /* Keep a selected member's outline visible above the merge overlay. */
 .cell--merged.cell--selected { z-index: 5; }
+/* NO z-index on these: a merged desk layers exactly like a plain CELL does. A cell is
+   positioned at `auto`, so it opens no stacking context and its `.cell__content` (z 2)
+   rises over a table (z 1) while the cell's own box stays under it — which is why a
+   square on a table shows the table with its outline ring around it. At z-index 1 these
+   wrappers opened a stacking context that trapped their `.cell__content` underneath the
+   table, so the desk could never sit under it and painted over the table instead. They
+   still paint above the cells, being later siblings. */
 .merge-shape,
 .merge-content,
 .merge-unit {
   position: absolute;
   pointer-events: none;   /* clicks pass to the cells below, which edit the anchor */
-  z-index: 1;
 }
 /* The unit overlay IS the live target for a centred merge (its member cells are
    inert), so it takes the pointer itself. The poly shape is the live target too,
@@ -915,19 +921,20 @@ body {
    footprint. The inner .cell__split (position:absolute; inset:0) fills it. */
 .merge-split {
   position: absolute;
-  z-index: 1;
   box-sizing: border-box;
   border: 1px solid var(--seat-border);
   border-radius: 6px;
   overflow: hidden;
 }
 /* A desk split whose pieces hang their names outside themselves has to let them out —
-   the overlay AND the sub-grid in it both clip — and ride above the squares they lie
-   over, the same licence .cell--floatlabel gives a split square. The band's own z-index
-   still orders it above the pieces inside this overlay. */
+   the overlay AND the sub-grid in it both clip. It must NOT carry a z-index of its own:
+   the BAND is what rides above the squares it lies over (.subcell--floatlabel's
+   .cell__furniturelabels--hang), exactly as a floating CELL lifts its band and not
+   itself. A z-index here lifted the whole DESK instead, which put a desk-split merge
+   over any table it sits on — and, being a stacking context, would trap the band
+   inside it anyway. */
 .merge-split--floatlabel,
 .merge-split--floatlabel .cell__split { overflow: visible; }
-.merge-split--floatlabel { z-index: 4; }
 /* Hovering any member cell lights the WHOLE fused desk, so a merge reads as one
    unit rather than a stack of squares. The member cells are transparent, so kill
    their own single-cell hover — the overlay is what answers the pointer. */
