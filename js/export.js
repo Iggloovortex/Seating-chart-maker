@@ -565,7 +565,8 @@ function drawMerge(ctx, rectOf, { merge, data, plan, coveredByTable }, imgCache,
         drawContent(ctx, left + cc * bw + bw / 2, top + rr * bh + bh / 2, bw, bh, sub, imgCache, false, out);
       });
     } else {
-      drawContent(ctx, (left + right) / 2, (top + bottom) / 2, right - left, bottom - top, data, imgCache, false, out);
+      drawContent(ctx, (left + right) / 2, (top + bottom) / 2, right - left, bottom - top, data, imgCache, false, out,
+                  undefined, 0, null, null, mergeIconSize(right - left, bottom - top));
     }
     return;
   }
@@ -656,7 +657,8 @@ function drawMerge(ctx, rectOf, { merge, data, plan, coveredByTable }, imgCache,
 
   if (plan.isRect) {
     drawContent(ctx, (left + right) / 2, (top + bottom) / 2, right - left, bottom - top,
-                data, imgCache, false, out, undefined, 0, fill);
+                data, imgCache, false, out, undefined, 0, fill, null,
+                mergeIconSize(right - left, bottom - top));
     return;
   }
   // L/T/+: labels across the widest run, icon in the slimmest cell.
@@ -1396,7 +1398,7 @@ function coveredGeometry(rectOf, { r, c }, footprints) {
  *  and only shrinks as far as the piece requires, which is the rule the grid's
  *  fitSubcellLabels follows. Without it a half-height piece got half-height text
  *  however much room the text actually needed. */
-function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, extraRot = 0, labelBg = null, base = null) {
+function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, extraRot = 0, labelBg = null, base = null, iconOverride = null) {
   const labels = labelsOf(data);
   let iconId = data.icon;
   let printerAsIcon = false;
@@ -1412,7 +1414,9 @@ function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, 
   // An ICON keeps the share of its box that a square's icon takes of the square, so a
   // split piece reads like a small square. Only the TEXT is struck from `base`, since
   // text does not want scaling down with the box while it still fits.
-  let iconSize = s * (labels.length ? plan.iconFrac : 0.6);
+  // A merged DESK hands in its own icon size: `s` is the short side, so on a long desk
+  // the icon would stay the size it is on a single square however much room there is.
+  let iconSize = iconOverride || s * (labels.length ? plan.iconFrac : 0.6);
   let lineH = (base || s) * plan.lineFrac;
   let totalH = (hasIcon ? iconSize : 0) + labels.length * lineH;
 

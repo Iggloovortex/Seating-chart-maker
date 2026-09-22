@@ -2183,7 +2183,16 @@ function placeMergeContent(data, fill, box, which, ghost = false) {
   wrap.style.top = `${box.top}px`;
   wrap.style.width = `${box.w}px`;
   wrap.style.height = `${box.h}px`;
-  wrap.appendChild(mergeContentInner(data, fill, which, ghost));
+  const inner = mergeContentInner(data, fill, which, ghost);
+  // The icon's CSS cap is struck from a CELL; a desk gets its own, measured from the
+  // desk (see mergeIconSize). Set inline so it overrides `.cell__icon`'s max-width.
+  const icon = inner.querySelector('.cell__icon');
+  if (icon) {
+    const side = mergeIconSize(box.w, box.h);
+    icon.style.width = `${side}px`;
+    icon.style.maxWidth = `${side}px`;
+  }
+  wrap.appendChild(inner);
   chart.appendChild(wrap);
 }
 

@@ -266,6 +266,22 @@ and push it; don't stack new work directly on `main`.
   shows both. A menu raised from the pane must be `.merge-menu`-styled at z-index 70
   like the delete/preset menus, or it opens BEHIND the pane and the button reads as
   doing nothing.
+  **A desk's ICON cap follows the DESK, not a cell** (`mergeIconSize`, js/layout.js —
+  called by `placeMergeContent` in the grid and passed to `drawContent` as
+  `iconOverride` in the export, so both agree). `.cell__icon`'s `max-width: 38px` is
+  struck from a cell, so a merged desk's icon stopped at 38px however long the desk was
+  — the size it would be on a single square, marooned in twice the room. The icon now
+  grows until it hits either `ICON_SHARE` (0.46) of the LONG side or `ICON_ROOM` (0.70)
+  of the SHORT side, whichever comes first: a 1×1 is unchanged (the short side binds, 34px),
+  a 2×1 desk goes 38 → 56px, and a tall 1×3 also reaches 56 because its short side caps it.
+  **Not fixed by this:** a WIDE glyph still cannot use a wide desk's long axis. Every
+  symbol has a square `viewBox`, and `.cell__icon` forces `aspect-ratio: 1`, so the art
+  scales to the box's HEIGHT. `ic-monitor-double` draws two 10.4×7 screens inside that
+  square box (ink ~10 of 24 tall) where `ic-monitor` draws one 18×12 (ink ~16 of 24), so
+  at the same box size the double reads about 60% the size of the single — which is why
+  it looks scrunched on a 2×1. Fixing it means giving a glyph an intrinsic ratio (a
+  viewBox that bounds its ink) and letting the icon box take it instead of 1:1.
+
   **Special/furniture content** (chair/server/rack/stairs) renders as furniture
   over the footprint with NO desk box, in both renderers: a chair stays a ½×½
   piece tucked to its facing (`chairInBox` export / `renderMergeFurniture` grid),

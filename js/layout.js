@@ -646,6 +646,24 @@ function tableBox(table, rectOf) {
   return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 }
 
+/** How big a merged desk's ICON may be. A square's icon is a share of its cell, capped
+ *  so it never dominates — but a DESK is not a cell: on a 2x1 the fixed cap left the
+ *  icon the size it would be on a single square, marooned in twice the room, and a wide
+ *  glyph (the double monitor) read as scrunched beside a single one.
+ *
+ *  So the cap follows the desk: the icon may grow until it hits either ICON_SHARE of
+ *  the LONG side or ICON_ROOM of the SHORT side, whichever comes first. On a 1x1 the
+ *  short side binds and the answer is what a plain square already gets, so an ordinary
+ *  desk is unchanged; the longer or taller the desk, the more the long side allows,
+ *  until the short side caps it. Both renderers call this, so a desk's icon is the same
+ *  size in the editing grid and in the export. */
+const ICON_SHARE = 0.46;   // of the long side — the share a square's icon takes
+const ICON_ROOM = 0.70;    // of the short side — how much of the depth an icon may fill
+function mergeIconSize(w, h) {
+  const long = Math.max(w, h), short = Math.min(w, h);
+  return Math.max(8, Math.min(long * ICON_SHARE, short * ICON_ROOM));
+}
+
 /** True when a box is sitting ON a table: its CENTRE falls inside the table's drawn
  *  box. This is the same centre-in-shape test `tableCoverage` uses for a turned table.
  *  A square the table merely REACHES INTO keeps its own pieces (membership is still
