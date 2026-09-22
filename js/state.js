@@ -984,7 +984,7 @@ function pasteSquareTo(keys) {
  *  This is the one move: both the selection's move handle and a square dragged
  *  to a new cell go through it, so they can never drift apart. Call it inside a
  *  batch — it does not emit. */
-function shiftCells(keys, dr, dc, displaced) {
+function shiftCells(keys, dr, dc, displaced, carryTables = true) {
   for (const k of keys) {
     const [r, c] = parseKey(k);
     if (!inBounds(r + dr, c + dc)) return false; // off-grid: silent no-op
@@ -1009,8 +1009,14 @@ function shiftCells(keys, dr, dc, displaced) {
 
   for (const k of keys) state.cells.delete(k);
   for (const [k, cell] of moved) state.cells.set(k, cell);
-  for (const t of state.tables) {
-    if (t.cellKeys.every((k) => selected.has(k))) t.cellKeys = t.cellKeys.map(at);
+  // A table travels only when its whole self is in the moved set — and only when the
+  // caller is moving FURNITURE rather than rearranging what sits on it. Dragging one
+  // square satisfies "whole self" for a 1x1 table, so a content drag off a one-square
+  // table used to take the table with it; the table is a surface and stays put.
+  if (carryTables) {
+    for (const t of state.tables) {
+      if (t.cellKeys.every((k) => selected.has(k))) t.cellKeys = t.cellKeys.map(at);
+    }
   }
   // A table or merge travels only when its whole self is in the moved set.
   for (const m of state.merges) {
@@ -1058,7 +1064,9 @@ function moveSquare(fromKey, toKey) {
   let ok = false;
   batch(() => {
     const displaced = new Map();
-    ok = shiftCells([fromKey], tr - fr, tc - fc, displaced);
+    // Moving ONE square is rearranging the chart's contents, not moving a table:
+    // the table keeps its place and the square leaves it (or lands on it).
+    ok = shiftCells([fromKey], tr - fr, tc - fc, displaced, false);
     const other = ok && displaced.get(toKey);
     if (other) state.cells.set(fromKey, other);
   });

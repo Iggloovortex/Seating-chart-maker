@@ -374,7 +374,22 @@ and push it; don't stack new work directly on `main`.
   border is reachable as a seam, and squares stop answering the pointer
   (`.chart--walls`).
 - **Drag a square — DONE.** Press a square and pull (mouse only; touch keeps its
-  scroll meaning, so there is no mobile equivalent yet). **A mouse does not arm the
+  scroll meaning, so there is no mobile equivalent yet). **Every mode drags** — normal,
+  select AND walls. Select and walls mode used to refuse, which put the one thing a
+  keyboard cannot do out of reach in two of the three modes. In walls mode the press is
+  armed but the TAP and the long-press are withheld (`pointer.inWalls`), so the edge
+  layer still owns clicks and a square is neither seated nor opened by one.
+  **A table's BODY is not a handle.** Dragging it used to move the whole table, which
+  took the gesture away from the squares and pieces sitting ON the table — they could
+  never be rearranged by hand. The body now drags what is under it (a covered square is
+  an ordinary drag source), and a table moves by its ✥ grip, or its resize handles in
+  select mode. `startTableBodyDrag` and `canDragTable` are gone with it.
+  **A table does not follow the square that leaves it:** `shiftCells` carries a table
+  when its whole self is in the moved set, which a ONE-square table trivially satisfies,
+  so dragging the seated square off a 1×1 table took the table along. `shiftCells` takes
+  a `carryTables` flag and `moveSquare` passes false — moving one square is rearranging
+  the contents, not moving the furniture. `moveSelection` still carries tables, which is
+  what moving a whole selection should do. **A mouse does not arm the
   long-press** (js/interactions.js): the hold belongs to the drag — press, hold, then
   pull has to pick the square or desk up, and a timer firing mid-hold would open the
   pane instead and kill it. Right-click is the desktop way into the editor; touch

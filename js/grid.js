@@ -1722,56 +1722,6 @@ function attachTableMoveDrag(handle, table, geo) {
   handle.addEventListener('pointercancel', finish);
 }
 
-/** Drag a table by its BODY (a covered square), the table analogue of dragging a
- *  square. Started from interactions.js once the press has travelled far enough;
- *  follows the window so it keeps tracking past the grid's edge, shows the same
- *  snapped preview, and relocates via moveTable on release. */
-function startTableBodyDrag(table, startEvent) {
-  const rects = table.cellKeys.map((k) => { const [r, c] = parseKey(k); return cellLocalRect(r, c); }).filter(Boolean);
-  if (!rects.length) return;
-  const left = Math.min(...rects.map((b) => b.left));
-  const top = Math.min(...rects.map((b) => b.top));
-  const right = Math.max(...rects.map((b) => b.left + b.width));
-  const bottom = Math.max(...rects.map((b) => b.top + b.height));
-  const gap = parseFloat(getComputedStyle(chart).gap) || 0;
-  const stepX = rects[0].width + gap, stepY = rects[0].height + gap;
-  const zoom = chartZoom();
-  const sx = startEvent.clientX, sy = startEvent.clientY;
-  let dr = 0, dc = 0;
-
-  const preview = document.createElement('div');
-  preview.className = 'move-preview';
-  preview.style.left = `${left}px`;
-  preview.style.top = `${top}px`;
-  preview.style.width = `${right - left}px`;
-  preview.style.height = `${bottom - top}px`;
-  chart.appendChild(preview);
-  movingSelection = true;
-
-  const move = (ev) => {
-    dc = Math.round((ev.clientX - sx) / zoom / stepX);
-    dr = Math.round((ev.clientY - sy) / zoom / stepY);
-    preview.style.left = `${left + dc * stepX}px`;
-    preview.style.top = `${top + dr * stepY}px`;
-    const fp = footprintOf(table.cellKeys);
-    const fits = fp.minR + dr >= 0 && fp.minC + dc >= 0 &&
-                 fp.maxR + dr < state.grid.rows && fp.maxC + dc < state.grid.cols;
-    preview.classList.toggle('move-preview--blocked', !fits);
-  };
-  const up = () => {
-    preview.remove();
-    movingSelection = false;
-    window.removeEventListener('pointermove', move, true);
-    window.removeEventListener('pointerup', up, true);
-    window.removeEventListener('pointercancel', up, true);
-    moveTable(table.id, dr, dc); // no-op off-grid or onto occupied cells
-  };
-  window.addEventListener('pointermove', move, true);
-  window.addEventListener('pointerup', up, true);
-  window.addEventListener('pointercancel', up, true);
-  move(startEvent);
-}
-
 /** A non-rectangular table (L/T/+) drawn as ONE rounded outline, inset from its
  *  cells with rounded corners and the same border weight as a plain rectangular
  *  table — so the two read as the same object. The boundary is traced once

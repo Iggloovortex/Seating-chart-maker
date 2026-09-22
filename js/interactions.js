@@ -76,8 +76,11 @@ function initInteractions(chartEl) {
 
   chartEl.addEventListener('pointerdown', (e) => {
     if (e.button === 2) return; // right-click handled via contextmenu
-    // In walls mode the grid's edge layer handles clicks; squares don't respond.
-    if (typeof isWallsMode === 'function' && isWallsMode()) return;
+    // In walls mode the grid's edge layer still owns CLICKS — a tap must not seat or
+    // edit a square — but a press-and-pull is a drag, and rearranging the squares is
+    // wanted there as much as anywhere. So the press is armed and only the tap and
+    // the long-press are withheld (see `inWalls` below).
+    const inWalls = typeof isWallsMode === 'function' && isWallsMode();
     const cell = cellFrom(e.target);
     if (!cell) return;
 
@@ -94,12 +97,12 @@ function initInteractions(chartEl) {
     const unitSurround = !!mergeHere && mergeHere.kind === 'unit' && !onLive;
 
     pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, cell, sub, longFired: false,
-                timer: 0, additive, shift, pointerType: e.pointerType, unitSurround };
+                timer: 0, additive, shift, pointerType: e.pointerType, unitSurround, inWalls };
     // Long-press opens the editor on TOUCH only. On a mouse the gesture belongs to
     // the drag: press, hold, then pull has to pick the square (or desk) up, and a
     // timer firing mid-hold would open the pane instead and kill the drag. Right-
     // click is the desktop way into the editor, so nothing is lost.
-    if (e.pointerType !== 'mouse') {
+    if (e.pointerType !== 'mouse' && !inWalls) {
       pointer.timer = window.setTimeout(() => {
         pointer.longFired = true;
         fireEdit(cell, sub);
@@ -117,14 +120,7 @@ function initInteractions(chartEl) {
       // dragging is desktop-only for now.
       const src = dragSourceOf(pointer);
       if (src) startContentDrag(src, pointer, e);
-      else {
-        const table = canDragTable(pointer);
-        if (table && typeof startTableBodyDrag === 'function') {
-          window.clearTimeout(pointer.timer);
-          startTableBodyDrag(table, e);
-          pointer = null;               // the window drag owns the gesture now
-        } else cancelPointer();
-      }
+      else cancelPointer();
     }
   });
 
@@ -132,7 +128,7 @@ function initInteractions(chartEl) {
     if (drag) return;                       // the window listeners finish a drag
     if (!pointer || e.pointerId !== pointer.id) return;
     window.clearTimeout(pointer.timer);
-    if (!pointer.longFired && !pointer.unitSurround) fireTap(pointer.cell, { additive: pointer.additive, shift: pointer.shift, sub: pointer.sub });
+    if (!pointer.longFired && !pointer.unitSurround && !pointer.inWalls) fireTap(pointer.cell, { additive: pointer.additive, shift: pointer.shift, sub: pointer.sub });
     pointer = null;
   };
   chartEl.addEventListener('pointerup', endHandler);
@@ -158,8 +154,10 @@ function initInteractions(chartEl) {
   function dragSourceOf(p) {
     if (p.additive || p.shift || p.longFired) return null;
     if (p.pointerType !== 'mouse') return null;
-    if (selectMode) return null;                     // select mode has its own move handle
-    if (typeof isWallsMode === 'function' && isWallsMode()) return null;
+    // Every mode drags. Select mode and walls mode used to refuse, which meant the
+    // one thing you cannot do with a keyboard — pick a desk up and put it somewhere
+    // else — was unavailable in two of the three modes. A Ctrl/Shift press is still a
+    // selection gesture, and it is already refused above.
     const [r, c] = parseKey(p.cell.dataset.key);
     // A merged desk drags its CONTENT (the anchor), keeping the merge in place —
     // dropContentDrag swaps content rather than moving the cell.
@@ -179,7 +177,8 @@ function initInteractions(chartEl) {
       const filled = typeof mergeIsEmpty === 'function' ? !mergeIsEmpty(m) : !!anchor?.enabled;
       return (filled || cellHasAnyContent(anchor)) ? { r: ar, c: ac, sub: null, merge: true } : null;
     }
-    if (typeof tableAt === 'function' && tableAt(r, c)) return null;
+    // A square UNDER a table drags like any other: the table is a surface, and what
+    // sits on it is what you rearrange. (The table itself moves by its ✥ grip.)
     const cell = peekCell(r, c);
     if (!cell) return null;
     if (isSplit(cell)) {
@@ -190,18 +189,10 @@ function initInteractions(chartEl) {
     return (cell.enabled || cellHasAnyContent(cell)) ? { r, c, sub: null } : null;
   }
 
-  /** A plain mouse drag off a table's body moves the whole table, the way a
-   *  square drag moves a square. Only outside select mode (which has the grip and
-   *  handles) and only when the pressed cell is actually under a table. */
-  function canDragTable(p) {
-    if (p.additive || p.shift || p.longFired) return null;
-    if (p.pointerType !== 'mouse') return null;
-    if (selectMode) return null;
-    if (typeof isWallsMode === 'function' && isWallsMode()) return null;
-    const [r, c] = parseKey(p.cell.dataset.key);
-    if (typeof mergeAt === 'function' && mergeAt(r, c)) return null;
-    return typeof tableAt === 'function' ? tableAt(r, c) : null;
-  }
+  // A table's BODY is not a handle. Dragging it used to move the whole table, which
+  // meant the squares and pieces sitting on a table could never be rearranged by
+  // hand — the gesture was taken. The body now drags what is under it, and the table
+  // moves by its ✥ grip (and its resize handles in select mode).
 
   function startContentDrag(src, p, e) {
     window.clearTimeout(p.timer);
