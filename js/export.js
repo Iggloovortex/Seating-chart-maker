@@ -1277,11 +1277,12 @@ function drawIconOnly(ctx, cx, cy, size, data, imgCache) {
   if (!data.icon) return;
   const img = imgCache.get(iconKey(data.icon, data));
   if (!img) return;
-  const iconSize = size * 0.64;
-  // The glyph's own shape: `iconSize` is its HEIGHT and the width follows the ratio, so
-  // a wide icon lays out wide instead of being squeezed into a square.
-  const ratio = iconRatio(data.icon);
-  const iw = iconSize * Math.max(1, ratio), ih = iconSize / Math.max(1, 1 / ratio);
+  // The biggest box of the glyph's OWN shape that fits in `size` square — scaled, never
+  // stretched. A wide glyph is limited by the width, a tall one by the height.
+  const ratio = iconRatio(data.icon) || 1;
+  const budget = size * 0.64;
+  const ih = Math.min(budget, budget / ratio);
+  const iw = ih * ratio;
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate(((data.rotation || 0) * Math.PI) / 180);
@@ -1421,6 +1422,12 @@ function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, 
   // A merged DESK hands in its own icon size: `s` is the short side, so on a long desk
   // the icon would stay the size it is on a single square however much room there is.
   let iconSize = iconOverride || s * (labels.length ? plan.iconFrac : 0.6);
+  // `iconSize` is the icon's HEIGHT and its width follows the glyph's own ratio. Where
+  // that width does not fit, the WHOLE icon shrinks to suit — an icon is only ever
+  // enlarged or reduced, never stretched out of shape.
+  const iconAspect = hasIcon && !printerAsIcon ? iconRatio(iconId) : 1;
+  const iconRoom = w * 0.94;
+  if (iconSize * iconAspect > iconRoom) iconSize = iconRoom / iconAspect;
   let lineH = (base || s) * plan.lineFrac;
   let totalH = (hasIcon ? iconSize : 0) + labels.length * lineH;
 
@@ -1468,10 +1475,7 @@ function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, 
       if (img) ctx.drawImage(img, -iconSize / 2, cursorY, iconSize, iconSize);
     } else {
       const img = imgCache.get(iconKey(iconId, data));
-      // `iconSize` is the glyph's HEIGHT; a wide glyph takes the width its own shape
-      // asks for (capped by the box, so it never runs out of the square it sits in).
-      const ratio = iconRatio(iconId);
-      const iw = Math.min(iconSize * Math.max(1, ratio), w * 0.94);
+      const iw = iconSize * iconAspect;      // uniform: the height already fits the room
       if (img) ctx.drawImage(img, -iw / 2, cursorY, iw, iconSize);
     }
     cursorY += iconSize;

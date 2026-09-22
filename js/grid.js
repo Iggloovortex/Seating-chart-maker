@@ -2192,10 +2192,16 @@ function placeMergeContent(data, fill, box, which, ghost = false) {
     // WIDTH follows the glyph's own shape (the inline aspect-ratio iconUse sets), capped
     // by the desk so a wide glyph cannot run off the end of it. Setting it as the width
     // instead halved a 2:1 icon in the grid while the export drew it full size.
-    const side = mergeIconSize(box.w, box.h);
-    icon.style.height = `${side}px`;
-    icon.style.width = 'auto';
-    icon.style.maxWidth = `${Math.max(8, box.w * 0.94)}px`;
+    // Height and width are BOTH set from the glyph's own ratio, so the box never
+    // letterboxes and never stretches: where the desk is too narrow for the width the
+    // ratio asks for, the whole icon comes down to suit. (A bare max-width would clamp
+    // the width and leave the height, which is the same squashing in CSS form.)
+    const ratio = iconRatio(data.icon) || 1;
+    const room = Math.max(8, box.w * 0.94);
+    const h = Math.min(mergeIconSize(box.w, box.h), room / ratio);
+    icon.style.height = `${h}px`;
+    icon.style.width = `${h * ratio}px`;
+    icon.style.maxWidth = 'none';
   }
   wrap.appendChild(inner);
   chart.appendChild(wrap);
