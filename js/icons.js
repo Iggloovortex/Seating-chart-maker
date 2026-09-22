@@ -124,16 +124,16 @@ const SYMBOL_MARKUP = {
     '<path d="M9.5 6h5M9.5 8.5h5" fill="FILL" stroke="COLOR" stroke-width="1.6" stroke-linecap="round"/>' +
     '<circle cx="12" cy="17.5" r="1.3" fill="COLOR"/>',
   'ic-laptop':
-    '<rect x="5" y="5" width="14" height="9" rx="1" fill="FILL" stroke="COLOR" stroke-width="1.6"/>' +
-    '<path d="M3 18h18l-1.5-2H4.5L3 18z" fill="FILL" stroke="COLOR" stroke-width="1.6" stroke-linejoin="round"/>',
+    '<rect x="5" y="5" width="14" height="9" rx="1" fill="FILL" stroke="COLOR" stroke-width="1.0"/>' +
+    '<path d="M3 18h18l-1.5-2H4.5L3 18z" fill="FILL" stroke="COLOR" stroke-width="1.0" stroke-linejoin="round"/>',
   'ic-monitor':
     '<rect x="3" y="4" width="18" height="12" rx="1" fill="FILL" stroke="COLOR" stroke-width="1.6"/>' +
     '<path d="M9 20h6m-3-4v4" fill="FILL" stroke="COLOR" stroke-width="1.6" stroke-linecap="round"/>',
   'ic-monitor-double':
-    '<rect x="0.8" y="5" width="10.4" height="7" rx="1" fill="FILL" stroke="COLOR" stroke-width="1.6"/>' +
-    '<path d="M4.2 17h3.6m-1.8-5v5" fill="none" stroke="COLOR" stroke-width="1.6" stroke-linecap="round"/>' +
-    '<rect x="12.8" y="5" width="10.4" height="7" rx="1" fill="FILL" stroke="COLOR" stroke-width="1.6"/>' +
-    '<path d="M16.2 17h3.6m-1.8-5v5" fill="none" stroke="COLOR" stroke-width="1.6" stroke-linecap="round"/>',
+    '<rect x="0.4" y="0.4" width="10.4" height="7" rx="1" fill="FILL" stroke="COLOR" stroke-width="0.8"/>' +
+    '<path d="M3.8 10.6h3.6m-1.8-3.2v3.2" fill="none" stroke="COLOR" stroke-width="0.8" stroke-linecap="round"/>' +
+    '<rect x="13.2" y="0.4" width="10.4" height="7" rx="1" fill="FILL" stroke="COLOR" stroke-width="0.8"/>' +
+    '<path d="M16.6 10.6h3.6m-1.8-3.2v3.2" fill="none" stroke="COLOR" stroke-width="0.8" stroke-linecap="round"/>',
   'ic-kvm':
     '<rect x="3" y="3.5" width="18" height="12" rx="1" fill="FILL" stroke="COLOR" stroke-width="1.6"/>' +
     '<circle cx="6.6" cy="7.2" r=".85" fill="COLOR"/>' +

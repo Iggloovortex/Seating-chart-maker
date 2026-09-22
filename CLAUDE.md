@@ -293,9 +293,17 @@ and push it; don't stack new work directly on `main`.
   For a `<use>` the outer `<svg>` must NOT carry a viewBox — the `<symbol>`'s own box
   already maps its art into that viewport, and setting both applies the transform twice
   and crops the glyph.
-  **Known nit:** a glyph in a tighter box scales more to reach the same height, so its
-  strokes come out heavier — the double monitor's are about twice the single's. The fix
-  is to thin that symbol's `stroke-width` to match, which is art, not layout.
+  **A tightened box needs the ART rebuilt with it, not just the box changed.** A glyph in
+  a tighter box scales more to reach the same height, so its stroke has to be thinned by
+  the same factor to keep one weight across the set: the double monitor's box is 11.4
+  tall against the single's 24, so its stroke is 0.8 against 1.6; the laptop's is 15
+  tall, so 1.0. Its stands were also rebuilt with their base bars inside the new box.
+  **The art lives in TWO copies and they had drifted** — `index.html`'s `<symbol>` (what
+  the grid `<use>`s) and `SYMBOL_MARKUP` in js/icons.js (what `iconDataUrl` rasterises
+  for the export). The double monitor's stand base sat at `y=15` in one and `y=17` in the
+  other, so a box ending at y=16 kept the base in the grid and cropped it in the export.
+  Edit both, and check them against each other when a glyph looks different between
+  renderers.
 
   **Special/furniture content** (chair/server/rack/stairs) renders as furniture
   over the footprint with NO desk box, in both renderers: a chair stays a ½×½
