@@ -773,6 +773,11 @@ body {
 .subcell:not(.subcell--on):hover { background: var(--surface-2); }
 .subcell--on { background: var(--seat); }
 .subcell--polyhidden { visibility: hidden; }
+/* A piece the table's reach covers: it is standing ON the table, so it shows only its
+   content, like any covered square. Drawing its box would stack a desk on the surface
+   it sits on — see markPiecesOnTables (js/grid.js). */
+.subcell--ontable { background: transparent; border-color: transparent; }
+.subcell--ontable:hover { background: transparent; }
 /* A 'unit' merged piece: one square centred in the pieces it fuses, straddling
    their seams. Its width/height come from the block's proportions (js/grid.js). */
 /* No z-index: it is appended last instead (js/grid.js), so it paints over the pieces it

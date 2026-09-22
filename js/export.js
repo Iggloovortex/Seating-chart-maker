@@ -65,6 +65,12 @@ async function renderToCanvas(dpi = 300) {
   }
 
   const rectOf = (r, c) => rects.get(keyOf(r, c));
+  // Every table's drawn box, so a split piece can tell whether it is sitting ON one.
+  // A table may reach PAST its own squares onto the seams around it (table.edges); the
+  // pieces it reaches over are covered, and drawSplit reads this to skip their boxes.
+  tableBoxesOnPage = state.tables
+    .map((t) => ({ box: tableBox(t, rectOf), color: t.color || '#8d6e63' }))
+    .filter((t) => t.box);
 
   // Classify every enabled square (footprints/ring computed above):
   //  - Any enabled square in the 1-cell ring around a footprint (orthogonal OR
@@ -674,6 +680,9 @@ function drawMerge(ctx, rectOf, { merge, data, plan, coveredByTable }, imgCache,
 /** `span` is how many CELLS the split covers — 1×1 for an ordinary split square, the
  *  desk's footprint for a merge split across several cells. Furniture is sized per
  *  CELL, so without it a chair on a 2-cell desk comes out a whole cell wide. */
+/** Set by renderToCanvas: the drawn box of every table, in page pixels. */
+let tableBoxesOnPage = [];
+
 function drawSplit(ctx, rectOf, sp, imgCache, plan, span = { rows: 1, cols: 1 }, hanging = null) {
   const rect = rectOf(sp.r, sp.c);
   const { rows, cols } = sp.data.split;
@@ -738,11 +747,19 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan, span = { rows: 1, cols: 1 },
       drawChair(ctx, { data: sub, geo }, imgCache, plan, hanging);
       continue;
     }
-    ctx.fillStyle = sub.fill || '#dbe7ff';
-    ctx.fillRect(box.x, box.y, bw, bh);
-    ctx.strokeStyle = sub.border || '#2f6feb';
-    ctx.lineWidth = Math.max(1, Math.min(bw, bh) * 0.04);
-    ctx.strokeRect(box.x, box.y, bw, bh);
+    // A piece sitting on a table shows only its content, like any covered square —
+    // drawing its box would stack a desk on top of the table it is standing on. Its
+    // text is then inked against the TABLE, because that is what it now sits on;
+    // inking against the piece's own fill put dark labels on a dark table.
+    const onTable = tableUnderBox(box, tableBoxesOnPage);
+    const inkBase = onTable ? onTable.color : (sub.fill || '#dbe7ff');
+    if (!onTable) {
+      ctx.fillStyle = sub.fill || '#dbe7ff';
+      ctx.fillRect(box.x, box.y, bw, bh);
+      ctx.strokeStyle = sub.border || '#2f6feb';
+      ctx.lineWidth = Math.max(1, Math.min(bw, bh) * 0.04);
+      ctx.strokeRect(box.x, box.y, bw, bh);
+    }
     // Struck from a CELL, not the piece: `span` says how many cells the split is
     // drawn across, so this is one cell however the split got there (a desk split
     // covers the whole merge). drawContent then shrinks to fit the piece.
@@ -751,7 +768,7 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan, span = { rows: 1, cols: 1 },
     // painted in the late pass so the pieces after it cannot bury it.
     if (hanging && anyLabelFloats(sub, true, true)) {
       drawContent(ctx, box.x + bw / 2, box.y + bh / 2, bw, bh, { ...sub, labels: [] },
-                  imgCache, false, plan, undefined, 0, sub.fill || '#dbe7ff', cellRef);
+                  imgCache, false, plan, undefined, 0, inkBase, cellRef);
       // Up out of the square for a piece in the top half, down for one in the bottom
       // half — the same rule the grid follows, so the names leave the square instead of
       // landing on the piece next door.
@@ -764,7 +781,7 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan, span = { rows: 1, cols: 1 },
       hanging.push(() => drawLabelBox(ctx, lbox, sub, plan, cellRef, sub.rotation || 0));
     } else {
       drawContent(ctx, box.x + bw / 2, box.y + bh / 2, bw, bh, sub, imgCache, false, plan,
-                  undefined, 0, sub.fill || '#dbe7ff', cellRef);
+                  undefined, 0, inkBase, cellRef);
     }
     if (hasPrinter(sub) && isPrinterSecondary(sub)) drawPrinterOverlay(ctx, box.x, box.y, bw, bh, sub, imgCache);
   }

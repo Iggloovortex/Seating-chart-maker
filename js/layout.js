@@ -646,6 +646,22 @@ function tableBox(table, rectOf) {
   return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 }
 
+/** True when a box is sitting ON a table: its CENTRE falls inside the table's drawn
+ *  box. This is the same centre-in-shape test `tableCoverage` uses for a turned table.
+ *  A square the table merely REACHES INTO keeps its own pieces (membership is still
+ *  `cellKeys`) — but a piece the reach actually covers is covered like anything else:
+ *  its box is not drawn, only its content overlays the table, so a table extended onto
+ *  the seams around it reads as ONE continuous surface instead of a slab with desk
+ *  boxes stacked on top of it. An unsplit neighbour is unaffected: a half-square reach
+ *  never contains that square's centre. */
+function tableUnderBox(box, tables) {
+  if (!box || !tables || !tables.length) return null;
+  const cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+  return tables.find(({ box: t }) =>
+    t && cx > t.x && cx < t.x + t.w && cy > t.y && cy < t.y + t.h) || null;
+}
+function boxOnTable(box, tables) { return !!tableUnderBox(box, tables); }
+
 /** True when a set of "r,c" keys exactly fills its bounding box — i.e. the shape
  *  is a plain rectangle, not an L/T/+ with a notch. Both renderers use this to
  *  pick the simple ellipse/rounded-rect path over the drawn-outline one. */

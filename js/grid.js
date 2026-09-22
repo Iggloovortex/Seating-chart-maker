@@ -87,6 +87,7 @@ function renderGrid() {
   fitSubcellLabels();
   renderTables();
   renderMerges();
+  markPiecesOnTables();
   renderWalls();
   renderMoveHandle();
   buildInsertGuides();
@@ -2796,12 +2797,60 @@ function showResizePreview({ preview, next, nextEdges }) {
   preview.style.height = `${bottom - top}px`;
 }
 
+/** A table may reach PAST its own squares onto the seams around it (`table.edges`).
+ *  The split pieces that reach covers are sitting ON the table, so they show only
+ *  their content — no piece box — exactly as a covered square does, and the table
+ *  reads as ONE continuous surface instead of a slab with desks stacked on it.
+ *  Membership is untouched: the square is still not in `cellKeys`.
+ *
+ *  It runs AFTER renderTables because it needs each table's measured box, and it inks
+ *  the piece's text against the TABLE, which is what the text now sits on. */
+function markPiecesOnTables() {
+  if (!state.tables.length) return;
+  const chartRect = chart.getBoundingClientRect();
+  const zoom = chartZoom();
+  const localOf = (el) => {
+    const b = el.getBoundingClientRect();
+    return { x: (b.left - chartRect.left) / zoom, y: (b.top - chartRect.top) / zoom,
+             w: b.width / zoom, h: b.height / zoom };
+  };
+  const rectOf = (r, c) => {
+    const el = chart.querySelector(`.cell[data-key="${CSS.escape(keyOf(r, c))}"]`);
+    return el ? localOf(el) : null;
+  };
+  const tables = state.tables
+    .map((t) => ({ box: tableBox(t, rectOf), color: t.color || '#8d6e63' }))
+    .filter((t) => t.box);
+  if (!tables.length) return;
+
+  for (const el of chart.querySelectorAll('.cell > .cell__split > .subcell')) {
+    const host = el.closest('.cell');
+    if (!host || !host.dataset.key) continue;
+    const [r, c] = parseKey(host.dataset.key);
+    if (typeof tableAt === 'function' && tableAt(r, c)) continue;   // wholly covered already
+    const on = tableUnderBox(localOf(el), tables);
+    if (!on) continue;
+    el.classList.add('subcell--ontable');
+    // Re-ink against the table. The piece was built against its own fill, which on a
+    // dark table leaves dark text on a dark surface.
+    const sub = subcellAt(r, c, Number(el.dataset.sub));
+    if (!sub) continue;
+    el.querySelectorAll('.cell__label').forEach((span, i) => {
+      const raw = (sub.labels || [])[i];
+      if (raw) span.style.color = contrastLabelColor(raw.color || DEFAULTS.labelColor, on.color);
+    });
+    const icon = el.querySelector('.cell__icon');
+    if (icon) icon.style.color = contrastLabelColor(sub.iconColor || '#1f2933', on.color);
+  }
+}
+
 /** Re-measure table overlays after layout changes (zoom, resize). */
 function refreshTables() {
   chart.querySelectorAll('.table-shape, .table-poly, .table-remove, .table-move, .table-handle, .move-handle, .merge-shape, .merge-content, .merge-unit, .merge-split, .merge-furniture, .walls-layer')
     .forEach((n) => n.remove());
   renderTables();
   renderMerges();
+  markPiecesOnTables();
   renderWalls();
   hideWallHint();       // its position was measured against the old layout
   renderMoveHandle();
