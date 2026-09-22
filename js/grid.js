@@ -2831,6 +2831,10 @@ function markPiecesOnTables() {
     const on = tableUnderBox(localOf(el), tables);
     if (!on) continue;
     el.classList.add('subcell--ontable');
+    // buildSubcell writes the fill and border as INLINE styles, which outrank any
+    // class, so they are cleared here rather than in CSS.
+    el.style.background = 'transparent';
+    el.style.borderColor = 'transparent';
     // Re-ink against the table. The piece was built against its own fill, which on a
     // dark table leaves dark text on a dark surface.
     const sub = subcellAt(r, c, Number(el.dataset.sub));

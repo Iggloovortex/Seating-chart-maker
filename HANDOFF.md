@@ -28,29 +28,20 @@ Grid: screenshot `#chart`. Export: `(await renderToCanvas(150)).toDataURL()`.
 | `2823460` | A centred merged piece no longer paints over a table |
 | `e9f3cab` | Wall bar's window swatch matches its neighbours |
 
-## OPEN — the one that matters
+## RESOLVED after the handoff was written
 
-**"Tables not overlaying over merge and split … tables should be on top most."**
-The user sent two screenshots (grid + export of the same real chart) saying *"this
-is what i meant"*, and the session ended before it was resolved. **Ask before
-building.**
+The screenshots meant: **the table was extended 1/2 in three directions onto the
+seams, and the split pieces it reached over drew their desk boxes on top of the
+extension**, so the table read as a slab with desks stacked on it. Reproduced
+exactly (`reach.js` in the scratchpad), fixed in `01e3f48` + follow-up: a piece
+whose CENTRE falls inside the table's drawn box is covered — no box, content
+overlaid, text inked against the table. `tableUnderBox` (js/layout.js) is the
+shared decision; `drawSplit` reads it in the export, `markPiecesOnTables` in the
+grid. Membership is untouched.
 
-What the screenshots show, both renderers alike: a large black table with blue
-desks around its edge (`CBS-568506`, `CNDGFX-VT01`, two `CBS-` monitor desks, four
-chairs, a `Writer` desk at the left). The desks are drawn as **boxes on top of the
-table**; only the middle square shows the table's own black fill with its content
-(`CBS-565329`) overlaid.
-
-Two readings, and they need opposite work:
-1. **The desks are genuinely covered** (inside `table.cellKeys`) and should be
-   showing content-only over one continuous table surface — in which case coverage
-   is being computed or rendered wrong for merges/splits at the table's edge.
-2. **The desks are NOT covered** (they sit beside the table, not on it) and the
-   user wants the table's surface to read as continuous *underneath* them anyway —
-   which is a design change, not a bug fix.
-
-Get the user's `.seatchart` for that chart, or ask which desks they consider "on"
-the table, before touching either renderer.
+Still worth a look: the table's own seated square keeps its blue outline ring
+showing through the 80%-opacity table. That matches a plain covered square, so it
+was left alone — confirm with the user if it reads wrong on their dark charts.
 
 ## OPEN — smaller
 
