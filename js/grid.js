@@ -1571,10 +1571,23 @@ function renderTables() {
     }).filter(Boolean);
     if (!members.length) continue;
 
-    const left = Math.min(...members.map((m) => m.x));
-    const top = Math.min(...members.map((m) => m.y));
-    const right = Math.max(...members.map((m) => m.x + m.w));
-    const bottom = Math.max(...members.map((m) => m.y + m.h));
+    let left = Math.min(...members.map((m) => m.x));
+    let top = Math.min(...members.map((m) => m.y));
+    let right = Math.max(...members.map((m) => m.x + m.w));
+    let bottom = Math.max(...members.map((m) => m.y + m.h));
+    // A table may reach PAST its own squares, onto the seam of a split square beside
+    // it. tableBox is the shared measure; here it is fed the measured boxes so the
+    // overlay lands on the same pixels the squares actually occupy.
+    {
+      const box = tableBox(table, (r, c) => {
+        const el = chart.querySelector(`.cell[data-key="${CSS.escape(keyOf(r, c))}"]`);
+        if (!el) return null;
+        const b = el.getBoundingClientRect();
+        return { x: (b.left - chartRect.left) / zoom, y: (b.top - chartRect.top) / zoom,
+                 w: b.width / zoom, h: b.height / zoom };
+      });
+      if (box) { left = box.x; top = box.y; right = box.x + box.w; bottom = box.y + box.h; }
+    }
     const border = table.border || state.defaults.tableBorder;
     const picked = state.tableSelection.has(table.id);
 
@@ -2683,6 +2696,29 @@ function cellLocalRect(r, c) {
            width: b.width / zoom, height: b.height / zoom };
 }
 
+/** Turn a raw drag distance, in squares, into the nearest place this edge may stop:
+ *  a whole number of squares plus one of the seams the neighbour offers. Returns
+ *  [whole squares, fraction into the next square]. With no split beside it the only
+ *  fraction is 0, so the gesture is exactly the whole-square one it has always been. */
+function snapEdge(table, side, raw) {
+  const fp = footprintOf(table.cellKeys);
+  let best = [0, 0], bestD = Infinity;
+  // Try each whole-square step near the pointer. The seams on offer belong to the square
+  // beyond the edge AT THAT STEP, not beyond where the table stands now, so dragging two
+  // squares out reads the split of the square it has actually arrived beside.
+  for (let w = Math.floor(raw) - 1; w <= Math.ceil(raw) + 1; w++) {
+    const at = { ...fp };
+    if (side === 'n') at.minR -= w; else if (side === 's') at.maxR += w;
+    else if (side === 'w') at.minC -= w; else at.maxC += w;
+    if (at.minR > at.maxR || at.minC > at.maxC) continue;
+    for (const f of tableEdgeStops(table, side, at)) {
+      const d = Math.abs(raw - (w + f));
+      if (d < bestD) { bestD = d; best = [w, f]; }
+    }
+  }
+  return best;
+}
+
 function attachResizeDrag(handle, table, dir) {
   let drag = null;
 
@@ -2695,6 +2731,7 @@ function attachResizeDrag(handle, table, dir) {
     handle.setPointerCapture(e.pointerId);
     const gap = parseFloat(getComputedStyle(chart).gap) || 0;
     drag = { x: e.clientX, y: e.clientY, fp, next: { ...fp }, zoom: chartZoom(),
+             edges: tableEdges(table),
              stepX: first.width + gap, stepY: first.height + gap };
     drag.preview = document.createElement('div');
     drag.preview.className = 'move-preview';
@@ -2704,13 +2741,23 @@ function attachResizeDrag(handle, table, dir) {
 
   handle.addEventListener('pointermove', (e) => {
     if (!drag) return;
-    const dc = Math.round((e.clientX - drag.x) / drag.zoom / drag.stepX);
-    const dr = Math.round((e.clientY - drag.y) / drag.zoom / drag.stepY);
+    // Whole squares as before, PLUS the seams of any split square just beyond the edge
+    // being dragged — a half, a third. snapEdge picks the nearest stop, so a side with
+    // no split neighbour still moves a square at a time exactly as it used to.
+    const rawC = (e.clientX - drag.x) / drag.zoom / drag.stepX;
+    const rawR = (e.clientY - drag.y) / drag.zoom / drag.stepY;
     const n = { ...drag.fp };
-    if (dir.includes('w')) n.minC += dc;
-    if (dir.includes('e')) n.maxC += dc;
-    if (dir.includes('n')) n.minR += dr;
-    if (dir.includes('s')) n.maxR += dr;
+    const edges = { ...drag.edges };
+    const apply = (side, raw, grow) => {
+      const [whole, frac] = snapEdge(table, side, grow ? raw : -raw);
+      edges[side] = frac;
+      return grow ? whole : -whole;
+    };
+    if (dir.includes('w')) n.minC -= apply('w', rawC, false);
+    if (dir.includes('e')) n.maxC += apply('e', rawC, true);
+    if (dir.includes('n')) n.minR -= apply('n', rawR, false);
+    if (dir.includes('s')) n.maxR += apply('s', rawR, true);
+    drag.nextEdges = edges;
     // An edge never crosses its opposite, and never leaves the grid.
     n.minC = Math.max(0, Math.min(n.minC, n.maxC));
     n.maxC = Math.min(state.grid.cols - 1, Math.max(n.maxC, n.minC));
@@ -2723,22 +2770,38 @@ function attachResizeDrag(handle, table, dir) {
   const finish = () => {
     if (!drag) return;
     const n = drag.next;
+    const ed = drag.nextEdges || drag.edges;
     drag.preview.remove();
     drag = null;
-    resizeTable(table.id, n.minR, n.minC, n.maxR, n.maxC);
+    resizeTable(table.id, n.minR, n.minC, n.maxR, n.maxC, ed);
   };
   handle.addEventListener('pointerup', finish);
   handle.addEventListener('pointercancel', finish);
 }
 
-function showResizePreview({ preview, next }) {
+function showResizePreview({ preview, next, nextEdges }) {
   const a = cellLocalRect(next.minR, next.minC);
   const z = cellLocalRect(next.maxR, next.maxC);
   if (!a || !z) return;
-  preview.style.left = `${a.left}px`;
-  preview.style.top = `${a.top}px`;
-  preview.style.width = `${z.left + z.width - a.left}px`;
-  preview.style.height = `${z.top + z.height - a.top}px`;
+  let left = a.left, top = a.top;
+  let right = z.left + z.width, bottom = z.top + z.height;
+  // Show the fraction too, measured off the square being reached into, so the preview
+  // lands exactly where the table will be drawn.
+  const ed = nextEdges || { n: 0, e: 0, s: 0, w: 0 };
+  const reach = (side, r, c, vertical) => {
+    if (!ed[side]) return 0;
+    const n = cellLocalRect(r, c);
+    if (!n) return 0;
+    return ed[side] * (vertical ? n.height : n.width);
+  };
+  top -= reach('n', next.minR - 1, next.minC, true);
+  bottom += reach('s', next.maxR + 1, next.minC, true);
+  left -= reach('w', next.minR, next.minC - 1, false);
+  right += reach('e', next.minR, next.maxC + 1, false);
+  preview.style.left = `${left}px`;
+  preview.style.top = `${top}px`;
+  preview.style.width = `${right - left}px`;
+  preview.style.height = `${bottom - top}px`;
 }
 
 /** Re-measure table overlays after layout changes (zoom, resize). */

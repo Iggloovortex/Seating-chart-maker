@@ -1454,9 +1454,17 @@ function updateTables(ids, patch) {
 /** Re-shape a table onto a new block of squares. A footprint is always a full
  *  rectangle and every square in it is seated, exactly as when a table is first
  *  made — so growing one picks up the squares it now covers. */
-function resizeTable(id, minR, minC, maxR, maxC) {
+function resizeTable(id, minR, minC, maxR, maxC, edges) {
   const t = state.tables.find((x) => x.id === id);
   if (!t) return false;
+  // How far each edge reaches past its own squares, onto the seam of a split square
+  // beside it. Only kept when something is actually set, so an ordinary table's data
+  // is unchanged.
+  if (edges) {
+    const keep = {};
+    for (const k of ['n', 'e', 's', 'w']) if (edges[k] > 0 && edges[k] < 1) keep[k] = edges[k];
+    if (Object.keys(keep).length) t.edges = keep; else delete t.edges;
+  }
   minR = Math.max(0, minR); minC = Math.max(0, minC);
   maxR = Math.min(state.grid.rows - 1, maxR);
   maxC = Math.min(state.grid.cols - 1, maxC);
@@ -1928,7 +1936,7 @@ function serialize() {
     cells: [...state.cells.entries()].map(([k, v]) => [k, v]),
     rowWeights: [...state.rowWeights],
     colWeights: [...state.colWeights],
-    tables: state.tables.map((t) => ({ ...t, cellKeys: [...t.cellKeys] })),
+    tables: state.tables.map((t) => ({ ...t, cellKeys: [...t.cellKeys], ...(t.edges ? { edges: { ...t.edges } } : {}) })),
     merges: state.merges.map((m) => ({ id: m.id, kind: m.kind, keys: [...m.keys], anchor: m.anchor, ...(m.deskSplit ? { deskSplit: true } : {}) })),
     walls: { ...state.walls },
     paper: state.paper,
@@ -2008,6 +2016,9 @@ function deserialize(data) {
       ? data.tables.map((t) => ({ id: t.id, shape: t.shape, color: t.color,
                                   border: t.border || DEFAULTS.tableBorder,
                                   rotation: t.rotation || 0,
+                                  // How far each edge reaches past its own squares, onto
+                                  // the seam of a split square beside it.
+                                  ...(t.edges ? { edges: { ...t.edges } } : {}),
                                   cellKeys: [...(t.cellKeys || [])] }))
       : [];
     state.merges = Array.isArray(data.merges)

@@ -537,32 +537,33 @@ and push it; don't stack new work directly on `main`.
   half of EACH axis, which on a thinned square is not a square at all but a wide bar.
   - **Not built:** stairs tile a whole cell, so a stairs square squashes into a band;
     excluding stairs, or a per-kind floor, is the fix if that reads badly.
-- **Tables that end on a split's seam (halves, thirds) — ASSESSED, not built.**
-  Wanted: a table may stop part-way through a square, at the seam of a split that is
-  there — a half, a third. Two ways, and the cheap-looking one is the wrong one.
-  - **Splits as real grid lines (rejected).** Making a split's seams into columns and
-    rows of the whole chart is not merely expensive, it changes what a split MEANS: a
-    split is local to one square today, and a global line would subdivide every other
-    square in that row and column, re-cutting every existing chart. It also re-keys six
-    persistent structures at once — `state.cells`, `state.walls` (`"h:r,c"`),
-    `state.merges.keys`, `table.cellKeys`, the weight arrays and the selection — plus
-    the insert/delete-row/column remapping, across ~100 `keyOf`/`parseKey` sites.
-  - **Fractional table edges (recommended).** Keep `cellKeys` for membership and add an
-    optional per-edge inset, e.g. `table.edges = { top: 0, right: 0, bottom: 0.5,
-    left: 0 }`, as a fraction of the edge cell. `footprintOf` already gives the box and
-    both renderers already draw from it (`keysAreRect` → ellipse/rounded-rect, otherwise
-    `cellShapeLoops`), so the geometry change is: trim the box by those fractions before
-    drawing. The resize handle offers the seams of the edge square's `split` as snap
-    stops, which is where "thirds and halves when present" comes from — the stops exist
-    only where a split does. Touches `footprintOf`/`tableCoverage` (js/layout.js), the
-    two `drawTable` paths, and the resize handles; it does NOT touch walls, merges,
-    selection or the key space.
-  - **Why the merge experience does not argue for the rework.** The merge fixes were
-    almost all about INTERACTION — hit-testing a notch, hover, drag, selection, paste —
-    because a merge has to behave as one object under the pointer while being an overlay
-    over many cells. A table already is one object that way: it has no per-cell tap
-    meaning, just a move grip, resize handles and a ✕. The cost that made merge painful
-    is not waiting in tables.
+- **Tables that end on a split's seam (halves, thirds) — DONE.** A table's edge may
+  stop part-way through the square beyond it, on a seam of the SPLIT that is there —
+  a half, a third, two thirds. Built the **fractional-edge** way, not by making splits
+  into grid lines: `cellKeys` still means membership, so walls, merges, selection and
+  the key space are untouched, and a square the table only reaches INTO is not covered
+  or seated — it keeps its own content and its own pieces.
+  Model: an optional `table.edges = {n, e, s, w}`, each 0..<1, a fraction of the square
+  just outside that side; absent on an ordinary table. Carried by serialize/deserialize
+  and written by `resizeTable`'s 6th argument.
+  `tableBox(table, rectOf)` (js/layout.js) is the one measure both renderers grow by —
+  the grid's `renderTables` feeds it measured cell boxes and the export's `tableRect`
+  feeds it layout rects, so each reaches into the REAL size of the square it is eating
+  into, which matters the moment rows and columns carry weights.
+  **The stops come from the squares that are actually there** (`tableEdgeStops`): it
+  scans the squares just beyond the side being dragged and offers `i/n` for each one
+  split `n` ways on that axis, plus 0. With no split beside it the only stop is 0, so
+  the gesture is exactly the whole-square one it has always been. Several squares run
+  along one side and need not agree — every seam any of them offers is a stop, since
+  the edge is one straight line and the user is picking where to put it. `snapEdge`
+  (js/grid.js) tries each whole-square step near the pointer and reads the stops for
+  the square beyond the edge AT THAT STEP, not beyond where the table stands now, so
+  dragging two squares out reads the split of the square it has arrived beside.
+  `showResizePreview` shows the fraction too, so the dashed preview lands where the
+  table will be drawn.
+  **Rectangles only.** `tableEdgeStops` returns `[0]` and `tableBox` ignores `edges`
+  unless `keysAreRect` — a notched L/T/+ is traced from its own squares by
+  `cellShapeLoops`, so there is no box for a fraction to grow.
 - **2-column labels** for the KVM and Dual Monitor icons — a per-row optional 2nd
   column, activating when any row has 2nd-column content. Touches the label data
   model, editor, both renderers, and TSV. (Scoped, not started.)

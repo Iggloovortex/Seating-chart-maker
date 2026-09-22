@@ -1516,10 +1516,13 @@ function within(v, lo, hi) {
 function tableRect(table, rectOf) {
   const rects = table.cellKeys.map((k) => { const [r, c] = parseKey(k); return rectOf(r, c); });
   if (!rects.length) return null;
-  const left = Math.min(...rects.map((b) => b.x));
-  const top = Math.min(...rects.map((b) => b.y));
-  const right = Math.max(...rects.map((b) => b.x + b.w));
-  const bottom = Math.max(...rects.map((b) => b.y + b.h));
+  // A table may reach PAST its own squares, onto the seam of a split square beside it.
+  // tableBox is the shared measure, so the export and the grid grow by the same amount.
+  const grown = tableBox(table, rectOf);
+  const left = grown ? grown.x : Math.min(...rects.map((b) => b.x));
+  const top = grown ? grown.y : Math.min(...rects.map((b) => b.y));
+  const right = grown ? grown.x + grown.w : Math.max(...rects.map((b) => b.x + b.w));
+  const bottom = grown ? grown.y + grown.h : Math.max(...rects.map((b) => b.y + b.h));
   // Off a CELL, not the table's own box: measuring the box gave a 2x2 table twice
   // the gap of a 1x1 and disagreed with the grid (see TABLE_INSET).
   const cm = Math.min(...rects.map((b) => Math.min(b.w, b.h)));

@@ -553,6 +553,71 @@ function layoutRects({ wUnits, hUnits, reserveUnits }, unit, originX, originY) {
   return rects;
 }
 
+/** How far a table reaches PAST its own squares, per side, as a fraction of the square
+ *  just outside that side. 0 everywhere is the ordinary whole-square table. This is what
+ *  lets a table stop on the seam of a split square beside it — a half, a third — rather
+ *  than only ever on a square boundary. */
+function tableEdges(table) {
+  const e = (table && table.edges) || {};
+  const f = (v) => (typeof v === 'number' && v > 0 && v < 1 ? v : 0);
+  return { n: f(e.n), e: f(e.e), s: f(e.s), w: f(e.w) };
+}
+
+/** The fractions a table's edge may stop on, on one side: 0 (flush with the square) plus
+ *  the seams of any SPLIT square lying just beyond that side. A neighbour split in two
+ *  offers a half, one split in three offers a third and two thirds. The stops come from
+ *  the squares that are actually there, so "thirds and halves when present" is literal —
+ *  with no split beside it, a table still moves a whole square at a time.
+ *
+ *  Several squares run along one side and they need not agree; every seam any of them
+ *  offers is a stop, since the table's edge is one straight line and the user is picking
+ *  where to put it. */
+function tableEdgeStops(table, side, fpOverride = null) {
+  // Only a rectangular table has a box to grow: a notched L/T/+ is traced from its
+  // own squares by cellShapeLoops, so there is nothing for a fraction to mean there.
+  if (!keysAreRect(table.cellKeys)) return [0];
+  const fp = fpOverride || footprintOf(table.cellKeys);
+  const stops = new Set([0]);
+  const axis = (side === 'n' || side === 's') ? 'rows' : 'cols';
+  const scan = [];
+  if (side === 'n' && fp.minR > 0) for (let c = fp.minC; c <= fp.maxC; c++) scan.push([fp.minR - 1, c]);
+  if (side === 's' && fp.maxR < state.grid.rows - 1) for (let c = fp.minC; c <= fp.maxC; c++) scan.push([fp.maxR + 1, c]);
+  if (side === 'w' && fp.minC > 0) for (let r = fp.minR; r <= fp.maxR; r++) scan.push([r, fp.minC - 1]);
+  if (side === 'e' && fp.maxC < state.grid.cols - 1) for (let r = fp.minR; r <= fp.maxR; r++) scan.push([r, fp.maxC + 1]);
+  for (const [r, c] of scan) {
+    const cell = peekCell(r, c);
+    const n = cell && cell.split && cell.split[axis];
+    if (!n || n < 2) continue;
+    for (let i = 1; i < n; i++) stops.add(i / n);
+  }
+  return [...stops].sort((a, b) => a - b);
+}
+
+/** The table's drawn box: its squares' bounding box, grown by whatever each edge
+ *  reaches into the square beyond it. `rectOf(r,c)` gives a square's box, so both
+ *  renderers expand by the SAME measure — the real size of the square being eaten into,
+ *  not an assumed one, which matters the moment rows and columns carry weights. */
+function tableBox(table, rectOf) {
+  const fp = footprintOf(table.cellKeys);
+  const tl = rectOf(fp.minR, fp.minC), br = rectOf(fp.maxR, fp.maxC);
+  if (!tl || !br) return null;
+  const box = { x: tl.x, y: tl.y, w: br.x + br.w - tl.x, h: br.y + br.h - tl.y };
+  const ed = keysAreRect(table.cellKeys) ? tableEdges(table) : { n: 0, e: 0, s: 0, w: 0 };
+  const reach = (side, r, c, vertical) => {
+    const f = ed[side];
+    if (!f) return 0;
+    const n = rectOf(r, c) || (vertical ? tl : tl);
+    return f * (vertical ? n.h : n.w);
+  };
+  const up = reach('n', fp.minR - 1, fp.minC, true);
+  const down = reach('s', fp.maxR + 1, fp.minC, true);
+  const left = reach('w', fp.minR, fp.minC - 1, false);
+  const right = reach('e', fp.minR, fp.maxC + 1, false);
+  box.x -= left; box.w += left + right;
+  box.y -= up; box.h += up + down;
+  return box;
+}
+
 /** True when a set of "r,c" keys exactly fills its bounding box — i.e. the shape
  *  is a plain rectangle, not an L/T/+ with a notch. Both renderers use this to
  *  pick the simple ellipse/rounded-rect path over the drawn-outline one. */
