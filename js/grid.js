@@ -1876,6 +1876,36 @@ function renderMerges() {
     // desk, reusing the ordinary split renderer on the anchor cell.
     const [ar, ac] = parseKey(mergeAnchorKey(merge));
     const anchorCell = peekCell(ar, ac);
+
+    // A merge whose cells fall under a TABLE is covered, exactly like a covered
+    // square: only its content overlays the table — no desk box, no outline. The
+    // export has always done this (`coveredByTable` in drawMerge); the grid did
+    // not, so the desk painted over the table and the table could not be seen at
+    // all. Same decision in both: any member square inside a table's footprint.
+    const deskCovered = typeof tableAt === 'function'
+      && merge.keys.some((k) => { const [r, c] = parseKey(k); return !!tableAt(r, c); });
+    if (deskCovered) {
+      // Contrast the content against the TABLE, which is what it now sits on.
+      const host = tableAt(...parseKey(merge.keys[0]));
+      const ink = (host && host.color) || fill;
+      if (!empty) {
+        if (merge.deskSplit && mergeCanSplit(merge) && isSplit(anchorCell)) {
+          // A desk-split merge overlays EVERY piece's content, each at its own spot
+          // in the desk box — matching the export.
+          const { rows: sr, cols: sc } = anchorCell.split;
+          const bw = (right - left) / sc, bh = (bottom - top) / sr;
+          (anchorCell.subcells || []).forEach((sub, i) => {
+            if (!sub || !(sub.enabled || hasContent(sub))) return;
+            const rr = Math.floor(i / sc), cc = i % sc;
+            placeMergeContent(sub, ink, { left: left + cc * bw, top: top + rr * bh, w: bw, h: bh }, 'both');
+          });
+        } else {
+          placeMergeContent(data, ink, { left, top, w: right - left, h: bottom - top }, 'both');
+        }
+      }
+      continue;
+    }
+
     if (!empty && merge.deskSplit && mergeCanSplit(merge) && isSplit(anchorCell)) {
       let box;
       if (merge.kind === 'unit') {

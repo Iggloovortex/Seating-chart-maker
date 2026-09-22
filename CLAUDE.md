@@ -223,6 +223,13 @@ and push it; don't stack new work directly on `main`.
   — a clipped region is neither painted nor hit-tested. Note the rack is laid across
   the bounding box, so on an L the clip visibly cuts the slabs that reach into the
   notch.
+  **A merge UNDER A TABLE is covered**, like any covered square: only its content
+  overlays the table — no desk box, no outline — and a desk-split merge overlays EVERY
+  piece's content. Both renderers decide it the same way (any member square inside a
+  table's footprint): `coveredByTable` in `drawMerge`, `deskCovered` in `renderMerges`.
+  The grid used to skip this check entirely, so the desk painted over the table and the
+  table could not be seen at all; the content is contrasted against the TABLE's colour,
+  which is what it now sits on.
   A selected merge shows
   ONE outline over the whole object (`.merge--selected`), not a tick per member
   (buildCell skips per-cell selection on merged cells). Walls are refused on a
