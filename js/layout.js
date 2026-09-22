@@ -603,19 +603,31 @@ function tableBox(table, rectOf) {
   if (!tl || !br) return null;
   const box = { x: tl.x, y: tl.y, w: br.x + br.w - tl.x, h: br.y + br.h - tl.y };
   const ed = keysAreRect(table.cellKeys) ? tableEdges(table) : { n: 0, e: 0, s: 0, w: 0 };
-  const reach = (side, r, c, vertical) => {
+  // The edge lands INSIDE the neighbouring square, so it is measured from that square's
+  // own box — not as a distance from the table's edge. In the grid the neighbour does
+  // not begin where the table's cells end: a gap sits between them, and reaching by a
+  // fraction of the neighbour's width from the wrong origin put the grid a whole gap
+  // short of the seam while the gapless export sat right on it. Anchoring on the
+  // neighbour is the same arithmetic in both, which is what makes it one measure.
+  const edgeAt = (side, r, c) => {
     const f = ed[side];
-    if (!f) return 0;
-    const n = rectOf(r, c) || (vertical ? tl : tl);
-    return f * (vertical ? n.h : n.w);
+    if (!f) return null;
+    const n = rectOf(r, c);
+    if (!n) return null;
+    if (side === 'n') return n.y + n.h - f * n.h;
+    if (side === 's') return n.y + f * n.h;
+    if (side === 'w') return n.x + n.w - f * n.w;
+    return n.x + f * n.w;
   };
-  const up = reach('n', fp.minR - 1, fp.minC, true);
-  const down = reach('s', fp.maxR + 1, fp.minC, true);
-  const left = reach('w', fp.minR, fp.minC - 1, false);
-  const right = reach('e', fp.minR, fp.maxC + 1, false);
-  box.x -= left; box.w += left + right;
-  box.y -= up; box.h += up + down;
-  return box;
+  const top = edgeAt('n', fp.minR - 1, fp.minC);
+  const bottom = edgeAt('s', fp.maxR + 1, fp.minC);
+  const leftX = edgeAt('w', fp.minR, fp.minC - 1);
+  const rightX = edgeAt('e', fp.minR, fp.maxC + 1);
+  const x0 = leftX === null ? box.x : leftX;
+  const y0 = top === null ? box.y : top;
+  const x1 = rightX === null ? box.x + box.w : rightX;
+  const y1 = bottom === null ? box.y + box.h : bottom;
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 }
 
 /** True when a set of "r,c" keys exactly fills its bounding box — i.e. the shape

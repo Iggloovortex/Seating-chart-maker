@@ -2785,19 +2785,23 @@ function showResizePreview({ preview, next, nextEdges }) {
   if (!a || !z) return;
   let left = a.left, top = a.top;
   let right = z.left + z.width, bottom = z.top + z.height;
-  // Show the fraction too, measured off the square being reached into, so the preview
-  // lands exactly where the table will be drawn.
+  // The preview shows the fraction too, anchored on the neighbouring square's own box
+  // exactly as tableBox anchors it, so the dashed outline sits on the seam the table
+  // will be drawn to.
   const ed = nextEdges || { n: 0, e: 0, s: 0, w: 0 };
-  const reach = (side, r, c, vertical) => {
-    if (!ed[side]) return 0;
+  const edgeAt = (side, r, c) => {
+    if (!ed[side]) return null;
     const n = cellLocalRect(r, c);
-    if (!n) return 0;
-    return ed[side] * (vertical ? n.height : n.width);
+    if (!n) return null;
+    if (side === 'n') return n.top + n.height - ed.n * n.height;
+    if (side === 's') return n.top + ed.s * n.height;
+    if (side === 'w') return n.left + n.width - ed.w * n.width;
+    return n.left + ed.e * n.width;
   };
-  top -= reach('n', next.minR - 1, next.minC, true);
-  bottom += reach('s', next.maxR + 1, next.minC, true);
-  left -= reach('w', next.minR, next.minC - 1, false);
-  right += reach('e', next.minR, next.maxC + 1, false);
+  const t2 = edgeAt('n', next.minR - 1, next.minC); if (t2 !== null) top = t2;
+  const b2 = edgeAt('s', next.maxR + 1, next.minC); if (b2 !== null) bottom = b2;
+  const l2 = edgeAt('w', next.minR, next.minC - 1); if (l2 !== null) left = l2;
+  const r2 = edgeAt('e', next.minR, next.maxC + 1); if (r2 !== null) right = r2;
   preview.style.left = `${left}px`;
   preview.style.top = `${top}px`;
   preview.style.width = `${right - left}px`;

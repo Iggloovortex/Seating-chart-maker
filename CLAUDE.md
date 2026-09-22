@@ -550,6 +550,17 @@ and push it; don't stack new work directly on `main`.
   the grid's `renderTables` feeds it measured cell boxes and the export's `tableRect`
   feeds it layout rects, so each reaches into the REAL size of the square it is eating
   into, which matters the moment rows and columns carry weights.
+  **The edge is anchored on the NEIGHBOUR's own box, not offset from the table's.** The
+  edge lands inside the square beyond it, so it is struck from that square: east is
+  `n.x + f * n.w`, west `n.x + n.w - f * n.w`, and so on. Measuring it as a distance
+  outward from the table's own edge is not the same thing in both renderers — the grid
+  puts a `CELL_GAP` between squares, so the neighbour does not begin where the table's
+  cells end, and the grid landed a whole gap short of the seam (12.3px on an 80px cell)
+  while the gapless export sat right on it. Anchoring on the neighbour is the same
+  arithmetic in both, which is what makes it ONE measure; verified by feeding `tableBox`
+  each renderer's own `rectOf` and comparing how far into the neighbour it reaches —
+  1/2, 1/3, 2/3 and a ninth all agree to four decimals, on a grid where no row or
+  column is thinned.
   **The stops come from the squares that are actually there** (`tableEdgeStops`): it
   scans the squares just beyond the side being dragged and offers `i/n` for each one
   split `n` ways on that axis, plus 0. With no split beside it the only stop is 0, so
