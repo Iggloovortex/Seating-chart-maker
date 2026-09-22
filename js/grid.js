@@ -1010,6 +1010,13 @@ function buildSplitGrid(r, c, data, span = { rows: 1, cols: 1 }) {
     }
     for (const sm of polyMerges) hidden.add(sm.anchor);
   }
+  // A UNIT merged piece is appended LAST rather than lifted with a z-index. It has to
+  // paint over the pieces it straddles, and a z-index did that — but it also put the
+  // piece ABOVE a table (z 1), which nothing else on a split square does, and it opened
+  // a stacking context that trapped its own content underneath one. Its grid placement
+  // is explicit, so DOM order moves only what paints over what. (The export's twin of
+  // this is "paint unit anchors last".)
+  const units = [];
   data.subcells.forEach((sub, i) => {
     if (hidden.has(i)) {
       const polyOwner = polyMerges.find((sm) => sm.indices.includes(i));
@@ -1032,13 +1039,14 @@ function buildSplitGrid(r, c, data, span = { rows: 1, cols: 1 }) {
       // (the piece twin of a unit merge). It fills its block here and is squared
       // off by sizeUnitSubmerges once the block has been laid out — the block is
       // only square when the cell is, which "true sizes" need not be.
-      if (sm.kind === 'unit') el.classList.add('subcell--unit');
+      if (sm.kind === 'unit') { el.classList.add('subcell--unit'); units.push(el); return; }
     }
     wrap.appendChild(el);
   });
   for (const sm of polyMerges) {
     buildSubmergeOverlay(wrap, data, sm);
   }
+  for (const el of units) wrap.appendChild(el);
   return wrap;
 }
 

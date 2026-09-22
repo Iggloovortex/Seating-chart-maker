@@ -120,6 +120,13 @@ and push it; don't stack new work directly on `main`.
   Centered reading and writing that merge's own kind, plus **Unmerge** in Merge's
   place. A Centered merge shows in the list as a centred square too, so it matches
   the chart.
+  **A UNIT merged piece is appended LAST, not lifted with a z-index** (`buildSplitGrid`,
+  js/grid.js — the grid's twin of the export's "paint unit anchors last"). It has to
+  paint over the pieces it straddles; `.subcell--unit`'s `z-index: 2` did that, but it
+  also put the piece above a TABLE (z 1), which nothing else on a split square does — a
+  centred submerge under a table painted opaque over it — and it opened a stacking
+  context that trapped the piece's own content underneath one. Its grid placement is
+  explicit, so DOM order decides only what paints over what.
   **The Pieces list is a tile grid, explicitly placed.** Every piece is given its own
   `gridColumn`/`gridRow`, and each ROW carries a hidden tile-shaped spacer
   (`.piece-rowspacer`) in its first column. A row normally takes its height from an

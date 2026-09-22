@@ -775,7 +775,10 @@ body {
 .subcell--polyhidden { visibility: hidden; }
 /* A 'unit' merged piece: one square centred in the pieces it fuses, straddling
    their seams. Its width/height come from the block's proportions (js/grid.js). */
-.subcell--unit { place-self: center; z-index: 2; }
+/* No z-index: it is appended last instead (js/grid.js), so it paints over the pieces it
+   straddles without rising above a table or trapping its own content in a stacking
+   context — the same rule the merge overlays follow. */
+.subcell--unit { place-self: center; }
 .subcell-merge-overlay {
   position: absolute; inset: 0;
   pointer-events: none; z-index: 1;
