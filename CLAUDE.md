@@ -81,7 +81,10 @@ and push it; don't stack new work directly on `main`.
 ## Backlog (planned, not built)
 
 - **Split Square — DONE.** A square can divide into halves (side-by-side or
-  stacked), quarters, or ninths (3×3). Model: `cell.split = {rows, cols}` +
+  stacked), THIRDS (side-by-side or stacked), quarters, or ninths (3×3). The two
+  thirds shapes sit between Stacked and Quarters in `SPLIT_KINDS` (js/editor.js);
+  without them the only way to a third was to split into ninths and merge each lane
+  back together — three merges for what is one shape. Model: `cell.split = {rows, cols}` +
   `cell.subcells[]` (each a mini cell via `makeSubcell`), in `js/state.js`
   (`splitCell`/`unsplitCell`/`updateSubcell`/`toggleSubcell`, carried by
   serialize/copy-paste). Rendered by `buildSplitGrid`/`buildSubcell` (grid) and

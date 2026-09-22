@@ -724,6 +724,10 @@ const SPLIT_KINDS = [
   { key: 'none', rows: 0, cols: 0, label: 'None' },
   { key: 'v2',   rows: 1, cols: 2, label: 'Halves' },   // side by side (two 0.5-wide)
   { key: 'h2',   rows: 2, cols: 1, label: 'Stacked' },  // stacked (two 0.5-tall)
+  // Thirds in one direction. Without these the only way to a third was to split into
+  // ninths and merge each lane back together, three merges for what is one shape.
+  { key: 'v3',   rows: 1, cols: 3, label: 'Thirds' },   // side by side (three 1/3-wide)
+  { key: 'h3',   rows: 3, cols: 1, label: 'Thirds stacked' },
   { key: 'g4',   rows: 2, cols: 2, label: 'Quarters' },
   { key: 'g9',   rows: 3, cols: 3, label: 'Ninths' },   // 3×3 equal thirds
 ];
