@@ -308,7 +308,11 @@ and push it; don't stack new work directly on `main`.
   Colors; railings (`railFill`/`railBorder`, grey on black) and doors
   (`doorFill`/`doorBorder`) have their own swatches beside their buttons in the
   Walls bar, which is divided into sections: [Wall|Hollow] [Window]
-  [Railing+colours] [Door+colours] [Erase|Clear]. Read via `wallFillColor()` /
+  [Railing+colours] [Door+colours] [Erase|Clear]. **Every swatch in that bar is the
+  `.field` pattern** (`label.field` > `span.field__label` + `input.field__input
+  field__input--color`), like the railing's and the door's. The window's Fill was built
+  from the TOOLBAR's Default-Colors pattern (`.defaults__item` / `.defaults__swatch`)
+  instead, so it came out 44×44 with 3px of padding beside its 27×27 neighbours. Read via `wallFillColor()` /
   `wallInkColor()` / `railFillColor()` / `railInkColor()` / `doorFillColor()` /
   `doorInkColor()`; `fadeInk(hex, a)` makes the faded marks (a door's swing arc,
   a window's hatch). A window keeps its `#d8feff` glass tint AND is ruled with a
