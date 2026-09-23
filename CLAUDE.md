@@ -286,17 +286,31 @@ and push it; don't stack new work directly on `main`.
   EXPORT drawing the old square crop), `.cell__icon`'s `aspect-ratio: 1` (now set inline
   per glyph by `iconUse`), and the export's `drawImage` calls (which drew every icon
   into a square).
-  **The size is the icon's HEIGHT in both renderers**, and the width follows the ratio.
-  Setting it as the WIDTH in the grid (as it first was) halved a 2:1 icon there while
-  the export drew it full size.
-  **An icon is only ever enlarged or reduced, never stretched.** Where the box is too
-  narrow for the width the ratio asks for, the WHOLE icon comes down — the height with
-  it — so the glyph keeps its shape: `iconSize = room / ratio` in the export,
-  `h = min(mergeIconSize(...), room / ratio)` with an explicit width in the grid.
+  **A size is the icon's WEIGHT, not its height or its width** (`iconBox` / `iconWeightK`,
+  js/layout.js — the one place a glyph's drawn box is struck, read by both renderers AND
+  by the CSS). Every icon size in the app — `.cell__icon`'s 46%, `ICON_FRAC` for a piece,
+  `mergeIconSize` for a desk, `drawContent`'s `plan.iconFrac`, `drawIconOnly`'s budget —
+  is a NOMINAL size: what a SQUARE glyph would measure either way. `iconBox` lays that
+  much icon out in the glyph's own shape (`w = n·√r`, `h = n/√r`, so the box keeps an
+  `n × n` area) and then CONTAINS it in the room it has, scaled whole.
+  Neither axis can be the size on its own, and taking one was wrong in both directions
+  at once: as the HEIGHT (the export) a 2:1 glyph drew twice as wide as the square glyph
+  beside it; as the WIDTH — `.cell__icon`'s flat 46% in the grid — it drew half as tall.
+  So the same square showed a scrunched double monitor in the editor and an overblown one
+  on export, and a merged desk exaggerated both. With the weight rule a square glyph is
+  exactly `n` as before, and a wide one is wider and shorter rather than double or half:
+  measured, single vs double monitor now match to 1.000 on a square, a desk and a split
+  piece, in the grid and in the export alike.
+  **In CSS the shape rides on a variable, not on the percentage.** `iconUse` sets
+  `--icon-k` (= `iconWeightK`) beside the inline `aspect-ratio`, and `.cell__icon` is
+  `width: calc(46% * var(--icon-k, 1))` with a `max-width` scaled the same way — so the
+  percentage stays responsive to the cell while the glyph's shape is applied on top of
+  it. `height: auto` + `aspect-ratio` is what keeps the box scaled whole.
+  **An icon is only ever enlarged or reduced, never stretched.** Where the room is too
+  narrow for the width the shape asks for, the WHOLE box comes down — the height with it.
   Clamping the width alone squashes it (a 2.1:1 glyph came out 75×56 on a narrow desk
   instead of 75×36), and in CSS a bare `max-width` does the same thing — or letterboxes,
-  which is just as wrong. `drawIconOnly` takes the largest box of the glyph's own shape
-  that fits its square budget, for the same reason.
+  which is just as wrong.
   For a `<use>` the outer `<svg>` must NOT carry a viewBox — the `<symbol>`'s own box
   already maps its art into that viewport, and setting both applies the transform twice
   and crops the glyph.

@@ -490,7 +490,15 @@ function customIconFillLayer(inner, fill) {
 function iconUse(id, className = 'cell__icon', fill = null) {
   // Set below on whatever svg we return: `.cell__icon` declares `aspect-ratio: 1`, so a
   // wide or tall glyph would be crushed into a square without this.
-  const shape = (svg) => { svg.style.aspectRatio = String(iconRatio(id)); return svg; };
+  // The glyph's shape goes on in two parts: `aspect-ratio` keeps the box scaled whole,
+  // and `--icon-k` (sqrt of the ratio) spreads the CSS percentage into that shape, so
+  // the box carries a square glyph's WEIGHT rather than its width. See iconBox.
+  const shape = (svg) => {
+    const r = iconRatio(id);
+    svg.style.aspectRatio = String(r);
+    svg.style.setProperty('--icon-k', String(iconWeightK(r)));
+    return svg;
+  };
   // Imported icons carry their own markup and fill with the icon colour
   // (currentColor), driven by the svg's `color` set by the caller.
   const custom = customIcon(id);

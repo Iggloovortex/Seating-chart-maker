@@ -631,9 +631,15 @@ body {
   z-index: 2;
 }
 
+/* `--icon-k` is the glyph's shape factor, sqrt(ratio), set inline per glyph by
+   iconUse — the CSS twin of layout.js's iconBox. The percentage is the NOMINAL size
+   (what a square glyph measures either way) and k spreads it into the glyph's own
+   shape, so a wide icon comes out wider and shorter rather than half as tall. A flat
+   46% made the double monitor half the weight of the single one beside it. Height
+   follows from `aspect-ratio`, so the box is scaled whole and never squashed. */
 .cell__icon {
-  width: 46%;
-  max-width: 38px;
+  width: calc(46% * var(--icon-k, 1));
+  max-width: min(100%, calc(38px * var(--icon-k, 1)));
   height: auto;
   aspect-ratio: 1;
   flex: 0 0 auto;

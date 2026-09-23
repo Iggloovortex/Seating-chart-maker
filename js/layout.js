@@ -664,6 +664,33 @@ function mergeIconSize(w, h) {
   return Math.max(8, Math.min(long * ICON_SHARE, short * ICON_ROOM));
 }
 
+/** A glyph's drawn box: `n` is the nominal size — what a SQUARE icon would measure
+ *  either way — and the answer is that much icon, in this glyph's own shape.
+ *
+ *  A nominal size cannot simply be the height or the width, because a wide glyph then
+ *  reads as a different amount of icon than a square one. Taking it as the HEIGHT drew
+ *  the double monitor twice as wide as the single monitor beside it (too big on a desk);
+ *  taking it as the WIDTH, which is what `.cell__icon`'s flat 46% did in the grid, drew
+ *  it half as tall (too small on a square) — and the two renderers disagreed, each
+ *  wrong in its own direction.
+ *
+ *  So the nominal size is the box's WEIGHT: `n x n` worth of area, laid out in the
+ *  glyph's ratio (w = n*sqrt(r), h = n/sqrt(r)). A 2:1 glyph is then wider and shorter
+ *  than a square one rather than double or half of it, and a square glyph is exactly
+ *  `n` as before. The box is then CONTAINED in the room it has — scaled whole, so the
+ *  glyph is only ever enlarged or reduced, never stretched. Pass 0 for a free axis. */
+function iconWeightK(ratio) {
+  return Math.sqrt(ratio > 0 ? ratio : 1);
+}
+function iconBox(n, ratio, roomW, roomH) {
+  const k = iconWeightK(ratio);
+  const w = Math.max(1, n) * k, h = Math.max(1, n) / k;
+  const sw = roomW > 0 ? Math.min(1, roomW / w) : 1;
+  const sh = roomH > 0 ? Math.min(1, roomH / h) : 1;
+  const s = Math.min(sw, sh);
+  return { w: w * s, h: h * s };
+}
+
 /** True when a box is sitting ON a table: its CENTRE falls inside the table's drawn
  *  box. This is the same centre-in-shape test `tableCoverage` uses for a turned table.
  *  A square the table merely REACHES INTO keeps its own pieces (membership is still

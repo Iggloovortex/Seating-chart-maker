@@ -1277,12 +1277,9 @@ function drawIconOnly(ctx, cx, cy, size, data, imgCache) {
   if (!data.icon) return;
   const img = imgCache.get(iconKey(data.icon, data));
   if (!img) return;
-  // The biggest box of the glyph's OWN shape that fits in `size` square — scaled, never
-  // stretched. A wide glyph is limited by the width, a tall one by the height.
+  // A square glyph's worth of icon, in this glyph's own shape, contained in `size`.
   const ratio = iconRatio(data.icon) || 1;
-  const budget = size * 0.64;
-  const ih = Math.min(budget, budget / ratio);
-  const iw = ih * ratio;
+  const { w: iw, h: ih } = iconBox(size * 0.64, ratio, size * 0.94, size * 0.94);
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate(((data.rotation || 0) * Math.PI) / 180);
@@ -1421,13 +1418,16 @@ function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, 
   // text does not want scaling down with the box while it still fits.
   // A merged DESK hands in its own icon size: `s` is the short side, so on a long desk
   // the icon would stay the size it is on a single square however much room there is.
-  let iconSize = iconOverride || s * (labels.length ? plan.iconFrac : 0.6);
-  // `iconSize` is the icon's HEIGHT and its width follows the glyph's own ratio. Where
-  // that width does not fit, the WHOLE icon shrinks to suit — an icon is only ever
-  // enlarged or reduced, never stretched out of shape.
+  // That share is the NOMINAL size — what a SQUARE glyph would measure either way.
+  // iconBox lays that much icon out in this glyph's own shape and contains it in the
+  // box, so `iconSize` below is the drawn HEIGHT and `iconW` the drawn width. Treating
+  // the share as the height drew a 2:1 glyph twice as wide as a square one; treating it
+  // as the width (what the grid's CSS did) drew it half as tall.
+  const iconNominal = iconOverride || s * (labels.length ? plan.iconFrac : 0.6);
   const iconAspect = hasIcon && !printerAsIcon ? iconRatio(iconId) : 1;
-  const iconRoom = w * 0.94;
-  if (iconSize * iconAspect > iconRoom) iconSize = iconRoom / iconAspect;
+  const iconFit = iconBox(iconNominal, iconAspect, w * 0.94, h * 0.94);
+  let iconSize = printerAsIcon ? iconNominal : iconFit.h;
+  let iconW = printerAsIcon ? iconNominal : iconFit.w;
   let lineH = (base || s) * plan.lineFrac;
   let totalH = (hasIcon ? iconSize : 0) + labels.length * lineH;
 
@@ -1455,7 +1455,7 @@ function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, 
       ctx.restore();
       if (widest > availLen) k *= availLen / widest;
     }
-    if (k < 1) { iconSize *= k; lineH *= k; totalH *= k; }
+    if (k < 1) { iconSize *= k; iconW *= k; lineH *= k; totalH *= k; }
   }
   if (clip) {
     const half = totalH / 2;
@@ -1475,8 +1475,7 @@ function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, 
       if (img) ctx.drawImage(img, -iconSize / 2, cursorY, iconSize, iconSize);
     } else {
       const img = imgCache.get(iconKey(iconId, data));
-      const iw = iconSize * iconAspect;      // uniform: the height already fits the room
-      if (img) ctx.drawImage(img, -iw / 2, cursorY, iw, iconSize);
+      if (img) ctx.drawImage(img, -iconW / 2, cursorY, iconW, iconSize);
     }
     cursorY += iconSize;
   }

@@ -232,9 +232,14 @@ function sizeSubcellIcon(sc) {
   if (!icon) return;
   const base = Math.min(sc.clientWidth, sc.clientHeight);
   if (base <= 0) return;
-  const size = Math.max(8, Math.round(base * ICON_FRAC));
-  icon.style.width = `${size}px`;
-  icon.style.height = `${size}px`;
+  // The share is the NOMINAL size; iconBox lays that much icon out in the glyph's own
+  // shape and contains it in the piece, so a wide glyph is not half as tall here as it
+  // is on a square. `aspect-ratio` is what iconUse set the glyph's ratio on.
+  const ratio = parseFloat(icon.style.aspectRatio) || 1;
+  const b = iconBox(Math.max(8, base * ICON_FRAC), ratio,
+                    sc.clientWidth * 0.94, sc.clientHeight * 0.94);
+  icon.style.width = `${b.w}px`;
+  icon.style.height = `${b.h}px`;
   icon.style.maxWidth = 'none';
 }
 
@@ -2188,19 +2193,15 @@ function placeMergeContent(data, fill, box, which, ghost = false) {
   // desk (see mergeIconSize). Set inline so it overrides `.cell__icon`'s max-width.
   const icon = inner.querySelector('.cell__icon');
   if (icon) {
-    // mergeIconSize is the icon's HEIGHT — the export treats it that way too — and the
-    // WIDTH follows the glyph's own shape (the inline aspect-ratio iconUse sets), capped
-    // by the desk so a wide glyph cannot run off the end of it. Setting it as the width
-    // instead halved a 2:1 icon in the grid while the export drew it full size.
-    // Height and width are BOTH set from the glyph's own ratio, so the box never
-    // letterboxes and never stretches: where the desk is too narrow for the width the
-    // ratio asks for, the whole icon comes down to suit. (A bare max-width would clamp
-    // the width and leave the height, which is the same squashing in CSS form.)
+    // mergeIconSize is the NOMINAL size — what a square glyph would measure either way —
+    // and iconBox lays that much icon out in this glyph's own shape, contained in the
+    // desk. Taking it as the HEIGHT instead drew a 2:1 glyph twice as wide as a square
+    // one on the same desk; taking it as the width drew it half as tall. Both were set
+    // explicitly here, so the CSS cap never bites and the box is never letterboxed.
     const ratio = iconRatio(data.icon) || 1;
-    const room = Math.max(8, box.w * 0.94);
-    const h = Math.min(mergeIconSize(box.w, box.h), room / ratio);
-    icon.style.height = `${h}px`;
-    icon.style.width = `${h * ratio}px`;
+    const b = iconBox(mergeIconSize(box.w, box.h), ratio, box.w * 0.94, box.h * 0.94);
+    icon.style.height = `${b.h}px`;
+    icon.style.width = `${b.w}px`;
     icon.style.maxWidth = 'none';
   }
   wrap.appendChild(inner);
