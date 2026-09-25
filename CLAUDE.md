@@ -685,10 +685,27 @@ and push it; don't stack new work directly on `main`.
   — the overlay AND the `.cell__split` inside it both clip, so the bands were built and
   then cut off, and the overlay is raised so a name may lie over the squares beside the
   desk. That is `.cell--floatlabel`'s licence, given to a desk.
-  **A split PIECE always shows it**, because a piece is already a small square: both
-  renderers hang its name outside the PIECE (`buildSubcell`'s float branch + the
-  `hanging` pushes in `drawSplit`, for a plain piece and a furniture one alike), so it
-  is never shrunk into the piece or laid over its own icon.
+  **A split PIECE keeps its names INSIDE until they would be too small to read**
+  (`pieceNamesHang`, js/layout.js — the user's rule). It used to hang them outside
+  unconditionally, which laid a quarter's perfectly legible name over its neighbour for
+  no reason. Now a piece's names step out only when keeping them in would shrink the
+  text below `READABLE_TEXT` (0.6 of a full square's text — ~7px on the grid's 80px
+  square) or squeeze an icon beside them below `READABLE_ICON` (0.12 of a square) when
+  the icon would be big enough on its own. A furniture piece is measured against the
+  half the piece leaves, with no icon to share it.
+  **It is decided in UNITS of a full square, from the chart alone**, so the grid and the
+  export make the same call for the same piece — neither renderer's px enter into it.
+  `keptInsideScale` is the shrink `k` both renderers apply (text struck from a cell,
+  shrunk as far as the piece needs); `textRunUnits` measures a name in the export's own
+  content font. The grid reads a piece's room from `squareUnits(r,c)` (the last layout's
+  rects, unit-free) over `pieceCellShare` (the same effective rows/cols furniture sizing
+  uses); `pieceHangs` is that decision for callers that only need "does ANY piece
+  hang" (a square's / desk's `--floatlabel`). The export passes the piece box over
+  `cellRef`. Measured on 9 cases by `tools/tests/piece-labels.js`: grid and export agree
+  on every one — short names stay in down to a ninth; a second line in a ninth, or a
+  long name in a third or a quarter, hangs.
+  **`iconBox` must not floor its size at 1** — a px-era guard that inflated a
+  0.23-square icon to a whole square the moment it was asked in units.
   **Float's whole rule is "outside, in the standard place".** A hung name takes the
   SAME band, on the side the facing implies, at a full cell's text — the only thing
   float changes is that the band starts at the piece's own edge and reaches past it. It

@@ -1,6 +1,6 @@
 # Handoff — table / icon / targeting session
 
-Branch: `claude/table-rework-t0cpjy` (pushed, working tree clean, `8b3c15a`).
+Branch: `claude/table-rework-t0cpjy` (pushed, working tree clean).
 Read `CLAUDE.md` first — every finished item below is written up there in full.
 This file is only the *live* state: what landed, what is open, and what not to
 repeat.
@@ -11,7 +11,9 @@ repeat.
 python3 -m http.server 8123 &            # background it; foreground sleep is blocked
 python3 tools/gen-sources.py             # after editing ANY source file
 node tools/tests/targeting.js            # 16 gesture cases — run after touching hit-testing
-node tools/survey/survey.js              # the icon/text survey chart + its measurements
+node tools/tests/piece-labels.js         # 9 cases: does a piece keep its name in? both renderers
+node tools/survey/survey.js [outdir]     # every case, grid vs export, as a share of a square
+node tools/survey/lineheight.js [outdir] # the line-height picture (grid beside export)
 ```
 Playwright lives at `/opt/node22/lib/node_modules/playwright/index.js`.
 Grid: screenshot `#chart`. Export: `(await renderToCanvas(150)).toDataURL()`.
@@ -32,25 +34,50 @@ Anything in the scratchpad is wiped by a container reset — commit what matters
 | `e5afaad` `62a4253` | Icons scale to fit, never stretch — and a size is the glyph's WEIGHT, not an axis |
 | `ce3d38c` | A table owns the click over its whole area; walls inside a table are half-weight dividers; clicking a wall from outside walls mode lifts it |
 | `8b3c15a` | `targetAt` — one hit test for every gesture |
+| (this push) | A piece keeps its names inside until they would be too small to read; two-renderer survey; line-height picture |
 
-## OPEN — the biggest one
+## OPEN — the biggest one: the universal icon & text pass
 
-**The universal square/piece icon & text pass is UNFINISHED.** The user asked for
-a chart of every rendering case, then "determine and eliminate the differences
-between them all… a full pass for completion". The chart is built
-(`tools/survey/`) and its differences reported, but **only the icon-size items
-have been acted on**. Still outstanding, from the survey's own measurements:
+The user asked for a chart of every rendering case, then "determine and eliminate
+the differences between them all… a full pass for completion". Where it stands:
 
-- **Split pieces hang their names OUTSIDE while squares keep them inside.** The
-  biggest inconsistency left. It needs the user's call on which is the reference
-  behaviour — the question was put to them and is still unanswered, so do not
-  start this without it.
-- **Line-height differs**: 13.8px on squares vs 15.8px on pieces at the same 12px
-  font.
-- **Rack labels report no computed line-height** (`NaN`) — they do not go through
-  the same label element as everything else.
-- **The survey only measured the GRID.** The export was never measured the same
-  way, and the grid screenshot was clipped below ~row 7.
+**Done**
+- Icon SHAPE and WEIGHT (`iconBox`) — single vs double monitor match to 1.000.
+- **Piece labels: decided and built.** User's rule: *a piece's name stays inside
+  until either the label or the icon gets too small for human readability.*
+  `pieceNamesHang` (js/layout.js), grid and export agree on all 9 cases in
+  `tools/tests/piece-labels.js`.
+- **The survey now measures BOTH renderers** (`node tools/survey/survey.js [out]`),
+  every size as a share of one full square so the columns compare directly.
+- **Line height is drawn, not just numbered** (`node tools/survey/lineheight.js
+  [out]`) — each case's two lines, grid beside export at the same font, line
+  boxes outlined. Sent to the user; they wanted to SEE it before deciding.
+
+**What the two-renderer survey found** (grid vs export, share of a square):
+- **Text size AGREES** at full size (0.150 vs 0.148). An earlier 8% "difference"
+  was the survey dividing the grid by its layout unit, which includes the 8px
+  `CELL_GAP` — measure a drawn `.cell`, never `layoutUnit()`.
+- **Line height DISAGREES**: export is 1.22× the font everywhere (`BASE_LINE /
+  FONT_OF_LINE`). Grid: square & merge 1.15 (`.cell__labels`), piece 1.10
+  (`.subcell .cell__label`), chair ~1.23 and rack `normal` — those two sit outside
+  `.cell__labels` and inherit the keyword, which is why the old survey read `NaN`.
+  **Needs the user's call on the reference** — the picture is what they asked for
+  in order to make it. Recommendation: the export's 1.22, since the grid previews
+  the export — one variable on `.cell__labels`, `.cell__furniturelabels` and
+  `.cell__rackunit` would do it.
+- **ICON size DISAGREES, and it is the biggest gap**: the export draws icons
+  ~30–40% larger than the grid on squares, pieces and merges alike (square: grid
+  0.425 vs export 0.58 labelled / 0.60 alone). The grid is `.cell__icon`'s 46%
+  capped at 38px; the export is `plan.iconFrac` (labelled) or 0.6 (alone). Same
+  decision needed as line height: which renderer is the reference.
+- **Piece text in thirds**: the grid shrinks it to 0.075, the export to 0.124 —
+  the grid's `fitSubcellLabels` squeezes about twice as hard.
+- **Export-only half-size labels** (0.074) in rows 8 and 10 — row 10 is the known
+  "covered split-piece label is small in the export" bug below, now measured.
+- **Furniture rows are not yet paired element-for-element**: the survey lumps a
+  chair's tile, a rack's corner icon and a stairs tile (which reads 1.000 — it is a
+  whole-square image, not an icon) into one "icon" list, so its DIFF % there is not
+  meaningful yet. Pair them by element before acting on those rows.
 
 ## OPEN — smaller
 
@@ -95,8 +122,15 @@ have been acted on**. Still outstanding, from the survey's own measurements:
   once cited for a case the test scene did not contain.
 - **Send the user images, do not describe them.** They have had to ask twice.
 - **Test-scene gotchas that read as bugs:** a freshly created merge starts
-  **filled** (a tap empties it), and an editor pane left open by an earlier case
-  will sit over the hover point of a later one.
+  **filled** (a tap empties it); an editor pane left open by an earlier case sits
+  over the hover point of a later one; `setGrid` takes **(cols, rows)**; and
+  tagging a label to make it unique (`Ann#3`) lengthens it and changes the answer
+  to any fit question — use distinct names instead.
+- **Normalise the grid by a DRAWN square**, not `layoutUnit()` — the unit includes
+  the 8px `CELL_GAP`, which read every grid size ~10% small and invented an 8%
+  text difference that does not exist.
+- **Never chain an edit after a `grep` with `&&`** — a grep with no match exits 1
+  and the edit silently never runs; the output then looks like the edit failed.
 - **The user's uploaded `.seatchart` holds real workplace data** (room CR47, staff
   role names, CBS asset tags). It stays in the scratchpad — never commit it as a
   repo fixture.
