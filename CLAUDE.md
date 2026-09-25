@@ -522,24 +522,53 @@ and push it; don't stack new work directly on `main`.
   table keeps the data:** `removeTable` (the ✕) empties the covered squares
   (unseats them, content intact) and leaves them selected in select mode, so a
   second delete clears the content.
-- **A table owns the plain click over everything it is drawn on — DONE.** One rule,
-  every kind of square: the table test is the FIRST thing `fireTap` (js/interactions.js)
-  does, before the split-piece and merge branches. It used to sit below them, so a
-  plain square picked the table while a piece of a split square toggled and a merged
-  desk seated — three behaviours on one table. Covered squares stay editable through
-  right-click / long-press, which address the square by its key rather than by what
-  is drawn over it.
+- **ONE hit test — `targetAt` (js/grid.js) — DONE.** What the pointer is on is one
+  decision, in one priority order, asked by every gesture: the tap, the hover, the
+  right-click and the drag's drop slot. Before it each of those resolved the point
+  for itself — `fireTap` had its own order, `updateTableHover` and `updateMergeHover`
+  each ran their own `elementFromPoint`, `slotUnder` had three fallbacks — so one
+  pixel could mean a table to the click, a merge to the highlight and a square to the
+  drop. Every "unify the targeting" round of this feature was a symptom of that; this
+  is the fix, and a NEW kind of thing on the chart is added to the order here, once.
+  The order: **walls mode → table → wall → merge → piece → square**. It returns a
+  typed target — `'wall' {o,r,c}` · `'table' {table}` · `'merge' {merge,r,c,cr,cc,sub,live}`
+  · `'piece' {r,c,sub}` · `'square' {r,c}` · null — and `targetOfCell(r,c,sub)` is the
+  tail of it from a square that is already known, so the keyboard (a focused cell, no
+  point) runs the same order rather than a copy of it.
+  Two gestures deliberately reach past the table and SAY so instead of reimplementing
+  the order: `through` (right-click / long-press — the editor's way in, so it also
+  reaches a divider inside a table, which `wallAtPoint` reads with `raw`) and
+  `content` (the drag's slots — no table and no wall, and a point in a seam resolves
+  to the square beside it, because a table is a surface and what sits on it is what
+  you rearrange).
+  **A merge target carries BOTH squares**: `r/c` is the anchor (its content) and
+  `cr/cc` the square the pointer is on. The range gestures use `cr/cc` — a Shift
+  rectangle is struck from where you clicked, not from the anchor of the desk you
+  clicked on.
+  **A table owns the plain click over everything it is drawn on** — plain, split and
+  merged squares alike, and the seams between them. `fireTap` used to test the table
+  BELOW the split and merge branches, so only a plain square picked it while a piece
+  toggled and a merged desk seated: three behaviours on one table. Covered squares
+  stay editable through right-click / long-press.
   **The SEAMS are the table's too.** Outside walls mode `wallEdgeNear` refuses a seam
   that runs inside a table (`seamInsideTable`), so no wall bar is offered there; the
-  press lands on no element at all (a seam is a gap in the DOM), and the pointerdown
-  handler resolves it with `tableAtSeamPoint` — the seam's twin of `tableAt`, read
-  with `raw` so a seam a merge or a table has taken out of the wall layer still
-  resolves. Inside walls mode the seam is a seam again and takes a divider.
-  **The table lights under the pointer** (`setHoverTable` → `.table-shape--hot`, on
-  the `.table-shape` div and the `.table-poly` svg alike), from a covered square and
-  from a seam, so you can see what the click will reach. It has to be the TABLE that
-  lights: a covered square's own hover background paints BELOW `.table-shape` (z 1)
-  and showed nothing, which is why it was impossible to tell square from table.
+  press lands on no element at all (a seam is a gap in the DOM), and `targetAt`
+  resolves it with `tableAtSeamPoint` — the seam's twin of `tableAt`, read with `raw`
+  so a seam a merge or a table has taken out of the wall layer still resolves. Inside
+  walls mode the seam is a seam again and takes a divider.
+  **`updateHover` lights exactly ONE thing** — the wall bar, the table or the desk —
+  reading the same `targetAt`, so what lights and what a press acts on can never
+  disagree (a merge under a table used to light itself while the click picked the
+  table). It resolves from the POINT, not from `e.target`: the hover is wired on the
+  stage, which is bigger than the chart, so the target is the stage on most moves.
+  A press passes its own `el`, which for a press is authoritative.
+  The table lights via `setHoverTable` → `.table-shape--hot`, on the `.table-shape`
+  div and the `.table-poly` svg alike. It has to be the TABLE that lights: a covered
+  square's own hover background paints BELOW `.table-shape` (z 1) and showed nothing,
+  which is why it was impossible to tell square from table.
+  **Tested**: `node tools/tests/targeting.js` (needs the server on 8123) walks tap,
+  hover, keyboard, right-click, drag slots and walls mode over plain / split / merged
+  / unit-merged / covered / seam points — 16 cases. Run it after touching any of this.
 - **Floating labels on small squares — DONE.** A square holding a special icon
   (chair / server / stairs) takes its row/column weight like an empty one instead of
   claiming a full unit, and its name hangs in a band BELOW it. Before this, every

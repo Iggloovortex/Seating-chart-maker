@@ -81,15 +81,17 @@ function initInteractions(chartEl) {
     // wanted there as much as anywhere. So the press is armed and only the tap and
     // the long-press are withheld (see `inWalls` below).
     const inWalls = typeof isWallsMode === 'function' && isWallsMode();
+    // What a CLICK here would mean — one decision, the same one the hover lights
+    // (targetAt, js/grid.js). The drag has its own source rule below: it reaches
+    // through a table on purpose, so it reads the cell element rather than this.
+    const t = targetAt(e.clientX, e.clientY, { el: e.target });
     const cell = cellFrom(e.target);
+    // A seam is a gap in the DOM, so there is no element to press — but the table
+    // drawn across it is still the target there.
     if (!cell) {
-      // Nothing under the pointer means a SEAM — the gap between two squares, which
-      // is no element at all. Where that seam runs inside a table the table is drawn
-      // across it and owns the click (the wall layer stands down there outside walls
-      // mode), so the press picks the table.
-      const table = !inWalls && typeof tableAtSeamPoint === 'function'
-        ? tableAtSeamPoint(e.clientX, e.clientY) : null;
-      if (table) pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, table, timer: 0 };
+      if (t && t.kind === 'table') {
+        pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, t, timer: 0 };
+      }
       return;
     }
 
@@ -100,12 +102,10 @@ function initInteractions(chartEl) {
     // surround. That surround must still be grabbable — on a 3-cell desk the square
     // is a third of it, so requiring the press to land on the square is why a wide
     // merge could not be picked up — but a TAP there stays a no-op, so only the
-    // square itself seats or empties the desk.
-    const mergeHere = typeof mergeAt === 'function' ? mergeAt(...parseKey(cell.dataset.key)) : null;
-    const onLive = !!(e.target.closest?.('.merge-unit') || e.target.closest?.('.merge-furniture--live'));
-    const unitSurround = !!mergeHere && mergeHere.kind === 'unit' && !onLive;
+    // square itself seats or empties the desk. `targetAt` reports it as `live`.
+    const unitSurround = !!t && t.kind === 'merge' && !t.live;
 
-    pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, cell, sub, longFired: false,
+    pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, cell, sub, t, longFired: false,
                 timer: 0, additive, shift, pointerType: e.pointerType, unitSurround, inWalls };
     // Long-press opens the editor on TOUCH only. On a mouse the gesture belongs to
     // the drag: press, hold, then pull has to pick the square (or desk) up, and a
@@ -123,7 +123,7 @@ function initInteractions(chartEl) {
   chartEl.addEventListener('pointermove', (e) => {
     if (drag) return;                       // a drag listens on the window instead
     if (!pointer || e.pointerId !== pointer.id) return;
-    if (pointer.table) return;              // a seam press: nothing to carry from there
+    if (!pointer.cell) return;              // a seam press: nothing to carry from there
     if (Math.hypot(e.clientX - pointer.x, e.clientY - pointer.y) > MOVE_TOLERANCE) {
       // On a mouse, pulling a square off its cell picks it up and carries it to
       // another one. Touch keeps the old meaning — the travel is a scroll — so
@@ -138,16 +138,12 @@ function initInteractions(chartEl) {
     if (drag) return;                       // the window listeners finish a drag
     if (!pointer || e.pointerId !== pointer.id) return;
     window.clearTimeout(pointer.timer);
-    // A press that began in a seam over a table: the table is the target there.
-    if (pointer.table) {
-      const table = pointer.table;
-      pointer = null;
-      if (!selectMode) enterTableHandler();
-      toggleTableSelection(table.id);
-      return;
-    }
-    if (!pointer.longFired && !pointer.unitSurround && !pointer.inWalls) fireTap(pointer.cell, { additive: pointer.additive, shift: pointer.shift, sub: pointer.sub });
+    const p = pointer;
     pointer = null;
+    // In walls mode the edge layer owns clicks: the press was armed only so a
+    // press-and-pull could still drag a square.
+    if (p.longFired || p.unitSurround || p.inWalls) return;
+    fireTap(p.t, { additive: p.additive, shift: p.shift, sub: p.sub });
   };
   chartEl.addEventListener('pointerup', endHandler);
   chartEl.addEventListener('pointercancel', () => { if (!drag) cancelPointer(); });
@@ -239,41 +235,18 @@ function initInteractions(chartEl) {
    *  A merged desk IS a drop target: content lands on its anchor (or the piece
    *  under the pointer for a desk-split merge), keeping the merge intact. */
   function slotUnder(clientX, clientY) {
-    const under = document.elementFromPoint(clientX, clientY);
-    if (!under || !under.closest) return null;
-    const subEl = under.closest('.subcell');
-    const sub = subEl && subEl.dataset.sub != null ? Number(subEl.dataset.sub) : null;
-
-    // Resolve a merge under the pointer — from a member .cell (poly), or straight
-    // from an overlay whose member cells are inert (unit / furniture / split desk).
-    let mergeHit = null;
-    const cell = under.closest('.cell');
-    if (cell && cell.dataset.key) {
-      const [cr, cc] = parseKey(cell.dataset.key);
-      mergeHit = typeof mergeAt === 'function' ? mergeAt(cr, cc) : null;
-      if (!mergeHit) return { key: cell.dataset.key, r: cr, c: cc, sub };
+    // `content: true` is the drag's reading of the one hit test: no table (a table
+    // is a surface — what sits on it is what you rearrange), no wall, and a point in
+    // a seam resolves to the square beside it, since a desk spans the seams it
+    // covers. It replaced three fallbacks of its own, the last of which hit-tested
+    // merge overlays by BOUNDING BOX — so a drop into the notch of an L landed on
+    // the desk, which is exactly what the traced path is there to prevent.
+    const t = targetAt(clientX, clientY, { content: true });
+    if (!t) return null;
+    if (t.kind === 'merge') {
+      return { key: keyOf(t.r, t.c), r: t.r, c: t.c, sub: t.sub, merge: true, mergeId: t.merge.id };
     }
-    if (!mergeHit) {
-      const mEl = under.closest('.merge-unit, .merge-furniture, .merge-shape, .merge-split, .merge-content');
-      if (mEl && mEl.dataset.mergeId) mergeHit = state.merges.find((m) => m.id === mEl.dataset.mergeId);
-    }
-    // A poly merge's overlay is pointer-events:none and its desk spans the gaps
-    // between member cells, so the pointer can land on the bare chart between them.
-    // Hit-test the merge overlays geometrically to still resolve the desk.
-    if (!mergeHit) {
-      for (const el of chartEl.querySelectorAll('.merge-shape[data-merge-id], .merge-unit[data-merge-id], .merge-furniture[data-merge-id], .merge-split[data-merge-id]')) {
-        const b = el.getBoundingClientRect();
-        if (clientX >= b.left && clientX <= b.right && clientY >= b.top && clientY <= b.bottom) {
-          mergeHit = state.merges.find((m) => m.id === el.dataset.mergeId);
-          if (mergeHit) break;
-        }
-      }
-    }
-    if (mergeHit) {
-      const [ar, ac] = parseKey(mergeAnchorKey(mergeHit));
-      return { key: keyOf(ar, ac), r: ar, c: ac, sub, merge: true, mergeId: mergeHit.id };
-    }
-    return null;
+    return { key: keyOf(t.r, t.c), r: t.r, c: t.c, sub: t.sub == null ? null : t.sub };
   }
 
   function trackContentDrag(e) {
@@ -357,7 +330,9 @@ function initInteractions(chartEl) {
     }
     // Right-clicking a WALL from outside walls mode steps into it — the wall is
     // what you are pointing at, so that is what the click should reach. Tested
-    // before the square, since the wall is what is in front.
+    // before the square, since the wall is what is in front. Right-click is the
+    // gesture that reaches PAST a table, so it finds a divider inside one too,
+    // which a plain click (the table's) deliberately does not.
     if (!e.shiftKey && typeof wallAtPoint === 'function' && wallAtPoint(e.clientX, e.clientY)) {
       e.preventDefault();
       setWallsMode(true);
@@ -383,28 +358,45 @@ function initInteractions(chartEl) {
   });
 }
 
-function fireTap(cell, mods = {}) {
-  const [r, c] = parseKey(cell.dataset.key);
-  const { additive, shift, sub } = mods;
+/** A tap on a TARGET (`targetAt`, js/grid.js) — the typed answer to "what is the
+ *  pointer on", which every gesture reads, so the thing that lights under the
+ *  pointer and the thing a press acts on are the same decision. `t` may be left out
+ *  by callers that only have a cell element (the keyboard), and is derived then. */
+function fireTap(t, mods = {}) {
+  const { additive, shift } = mods;
+  if (t && t.nodeType) t = targetOfCell(...parseKey(t.dataset.key), mods.sub ?? null);
+  if (!t) return;
 
-  // A click that lands on a table picks the TABLE, whatever kind of square is
-  // hiding under it — plain, split or merged. The table is what you can see there,
-  // so it is what a click should mean, and it is the SAME rule for every square:
-  // this test used to sit below the split and merge branches, so a piece of a split
-  // square toggled and a merged desk seated while a plain square picked the table.
-  // Plain and Ctrl/Cmd clicks agree; Ctrl only differs in not disturbing a square
-  // selection. Covered squares stay editable through right-click / long-press,
-  // which addresses the square by its key rather than by what is drawn over it.
-  //
-  // The shapes are pointer-events:none overlays, so the square underneath is what
-  // the pointer actually lands on and the table is found from its position.
-  if (!shift) {
-    const table = tableAt(r, c);
-    if (table) {
-      if (!selectMode) enterTableHandler();
-      toggleTableSelection(table.id);
-      return;
-    }
+  // A TABLE owns the plain click over everything it is drawn on — plain, split and
+  // merged squares alike, and the seams between them. Shift keeps its rectangle
+  // meaning, which is a squares-only gesture, so it reaches through. Covered squares
+  // stay editable through right-click / long-press, which reach through as well.
+  if (t.kind === 'table') {
+    if (shift) return;
+    if (!selectMode) enterTableHandler();
+    toggleTableSelection(t.table.id);
+    return;
+  }
+
+  // `r/c` is what the target's CONTENT lives at (a merge's anchor); `sr/sc` is the
+  // square the pointer is actually on, which is what the range gestures below draw
+  // from — a Shift rectangle is struck from where you clicked, not from the anchor
+  // of whatever desk you clicked on.
+  const { r, c, sub } = t;
+  const sr = t.cr == null ? r : t.cr;
+  const sc = t.cc == null ? c : t.cc;
+  const picking = selectMode;
+
+  // A merged desk is one grid-level unit: a plain tap seats or empties the whole
+  // desk, just like tapping a square, and a PICK gathers the whole merge rather
+  // than the cell under the pointer. Shift keeps its rectangle meaning; that is how
+  // a merge is swept up alongside other squares.
+  if (t.kind === 'merge' && !shift) {
+    if (!picking && !additive) { toggleMergeFilled(t.merge); return; }
+    if (!picking) enterSelectHandler();
+    toggleMergeSelection(t.merge);
+    if (state.selection.size === 0) selectionEmptiedHandler();
+    return;
   }
 
   // A tap on a piece of a split square fills or empties just that piece — it is
@@ -412,32 +404,9 @@ function fireTap(cell, mods = {}) {
   // we are NOT picking: in select mode (or a Ctrl/Shift gesture) a tap must select
   // the whole square, so a split square can be gathered into a selection and
   // merged like any other.
-  if (sub != null && !selectMode && !additive && !shift) {
-    const data = peekCell(r, c);
-    if (data && isSplit(data)) { toggleSubcell(r, c, sub); return; }
-  }
-
-  // A merged desk is one grid-level unit: a plain tap seats or empties the whole
-  // desk, just like tapping a square. Editing it is long-press / right-click,
-  // which addresses the anchor (see fireEdit).
-  if (!selectMode && !shift && !additive) {
-    const merge = mergeAt(r, c);
-    if (merge) { toggleMergeFilled(merge); return; }
-  }
-
-  const picking = selectMode;
-
-  // A pick gathers the WHOLE merge, not the single cell under the pointer, so a
-  // merge is selected (and then moved or deleted) as one unit. Shift keeps its
-  // rectangle meaning; that is how a merge is swept up alongside other squares.
-  if ((picking || additive) && !shift) {
-    const merge = mergeAt(r, c);
-    if (merge) {
-      if (!picking) enterSelectHandler();
-      toggleMergeSelection(merge);
-      if (state.selection.size === 0) selectionEmptiedHandler();
-      return;
-    }
+  if (t.kind === 'piece' && !picking && !additive && !shift) {
+    toggleSubcell(r, c, sub);
+    return;
   }
 
   // Ctrl+Shift ADDS a line to whatever is already selected, rather than replacing
@@ -449,8 +418,8 @@ function fireTap(cell, mods = {}) {
     if (!picking) enterSelectHandler();
 
     if (!lineAnchor) {
-      lineAnchor = { r, c };
-      lineKeys = addLineRange(r, c, r, c);
+      lineAnchor = { r: sr, c: sc };
+      lineKeys = addLineRange(sr, sc, sr, sc);
       return;
     }
 
@@ -458,17 +427,17 @@ function fireTap(cell, mods = {}) {
     // even along the same row — starts a fresh line, so consecutive runs down
     // one column do not keep swallowing each other.
     const started = lineKeys.length > 1;
-    const inside = lineKeys.includes(keyOf(r, c));
-    const sameLine = r === lineAnchor.r || c === lineAnchor.c;
+    const inside = lineKeys.includes(keyOf(sr, sc));
+    const sameLine = sr === lineAnchor.r || sc === lineAnchor.c;
     if (sameLine && (!started || inside)) {
       deselectKeys(lineKeys);                    // re-size: take this line back
-      lineKeys = addLineRange(lineAnchor.r, lineAnchor.c, r, c);
+      lineKeys = addLineRange(lineAnchor.r, lineAnchor.c, sr, sc);
       return;
     }
 
     if (lineKeys.length === 1) deselectKeys(lineKeys);
-    lineAnchor = { r, c };
-    lineKeys = addLineRange(r, c, r, c);
+    lineAnchor = { r: sr, c: sc };
+    lineKeys = addLineRange(sr, sc, sr, sc);
     return;
   }
 
@@ -484,40 +453,40 @@ function fireTap(cell, mods = {}) {
     lineAnchor = null; lineKeys = [];   // a rectangle run ends any line run
 
     if (!anchor) {
-      anchor = { r, c };
-      corner = { r, c };
-      setSelectionRange(r, c, r, c);
+      anchor = { r: sr, c: sc };
+      corner = { r: sr, c: sc };
+      setSelectionRange(sr, sc, sr, sc);
       return;
     }
 
-    if (corner && corner.r === r && corner.c === c) {
+    if (corner && corner.r === sr && corner.c === sc) {
       // Same rectangle again — commit. A rect with any gap fills in; only an
       // already-complete rect empties.
-      seatRange(anchor.r, anchor.c, r, c, !allSeatedInRange(anchor.r, anchor.c, r, c));
+      seatRange(anchor.r, anchor.c, sr, sc, !allSeatedInRange(anchor.r, anchor.c, sr, sc));
       return;
     }
 
-    corner = { r, c };
-    setSelectionRange(anchor.r, anchor.c, r, c);
+    corner = { r: sr, c: sc };
+    setSelectionRange(anchor.r, anchor.c, sr, sc);
     return;
   }
 
   if (picking) {
-    toggleSelection(r, c);
+    toggleSelection(sr, sc);
     // Emptying the selection leaves select mode, unless a table is still picked.
     if (state.selection.size === 0) selectionEmptiedHandler();
   } else if (additive) {
     enterSelectHandler();     // turn on select mode + show the select bar
-    toggleSelection(r, c);
+    toggleSelection(sr, sc);
   } else {
-    toggleEnabled(r, c);
+    toggleEnabled(sr, sc);
   }
   // Only clicks made while PICKING start a range. Outside those modes there is
   // no anchor at all, so the first Shift+click always begins a fresh rectangle
   // instead of stretching from whichever square happened to be clicked last.
   if (picking) {
-    anchor = { r, c };
-    corner = { r, c };
+    anchor = { r: sr, c: sc };
+    corner = { r: sr, c: sc };
   } else {
     anchor = null;
     corner = null;

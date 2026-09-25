@@ -627,15 +627,11 @@ function initInsertGuides(stageEl) {
     // The wall bar is deliberately NOT in the guard above: it sits on the seam it
     // offers, so the pointer is over it for most of the gesture and it still has
     // to hand over to the next seam along.
-    updateWallHint(e);
-    updateTableHover(e);   // reveal the ✕ of whichever table the pointer is over
-    updateMergeHover(e);   // light the whole merged desk the pointer is over
+    updateHover(e);        // light the ONE thing a click would reach (targetAt)
   });
   stageEl.addEventListener('pointerleave', () => {
     if (!cornerMenuOpen) hideInsertGuides();
-    clearWallHover();
-    setHoverTable(null);
-    setHoverMerge(null);
+    clearHover();
   });
   // The menu is modal-ish: anything else you click dismisses it.
   document.addEventListener('pointerdown', (e) => {
@@ -1505,30 +1501,6 @@ function ariaLabel(r, c, data) {
 // shown on hover only, so this tracks which one the pointer is over.
 let hoverTableId = null;
 
-/** Reveal the ✕ of the table under the pointer, hiding the rest. Cheap enough to
- *  run on pointermove: it only toggles `hidden` when the hovered table changes. */
-function updateTableHover(e) {
-  if (!state.tables.length) { setHoverTable(null); return; }
-  // Reaching for a table's own control keeps its controls up rather than recomputing.
-  if (e.target.closest && e.target.closest('.table-remove, .table-move, .table-handle')) return;
-  // Shapes are pointer-events:none, so the cell under the pointer is what's hit;
-  // tableAt maps that covered cell back to its table.
-  const el = document.elementFromPoint(e.clientX, e.clientY);
-  const cell = el && el.closest ? el.closest('.cell') : null;
-  let id = null;
-  if (cell && cell.dataset.key) {
-    const [r, c] = parseKey(cell.dataset.key);
-    const t = typeof tableAt === 'function' ? tableAt(r, c) : null;
-    if (t) id = t.id;
-  } else {
-    // In the SEAM between two of a table's squares there is no cell at all, but the
-    // table is drawn across it and owns the click there — so it lights from there too.
-    const t = tableAtSeamPoint(e.clientX, e.clientY);
-    if (t) id = t.id;
-  }
-  setHoverTable(id);
-}
-
 /** Light the table under the pointer and show its controls. The table is what a
  *  plain click reaches over its whole area — over the squares it covers and over
  *  the seams between them — so it says so, the way an empty square lights under the
@@ -1547,24 +1519,6 @@ function setHoverTable(id) {
 // The merge currently lit by a hover, so hovering any member cell highlights the
 // WHOLE fused desk rather than the single square under the pointer.
 let hoverMergeId = null;
-
-function updateMergeHover(e) {
-  if (!state.merges.length) { setHoverMerge(null); return; }
-  const el = document.elementFromPoint(e.clientX, e.clientY);
-  let id = null;
-  const cell = el && el.closest ? el.closest('.cell') : null;
-  if (cell && cell.dataset.key) {
-    const [r, c] = parseKey(cell.dataset.key);
-    const m = typeof mergeAt === 'function' ? mergeAt(r, c) : null;
-    if (m) id = m.id;
-  } else {
-    // A unit merge's centred overlay (or its furniture host) is the live target
-    // (member cells are inert).
-    const live = el && el.closest ? el.closest('.merge-unit, .merge-furniture--live, .merge-shape') : null;
-    if (live && live.dataset.mergeId) id = live.dataset.mergeId;
-  }
-  setHoverMerge(id);
-}
 
 function setHoverMerge(id) {
   if (id === hoverMergeId) return;
@@ -2337,7 +2291,10 @@ function renderWalls() {
  *  disagree. Lets a right-click on a wall reach the wall rather than the square. */
 function wallAtPoint(clientX, clientY) {
   if (!hasWalls()) return null;
-  const edge = wallEdgeNear(clientX, clientY);
+  // `raw`: right-click is the reach-through gesture, so it reaches a DIVIDER inside
+  // a table — the seam the plain click gives to the table. A seam inside a merge
+  // carries no wall, so `raw` costs nothing there.
+  const edge = wallEdgeNear(clientX, clientY, { raw: true });
   return edge && wallAt(edge.o, edge.r, edge.c) ? edge : null;
 }
 
@@ -2570,6 +2527,103 @@ function tableAtSeamPoint(clientX, clientY) {
   return edge ? tableAtSeam(edge.o, edge.r, edge.c) : null;
 }
 
+// ------------------------------------------------------------- THE hit test
+//
+// `targetAt` is the ONE decision about what the pointer is on, in ONE priority
+// order, asked by every gesture in the app: the tap, the hover, the right-click
+// and the drag's drop slot. Before it, each of those resolved the point for
+// itself — `fireTap` tested table/split/merge in one order, `updateTableHover`
+// and `updateMergeHover` each ran their own `elementFromPoint`, the drag's
+// `slotUnder` had three fallbacks of its own — so the same pixel could mean a
+// table to the click, a merge to the highlight and a square to the drop. Every
+// "unify the targeting" round of this feature has been a symptom of that.
+//
+// The order, once, top to bottom:
+//   1. WALLS MODE — the seams own the chart; the squares stand down entirely.
+//   2. TABLE      — it owns the plain click over everything it is drawn on, the
+//                   squares it covers and the seams between them alike.
+//   3. WALL       — a bare seam outside any table: where a wall is offered.
+//   4. MERGE      — one object; its anchor carries its content.
+//   5. PIECE      — one space of a split square.
+//   6. SQUARE.
+//
+// Two gestures deliberately reach past the table, and say so rather than
+// reimplementing the order:
+//   `through` — the EDITOR's way in (right-click / long-press): the table is not
+//               the answer, so the square or the wall under it is.
+//   `content` — the DRAG's slots: no table and no wall either, and a point in a
+//               seam resolves to the square beside it, because a table is a
+//               surface and what sits on it is what you rearrange.
+//
+// Kinds: 'wall' {o,r,c} · 'table' {table} · 'merge' {merge,r,c,sub,live} ·
+//        'piece' {r,c,sub} · 'square' {r,c} · null (nothing).
+function targetAt(clientX, clientY, opts = {}) {
+  const { through = false, content = false } = opts;
+  const el = 'el' in opts ? opts.el : document.elementFromPoint(clientX, clientY);
+  const inWalls = typeof isWallsMode === 'function' && isWallsMode();
+  const edge = () => {
+    const w = wallEdgeNear(clientX, clientY);
+    return w ? { kind: 'wall', o: w.o, r: w.r, c: w.c } : null;
+  };
+
+  if (inWalls && !content) return edge();
+
+  // The square the point is on. A merge's overlays carry their ANCHOR's key, so a
+  // unit desk's centred square and a desk-split's pieces resolve like cells.
+  const host = el && el.closest
+    ? el.closest('.cell, .merge-unit, .merge-furniture--live, .merge-shape, .merge-split, .merge-content')
+    : null;
+  let key = host && host.dataset.key ? host.dataset.key : null;
+  // A seam is a GAP in the DOM — no element at all. For the drag's slots that is
+  // still the square beside it (a desk spans the seams it covers), so bridge.
+  if (!key && content) {
+    const near = cellNearPoint(clientX, clientY);
+    key = near && near.dataset.key ? near.dataset.key : null;
+  }
+
+  // A seam over a table has no square to hand to targetOfCell, so the table step is
+  // made here for that one case; everywhere else targetOfCell makes it.
+  if (!key) {
+    if (!through && !content) {
+      const t = tableAtSeamPoint(clientX, clientY);
+      if (t) return { kind: 'table', table: t };
+    }
+    return content ? null : edge();
+  }
+
+  const [r, c] = parseKey(key);
+  const subEl = el && el.closest ? el.closest('.subcell') : null;
+  const sub = subEl && subEl.dataset.sub != null ? Number(subEl.dataset.sub) : null;
+  // A unit desk draws ONE centred square and leaves the rest of its footprint bare.
+  // `live` says the point is on that square — the surround can be grabbed and
+  // right-clicked, but a TAP there is a no-op.
+  const live = !!(el && el.closest &&
+    (el.closest('.merge-unit') || el.closest('.merge-furniture--live')));
+  return targetOfCell(r, c, sub, { live, through, content });
+}
+
+/** The order from a square that is already known — table → merge → piece → square.
+ *  The keyboard has a focused cell and no point, and `targetAt` has resolved one
+ *  from the pointer, so both finish here: ONE implementation of the order rather
+ *  than a copy each. */
+function targetOfCell(r, c, sub = null, opts = {}) {
+  if (!opts.through && !opts.content) {
+    const table = typeof tableAt === 'function' ? tableAt(r, c) : null;
+    if (table) return { kind: 'table', table, cr: r, cc: c };
+  }
+  const merge = typeof mergeAt === 'function' ? mergeAt(r, c) : null;
+  if (merge) {
+    const [ar, ac] = parseKey(mergeAnchorKey(merge));
+    // `r/c` is the ANCHOR (the desk's content); `cr/cc` stays the square the
+    // pointer is actually on, which is what a Shift rectangle is drawn from.
+    return { kind: 'merge', merge, r: ar, c: ac, cr: r, cc: c, sub,
+             live: merge.kind !== 'unit' || !!opts.live };
+  }
+  const data = typeof peekCell === 'function' ? peekCell(r, c) : null;
+  if (sub != null && data && isSplit(data)) return { kind: 'piece', r, c, cr: r, cc: c, sub };
+  return { kind: 'square', r, c, cr: r, cc: c };
+}
+
 /** True when a seam sits between two cells of the SAME merge (an interior seam).
  *  `h:r,c` divides (r-1,c) and (r,c); `v:r,c` divides (r,c-1) and (r,c). */
 function seamInsideMerge(o, r, c) {
@@ -2586,23 +2640,45 @@ function wallPointReserve(box) {
   return (WALL_THICK * Math.min(box.width, box.height)) / 2 + WALL_POINT_PAD;
 }
 
-/** Follow the pointer: light an existing wall, or offer a bar on a bare seam. */
-function updateWallHint(e) {
+/** Follow the pointer and light the ONE thing a click would reach — the wall bar,
+ *  the table, or the merged desk — reading `targetAt`, so what lights and what a
+ *  press acts on can never disagree. They used to be three passes (updateWallHint,
+ *  updateTableHover, updateMergeHover), each with its own hit test, so a merge
+ *  under a table lit itself while the click picked the table. */
+function updateHover(e) {
   // A drag, an open menu, or the insert guides claiming the border all own the
   // pointer for the moment. Walls mode suppresses the guides instead, so its
   // perimeter seams stay reachable.
   const guidesUp = rowGuide && (!rowGuide.hidden || !colGuide.hidden ||
                                 (cornerBtn && !cornerBtn.hidden));
-  if (movingSelection || cornerMenuOpen || guidesUp) { clearWallHover(); return; }
+  if (movingSelection || cornerMenuOpen || guidesUp) { clearHover(); return; }
+  // Reaching for a table's own control keeps its controls up rather than
+  // recomputing: the ✕ sits inside the shape, past the square that revealed it.
+  if (e.target.closest && e.target.closest('.table-remove, .table-move, .table-handle')) return;
 
-  const edge = wallEdgeNear(e.clientX, e.clientY);
-  if (!edge) { clearWallHover(); return; }
+  // Resolved from the POINT, not from `e.target`: the hover is wired on the stage
+  // (it is bigger than the chart, so the insert guides can be reached from just
+  // outside it), so the event's target is the stage on every move that is not over
+  // a live element. A press passes its own target, which for a press is authoritative.
+  const t = targetAt(e.clientX, e.clientY);
+  const kind = t ? t.kind : null;
+  if (kind !== 'wall') clearWallHover();
+  setHoverTable(kind === 'table' ? t.table.id : null);
+  setHoverMerge(kind === 'merge' ? t.merge.id : null);
+  if (kind !== 'wall') return;
   // Exactly one of the two is ever lit: a seam that already carries a wall
   // brightens the wall and draws no bar, a bare one draws the bar. Either way the
   // strip itself stays over the square, so the square never lights as well.
-  const set = !!wallAt(edge.o, edge.r, edge.c);
-  highlightWall(set ? wallKey(edge.o, edge.r, edge.c) : null);
-  showWallHint(edge, set);
+  const set = !!wallAt(t.o, t.r, t.c);
+  highlightWall(set ? wallKey(t.o, t.r, t.c) : null);
+  showWallHint(t, set);
+}
+
+/** Nothing lit. */
+function clearHover() {
+  clearWallHover();
+  setHoverTable(null);
+  setHoverMerge(null);
 }
 
 /** Lay the strip along a seam. `onWall` makes it invisible — the wall under it is
