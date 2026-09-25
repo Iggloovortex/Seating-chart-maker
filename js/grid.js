@@ -1146,13 +1146,11 @@ function buildSubmergeOverlay(wrap, data, sm) {
 /** One sub-cell of a split square — a mini desk: fill/border when seated, its
  *  icon and labels turned to its own facing, faded when it holds content but is
  *  empty (the same ghost treatment a whole square gets). */
-function buildSubcell(sub, i, split, sm, parentR, parentC, span = { rows: 1, cols: 1 }) {
-  const el = document.createElement('div');
-  el.className = 'subcell';
-  el.dataset.sub = i;
-  if (sm) el.classList.add('subcell--merged');
-  const ghost = !sub.enabled && hasContent(sub);
-  // For merged subcells, compute effective rows/cols for furniture sizing.
+/** How many pieces of this kind make one CELL each way ({uRows, uCols}): a merged
+ *  piece counts its effective rows/cols, a desk split is spread across `span` cells,
+ *  and a unit merged piece is a square of its block's short side. Furniture is sized
+ *  from this, and so is a piece's room in squares (su.w / uCols). */
+function pieceCellShare(split, sm, span = { rows: 1, cols: 1 }) {
   const effRows = sm ? split.rows / submergeRect(sm, split.cols).rowSpan : split.rows;
   const effCols = sm ? split.cols / submergeRect(sm, split.cols).colSpan : split.cols;
   // Furniture is sized per CELL, so divide by how many cells the split is drawn
@@ -1163,7 +1161,37 @@ function buildSubcell(sub, i, split, sm, parentR, parentC, span = { rows: 1, col
   // A unit merged piece draws as a square of the block's SHORT side, so that is
   // the size its furniture has to fit.
   if (sm && sm.kind === 'unit') uRows = uCols = Math.max(uRows, uCols);
+  return { uRows, uCols };
+}
+
+/** Whether piece `i` of the split square at (r,c) hangs its names — buildSubcell's
+ *  decision, for the callers that only need to know whether ANY piece does (the
+ *  square's and the desk's `--floatlabel`, which let the band out of their clip). */
+function pieceHangs(r, c, data, i, span = { rows: 1, cols: 1 }) {
+  const sub = data.subcells && data.subcells[i];
+  if (!sub) return false;
+  const { rows, cols } = data.split;
+  const sm = (data.submerges || []).find((m) => m.anchor === i &&
+    (m.kind === 'unit' || isRectSubcells(m.indices, rows, cols))) || null;
+  const { uRows, uCols } = pieceCellShare(data.split, sm, span);
+  const su = squareUnits(r, c);
   const furniture = subcellFurniture(sub, uRows, uCols);
+  return anyLabelFloats(sub, pieceNamesHang(sub, su.w / uCols, su.h / uRows, !!furniture), true);
+}
+
+function buildSubcell(sub, i, split, sm, parentR, parentC, span = { rows: 1, cols: 1 }) {
+  const el = document.createElement('div');
+  el.className = 'subcell';
+  el.dataset.sub = i;
+  if (sm) el.classList.add('subcell--merged');
+  const ghost = !sub.enabled && hasContent(sub);
+  const { uRows, uCols } = pieceCellShare(split, sm, span);
+  const furniture = subcellFurniture(sub, uRows, uCols);
+  // Whether this piece's names hang outside it: they stay inside until that would
+  // make them — or the icon beside them — too small to read (pieceNamesHang, the
+  // same call the export makes for the same piece).
+  const su = squareUnits(parentR, parentC);
+  const hangs = anyLabelFloats(sub, pieceNamesHang(sub, su.w / uCols, su.h / uRows, !!furniture), true);
   if (sub.enabled && !furniture) {
     el.classList.add('subcell--on');
     el.style.background = sub.fill;
@@ -1242,7 +1270,7 @@ function buildSubcell(sub, i, split, sm, parentR, parentC, span = { rows: 1, col
         labelsEl.classList.add('cell__furniturelabels');
         // A furniture piece floats its name like a plain one: out of the square
         // rather than over its own icon.
-        if (anyLabelFloats(sub, true, true)) {
+        if (hangs) {
           el.classList.add('subcell--floatlabel');
           hangLabelsBelow(el, labelsEl, sub, rot, null, 100);
         } else {
@@ -1252,10 +1280,10 @@ function buildSubcell(sub, i, split, sm, parentR, parentC, span = { rows: 1, col
         el.appendChild(labelsEl);
       }
     } else {
-      // A piece IS a small square: a name marked to float hangs outside it rather than
-      // being shrunk into it. The piece's content fills it, so the band starts at its
-      // edge (100%) — the same rule a shrunken square follows.
-      if (labelsEl && anyLabelFloats(sub, true, true)) {
+      // A piece's name stays inside until it (or the icon beside it) would be too small
+      // to read, and only then hangs outside. The piece's content fills it, so the band
+      // starts at its edge (100%) — the same rule a shrunken square follows.
+      if (labelsEl && hangs) {
         el.classList.add('subcell--floatlabel');
         labelsEl.classList.add('cell__furniturelabels');
         // Which way it hangs is decided by WHERE the piece sits, not by its facing: a
@@ -1292,7 +1320,7 @@ function buildCell(r, c, rects) {
   // Does this square's name hang outside it? Answered from the laid-out rect, the
   // same test the export makes, so the two agree square for square.
   const floatingHere = !!(rects && anyLabelFloats(data, rectIsShrunk(rects.get(key))))
-    || !!(isSplit(data) && (data.subcells || []).some((sc) => anyLabelFloats(sc, true, true)));
+    || !!(isSplit(data) && (data.subcells || []).some((sc, i) => pieceHangs(r, c, data, i)));
   if (floatingHere) el.classList.add('cell--floatlabel');
 
   // True-size mode positions each square itself. Half a gap of inset on every
@@ -2101,7 +2129,7 @@ function renderMergeSplit(merge, box, ar, ac, anchorCell, border, selected, span
   // A piece that hangs its name outside itself needs the DESK to let it out, exactly as
   // a split square needs `.cell--floatlabel`: the overlay and the sub-grid inside it
   // both clip, so a desk-split merge's names were built and then cut off.
-  const floats = (anchorCell.subcells || []).some((sc) => anyLabelFloats(sc, true, true));
+  const floats = (anchorCell.subcells || []).some((sc, i) => pieceHangs(ar, ac, anchorCell, i, span));
   container.className = 'merge-split' + (selected ? ' merge--selected' : '')
     + (floats ? ' merge-split--floatlabel' : '');
   container.dataset.mergeId = merge.id;

@@ -750,7 +750,9 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan, span = { rows: 1, cols: 1 },
       const geo = chairInRect(box, sub, uRows, uCols);
       // A furniture piece floats its name the same way a plain one does: the piece
       // keeps its square, the name steps out of it and is painted late.
-      if (hanging && anyLabelFloats(sub, true, true)) {
+      // It hangs only when kept beside the piece it would be too small to read
+      // (pieceNamesHang) — measured in squares, so the grid makes the same call.
+      if (hanging && anyLabelFloats(sub, pieceNamesHang(sub, bw / cellRef, bh / cellRef, true), true)) {
         geo.labelBox = hangingLabelBox(box, ...facingStepOf(sub), geo.w);
         geo.full = cellRef;
         geo.floating = true;
@@ -777,7 +779,9 @@ function drawSplit(ctx, rectOf, sp, imgCache, plan, span = { rows: 1, cols: 1 },
     // A piece IS a small square, so a name marked to float hangs outside it exactly as
     // a shrunken square's does: the piece keeps its icon, the name steps out and is
     // painted in the late pass so the pieces after it cannot bury it.
-    if (hanging && anyLabelFloats(sub, true, true)) {
+    // Its names stay inside until that would shrink the text or the icon below what a
+    // person can read (pieceNamesHang), and only then step out.
+    if (hanging && anyLabelFloats(sub, pieceNamesHang(sub, bw / cellRef, bh / cellRef), true)) {
       drawContent(ctx, box.x + bw / 2, box.y + bh / 2, bw, bh, { ...sub, labels: [] },
                   imgCache, false, plan, undefined, 0, inkBase, cellRef);
       // Up out of the square for a piece in the top half, down for one in the bottom
@@ -999,13 +1003,6 @@ function hangingLabelBox(rect, dr = -1, dc = 0, size = null) {
   return dr > 0
     ? { x: midX - run / 2, y: rect.y + rect.h - s - depth, w: run, h: depth, anchor: 'bottom' }
     : { x: midX - run / 2, y: rect.y + s,                  w: run, h: depth, anchor: 'top' };
-}
-
-/** The facing step a label placement reads, collapsed the way the furniture does. */
-function facingStepOf(data) {
-  let [dr, dc] = FACING_STEP[data.rotation || 0] || FACING_STEP[0];
-  if (dr && dc) dc = 0;
-  return [dr, dc];
 }
 
 /** The facing step a label placement reads, collapsed the way the furniture does. */

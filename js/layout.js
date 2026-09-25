@@ -561,7 +561,94 @@ function layoutRects({ wUnits, hUnits, reserveUnits }, unit, originX, originY) {
       y += rect.h + (reserveUnits ? reserveUnits(r, c) * unit : 0);
     }
   }
+  LAYOUT_RECTS = rects;
   return rects;
+}
+
+// The most recent layout's rects, so a square's size in UNITS can be read back by
+// code that builds a piece before it is laid out (the grid's buildSubcell).
+let LAYOUT_RECTS = null;
+
+/** A square's laid-out size in units of a full square — {w:1,h:1} unless its row or
+ *  column is weighted. Unit-free, so either renderer's last layout gives the same. */
+function squareUnits(r, c) {
+  const b = LAYOUT_RECTS && LAYOUT_RECTS.get(keyOf(r, c));
+  if (!b || !(LAYOUT_UNIT > 0)) return { w: 1, h: 1 };
+  return { w: b.w / LAYOUT_UNIT, h: b.h / LAYOUT_UNIT };
+}
+
+// ------------------------------------------------ a split piece's names: in or out
+//
+// A piece's names stay INSIDE it until keeping them there would shrink the text, or
+// the icon, below what a person can read — only then do they hang outside. (A piece
+// used to hang its names out unconditionally, which put a quarter's perfectly
+// legible name outside it and over its neighbour for no reason.)
+//
+// Both renderers strike a piece's text from a whole CELL and shrink it only as far as
+// the piece requires; `k` below is that shrink. It is worked out here in UNITS of a
+// full square, from the chart alone, so the grid and the export make the same call
+// for the same piece — neither renderer's own px measurements are involved.
+
+/** The least a kept-inside name may shrink to, as a share of a full square's text.
+ *  Below it the name hangs outside instead. */
+const READABLE_TEXT = 0.6;
+/** The smallest an icon may be squeezed to by names kept beside it, in squares
+ *  (~10px on the editing grid's 80px square). Below it the names hang outside and
+ *  give the icon the piece back. */
+const READABLE_ICON = 0.12;
+const PIECE_ICON_SHARE = 0.46;   // a piece's icon, of its short side (ICON_FRAC)
+const PIECE_ROOM = 0.94;         // the share of a box the content may fill (drawContent)
+
+let TEXT_MEASURE = null;
+/** A label's width in units, at a font of `fontU` units — measured with the export's
+ *  own content font, so the estimate is the text the export will draw. */
+function textRunUnits(text, fontU) {
+  if (!TEXT_MEASURE) {
+    if (typeof document === 'undefined') return String(text).length * fontU * 0.6;
+    TEXT_MEASURE = document.createElement('canvas').getContext('2d');
+    TEXT_MEASURE.font = '600 100px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+  }
+  return (TEXT_MEASURE.measureText(String(text)).width / 100) * fontU;
+}
+
+/** How far keeping a piece's names inside would shrink its content: 1 = not at all.
+ *  `wU`/`hU` are the room the content has, in squares. */
+function keptInsideScale(cell, wU, hU) {
+  const lines = (cell.labels || []).filter((l) => l.text && l.text.trim());
+  if (!lines.length) return 1;
+  const quarter = ((((Math.round((cell.rotation || 0) / 90) * 90) % 360) + 360) % 360);
+  const vertical = quarter === 90 || quarter === 270;
+  const stack = (vertical ? wU : hU) * PIECE_ROOM;
+  const run = (vertical ? hU : wU) * PIECE_ROOM;
+  const lineU = LABEL_LINE_UNITS;
+  const fontU = lineU * 0.82;                       // FONT_OF_LINE in js/export.js
+  const iconN = cell.icon ? Math.min(wU, hU) * PIECE_ICON_SHARE : 0;
+  const ratio = cell.icon && typeof iconRatio === 'function' ? iconRatio(cell.icon) : 1;
+  const iconH = cell.icon ? iconBox(iconN, ratio, run, 0).h : 0;
+  const total = iconH + lines.length * lineU;
+  let k = total > stack ? stack / total : 1;
+  let widest = 0;
+  for (const l of lines) widest = Math.max(widest, textRunUnits(l.text, fontU * k));
+  if (widest > run) k *= run / widest;
+  return k;
+}
+
+/** True when a piece's names must hang OUTSIDE it: keeping them in would push the text
+ *  below READABLE_TEXT, or squeeze the icon below READABLE_ICON when the icon would be
+ *  big enough on its own. A furniture piece's names sit in the half the piece leaves,
+ *  so that half is the room they are measured against, with no icon to share it. */
+function pieceNamesHang(cell, wU, hU, furniture = false) {
+  if (!cell || !(cell.labels || []).some((l) => l.text && l.text.trim())) return false;
+  if (furniture) {
+    const n = ((Math.round((cell.rotation || 0) / 45) * 45) % 360 + 360) % 360;
+    const [dr, dc] = (typeof FACING_STEP !== 'undefined' && FACING_STEP[n]) || [-1, 0];
+    const room = { ...cell, icon: null };
+    return keptInsideScale(room, dc && !dr ? wU / 2 : wU, dr ? hU / 2 : hU) < READABLE_TEXT;
+  }
+  const k = keptInsideScale(cell, wU, hU);
+  if (k < READABLE_TEXT) return true;
+  const iconN = cell.icon ? Math.min(wU, hU) * PIECE_ICON_SHARE : 0;
+  return iconN >= READABLE_ICON && iconN * k < READABLE_ICON;
 }
 
 /** Where each of a table's edges sits, as a signed fraction of ONE square. 0 is flush
@@ -695,7 +782,10 @@ function iconWeightK(ratio) {
 }
 function iconBox(n, ratio, roomW, roomH) {
   const k = iconWeightK(ratio);
-  const w = Math.max(1, n) * k, h = Math.max(1, n) / k;
+  // Only negatives are guarded: callers measure in px AND in squares (pieceNamesHang),
+  // and a floor of 1 inflated a 0.23-square icon to a whole square.
+  const m = n > 0 ? n : 0;
+  const w = m * k, h = m / k;
   const sw = roomW > 0 ? Math.min(1, roomW / w) : 1;
   const sh = roomH > 0 ? Math.min(1, roomH / h) : 1;
   const s = Math.min(sw, sh);
