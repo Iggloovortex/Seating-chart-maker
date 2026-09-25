@@ -1211,6 +1211,15 @@ body {
   white-space: nowrap;
 }
 
+/* Under the pointer: the table says it is what a click will reach, over its
+   squares and over the seams between them alike. A covered square's own hover
+   paints BELOW the table (z 1) and so showed nothing — this is the feedback in its
+   place, and it is on the table because the table is what the click picks. The
+   inline border colour has to be out-weighed, hence !important. */
+.table-shape--hot { opacity: 1; border-color: var(--accent) !important; }
+.table-poly.table-shape--hot { opacity: 1; }
+.table-poly.table-shape--hot path { stroke: var(--accent); }
+
 /* Picked in table mode: a dashed accent ring around the shape. */
 .table-shape--picked {
   outline: 3px dashed var(--accent);

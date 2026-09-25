@@ -264,7 +264,9 @@ function canvasWallOps(ctx) {
  *  free end grows, so an outline pass caps it without bleeding into a neighbour. */
 function wallBarRect(it, sign) {
   const { seg, o } = it;
-  const u = seg.u * WALL_OUT_SCALE;    // the export's thinner wall weight
+  // The export's thinner wall weight, halved again for a divider (a seam inside a
+  // table). `wallScale` is the one place both reductions live.
+  const u = seg.u * wallScale({ out: true, divider: it.divider });
   const half = (WALL_THICK * u) / 2;
   const s = (WALL_STROKE * u) / 2;
   const grow = sign * s;
@@ -306,7 +308,11 @@ function wallJunctions(rectOf) {
       // Whichever end of that arm is the one landing on this point.
       const atA = a.o === 'h' ? a.c === C : a.r === R;
       const p = wallPt(seg, atA ? seg.a0 : seg.a1, 0);
-      out.push({ x: p.x, y: p.y, type, u: seg.u, o: a.o });
+      // The point is a divider's only when EVERY arm meeting it is one: a full wall
+      // reaching the point owns it at full size, and the dividers trim to its face
+      // (wallEndJoin), so the joint is never half a bar wide with a wall on it.
+      const divider = arms.every((x) => seamInsideTable(x.o, x.r, x.c));
+      out.push({ x: p.x, y: p.y, type, u: seg.u, o: a.o, divider });
     }
   }
   return out;
@@ -315,7 +321,7 @@ function wallJunctions(rectOf) {
 /** A junction's square, grown or shrunk by half an outline exactly as a bar's
  *  rect is, so the two passes meet flush and no seam shows between them. */
 function junctionRect(j, sign) {
-  const u = j.u * WALL_OUT_SCALE;
+  const u = j.u * wallScale({ out: true, divider: j.divider });
   const t = (WALL_THICK * u) / 2 + sign * (WALL_STROKE * u) / 2;
   return { x: j.x - t, y: j.y - t, w: t * 2, h: t * 2 };
 }
@@ -335,7 +341,8 @@ function drawWalls(ctx, rectOf) {
     const m = /^([hv]):(\d+),(\d+)$/.exec(key);
     if (!m) continue;
     const o = m[1], r = Number(m[2]), c = Number(m[3]);
-    items.push({ o, r, c, value, type: wallTypeOf(value), seg: wallSegment(o, r, c, rectOf) });
+    items.push({ o, r, c, value, type: wallTypeOf(value), divider: seamInsideTable(o, r, c),
+                 seg: wallSegment(o, r, c, rectOf) });
   }
 
   // Bars reach into each other at a junction, so where two types meet the one
@@ -427,21 +434,23 @@ function drawWalls(ctx, rectOf) {
     const endA = jA.mode, endB = jB.mode;
     // Stop short of anything that is not a railing, by that wall's own half
     // thickness, so a rail never runs into a wall or a door.
-    const wallHalf = (WALL_THICK * it.seg.u * WALL_OUT_SCALE) / 2;
+    const railOpts = { bevel: false, out: true, divider: it.divider };
+    const wallHalf = (WALL_THICK * it.seg.u * railScale(railOpts)) / 2;
     const clipA = jA.meetsWall ? wallHalf : 0, clipB = jB.meetsWall ? wallHalf : 0;
     for (const [end, mode] of [['A', endA], ['B', endB]]) {
       if (mode !== 'corner') continue;
       const along = end === 'A' ? it.seg.a0 : it.seg.a1;
       const p = wallPt(it.seg, along, 0);
-      posts.set(`${Math.round(p.x)},${Math.round(p.y)}`, { p, u: it.seg.u });
+      posts.set(`${Math.round(p.x)},${Math.round(p.y)}`, { p, u: it.seg.u, divider: it.divider });
     }
-    paintRailing(it.seg, ops, { bevel: false, out: true, endA, endB, clipA, clipB });
+    paintRailing(it.seg, ops, { ...railOpts, endA, endB, clipA, clipB });
   }
-  for (const { p, u } of posts.values()) paintRailingPost(p.x, p.y, u, ops, { out: true });
+  for (const { p, u, divider } of posts.values()) paintRailingPost(p.x, p.y, u, ops, { out: true, divider });
 
   for (const it of items) {
     if (isWallBar(it.type) || it.type === 'railing') continue;
-    const opts = { bevel: false, out: true, endA: wallEndJoin(it.o, it.r, it.c, 'A'),
+    const opts = { bevel: false, out: true, divider: it.divider,
+                   endA: wallEndJoin(it.o, it.r, it.c, 'A'),
                    endB: wallEndJoin(it.o, it.r, it.c, 'B') };
     paintDoor(it.seg, wallOrient(it.value), ops, opts);
   }

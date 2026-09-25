@@ -1520,14 +1520,28 @@ function updateTableHover(e) {
     const [r, c] = parseKey(cell.dataset.key);
     const t = typeof tableAt === 'function' ? tableAt(r, c) : null;
     if (t) id = t.id;
+  } else {
+    // In the SEAM between two of a table's squares there is no cell at all, but the
+    // table is drawn across it and owns the click there — so it lights from there too.
+    const t = tableAtSeamPoint(e.clientX, e.clientY);
+    if (t) id = t.id;
   }
   setHoverTable(id);
 }
 
+/** Light the table under the pointer and show its controls. The table is what a
+ *  plain click reaches over its whole area — over the squares it covers and over
+ *  the seams between them — so it says so, the way an empty square lights under the
+ *  pointer. It has to read ABOVE the table itself: the square's own hover paints
+ *  below `.table-shape`, which is why hovering a covered square used to show
+ *  nothing and you could not tell what a click would land on. */
 function setHoverTable(id) {
   if (id === hoverTableId) return;
   hoverTableId = id;
   chart.querySelectorAll('.table-remove, .table-move').forEach((b) => { b.hidden = b.dataset.tableId !== id; });
+  chart.querySelectorAll('.table-shape, .table-poly').forEach((s) => {
+    s.classList.toggle('table-shape--hot', !!id && s.dataset.tableId === id);
+  });
 }
 
 // The merge currently lit by a hover, so hovering any member cell highlights the
@@ -2271,7 +2285,11 @@ function renderWalls() {
     // The editing grid keeps the bevelled ends, so runs miter at their corners.
     const type = wallTypeOf(value);
     const o = m[1], r = Number(m[2]), c = Number(m[3]);
-    const opts = { bevel: true };
+    // A seam inside a table is a desk divider, drawn at half weight (see
+    // WALL_DIVIDER_SCALE); every measure struck below takes the same scale, or the
+    // bar would thin while its outline, clip and hatch stayed at full size.
+    const opts = { bevel: true, divider: seamInsideTable(o, r, c) };
+    const wu = seg.u * wallScale(opts);
     // One group per wall, named by its edge key, so hovering can light it up.
     const g = document.createElementNS(MERGE_SVGNS, 'g');
     g.setAttribute('class', 'wall-piece');
@@ -2280,14 +2298,14 @@ function renderWalls() {
     ops.into(g);
     if (type === 'railing') {
       const jA = railingJoin(o, r, c, 'A'), jB = railingJoin(o, r, c, 'B');
-      const wallHalf = (WALL_THICK * seg.u) / 2;
+      const wallHalf = (WALL_THICK * wu) / 2;
       paintRailing(seg, ops, { ...opts, endA: jA.mode, endB: jB.mode,
                                clipA: jA.meetsWall ? wallHalf : 0,
                                clipB: jB.meetsWall ? wallHalf : 0 });
       for (const [end, j] of [['A', jA], ['B', jB]]) {
         if (j.mode !== 'corner') continue;
         const p = wallPt(seg, end === 'A' ? seg.a0 : seg.a1, 0);
-        posts.set(`${Math.round(p.x)},${Math.round(p.y)}`, { p, u: seg.u });
+        posts.set(`${Math.round(p.x)},${Math.round(p.y)}`, { p, u: seg.u, divider: opts.divider });
       }
     } else if (type === 'door') {
       paintDoor(seg, wallOrient(value), ops, opts);
@@ -2296,12 +2314,12 @@ function renderWalls() {
       // Glass gets its `/ / /` rule, ruled inside the pane.
       if (type === 'window') {
         const bar = wallBar(seg, opts);
-        const t = bar.h - WALL_STROKE * seg.u * 0.5;
+        const t = bar.h - WALL_STROKE * wu * 0.5;
         const lo = Math.min(bar.a0, bar.a1), hi = Math.max(bar.a0, bar.a1);
         const pane = seg.o === 'h'
           ? { x: lo, y: seg.cross - t, w: hi - lo, h: t * 2 }
           : { x: seg.cross - t, y: lo, w: t * 2, h: hi - lo };
-        paintWindowHatch(pane, seg.u, ops);
+        paintWindowHatch(pane, wu, ops);
       }
     }
   }
@@ -2309,7 +2327,7 @@ function renderWalls() {
   // A post belongs to the junction rather than to either rail, so it goes back
   // on the layer itself.
   ops.into(null);
-  for (const { p, u } of posts.values()) paintRailingPost(p.x, p.y, u, ops);
+  for (const { p, u, divider } of posts.values()) paintRailingPost(p.x, p.y, u, ops, { divider });
   chart.appendChild(svg);
 }
 
@@ -2499,7 +2517,7 @@ function cellNearPoint(clientX, clientY) {
 /** Which seam the pointer is reaching for, or null. Resolved from the square the
  *  pointer is on or beside and that square's own box, so it stays exact under
  *  "true sizes", where a column's offset differs from row to row. */
-function wallEdgeNear(clientX, clientY) {
+function wallEdgeNear(clientX, clientY, opts = {}) {
   const cellEl = cellNearPoint(clientX, clientY);
   if (!cellEl) return null;
   const [r, c] = parseKey(cellEl.dataset.key);
@@ -2530,10 +2548,26 @@ function wallEdgeNear(clientX, clientY) {
   let edge = null;
   if (dy > 0) edge = { o: 'h', r: py < y0 ? r : r + 1, c };
   else if (dx > 0) edge = { o: 'v', r, c: px < x0 ? c : c + 1 };
+  if (!edge || opts.raw) return edge;
   // A seam INSIDE a merged desk (both cells it divides belong to the same merge)
   // takes no wall — a merge is one object, so there is nothing to wall between.
-  if (edge && seamInsideMerge(edge.o, edge.r, edge.c)) return null;
+  if (seamInsideMerge(edge.o, edge.r, edge.c)) return null;
+  // Outside walls mode a seam that runs INSIDE a table belongs to the TABLE: the
+  // table is what you can see there, so that is what a click reaches (the press
+  // falls through to tableAtSeamPoint). Inside walls mode the seam is a seam again
+  // and takes a divider like any other.
+  const inWalls = typeof isWallsMode === 'function' && isWallsMode();
+  if (!inWalls && seamInsideTable(edge.o, edge.r, edge.c)) return null;
   return edge;
+}
+
+/** The table a point in a SEAM lands on, or null — the seam's twin of `tableAt`.
+ *  Read with `raw`, so a seam a merge or a table has taken out of the wall layer
+ *  still resolves: it is the TABLE we are asking about, not the wall. */
+function tableAtSeamPoint(clientX, clientY) {
+  if (!state.tables.length) return null;
+  const edge = wallEdgeNear(clientX, clientY, { raw: true });
+  return edge ? tableAtSeam(edge.o, edge.r, edge.c) : null;
 }
 
 /** True when a seam sits between two cells of the SAME merge (an interior seam).

@@ -118,9 +118,18 @@ const TABLE_INSET = 0.03;
 const WALL_THICK = 0.0909;
 const WALL_STROKE = 0.0295;
 const WALL_OUT_SCALE = 0.5;
+/** A wall on a seam INSIDE a table is a desk divider — the panel between two seats
+ *  of one cubicle run — not a wall of the room. It is drawn at half weight, which
+ *  is the railing's shaft: a divider reads as a partition rather than as structure,
+ *  and a run of them does not bury the desks it divides. Every measure scales
+ *  together, exactly as WALL_OUT_SCALE does, so the proportions are unchanged. */
+const WALL_DIVIDER_SCALE = 0.5;
+
 /** Weight multiplier for a set of paint options: the export's thin walls, or the
- *  grid's full-weight ones. */
-function wallScale(opts) { return opts && opts.out ? WALL_OUT_SCALE : 1; }
+ *  grid's full-weight ones, halved again for a divider. */
+function wallScale(opts) {
+  return (opts && opts.out ? WALL_OUT_SCALE : 1) * (opts && opts.divider ? WALL_DIVIDER_SCALE : 1);
+}
 const WALL_INK = '#000000';
 const DOOR_FILL = '#6c4c00';
 const DOOR_INK = '#392b00';
@@ -130,7 +139,9 @@ const RAIL_INK = '#343434';
 // thick, and its slim shaft — half of that — fits inside a wall's footprint. The
 // editing grid keeps the railing at full weight, where it has room to read.
 const RAIL_OUT_SCALE = WALL_OUT_SCALE;
-function railScale(opts) { return opts && opts.out ? RAIL_OUT_SCALE : 1; }
+function railScale(opts) {
+  return (opts && opts.out ? RAIL_OUT_SCALE : 1) * (opts && opts.divider ? WALL_DIVIDER_SCALE : 1);
+}
 // The railing's outline is finer than a wall's — 0.194 of its own thickness,
 // measured off the reference, which is what keeps the dumbbell reading as an
 // outlined rail rather than a solid bar at this size.

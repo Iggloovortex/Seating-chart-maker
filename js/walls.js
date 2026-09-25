@@ -9,6 +9,9 @@ let activeWallType = 'wall';
 /** Turn walls mode on or off. Assigned by initWalls; right-click uses it to step
  *  into walls mode from a wall, and back out of it again. */
 let setWallsMode = () => {};
+/** Arm the bar with a type, as clicking its button does. Assigned by initWalls;
+ *  placeWallFromHint uses it to adopt the type of the wall being lifted. */
+let selectWallType = () => {};
 
 function isWallsMode() { return wallsMode; }
 function activeWall() { return activeWallType; }
@@ -45,13 +48,21 @@ function placeWall(o, r, c) {
 
 /** A press on the seam's strip (see updateWallHint in js/grid.js), which covers
  *  the whole band a seam owns — bare seams and walls alike. In walls mode it
- *  places the active type, exactly as the strip says it will. From OUTSIDE walls
- *  mode the strip is the way IN: a bare seam takes a plain wall and the mode
- *  turns on, and a seam that already carries a wall just turns the mode on, so
- *  pressing a wall reaches it without changing it by surprise. */
+ *  places the active type, exactly as the strip says it will.
+ *
+ *  From OUTSIDE walls mode the strip is the way IN, and it does the whole gesture
+ *  in one press: a bare seam takes a plain wall and the mode turns on, while a seam
+ *  that already carries one turns the mode on, ARMS THE BAR WITH THAT TYPE and
+ *  lifts the wall. So a wall removed by accident is put straight back by clicking
+ *  the seam again, and a run is re-laid in its own type without hunting for it in
+ *  the bar. Inside walls mode nothing changes — there the press places, replaces or
+ *  clears exactly as the bar says. */
 function placeWallFromHint(o, r, c) {
   if (wallsMode) { placeWall(o, r, c); return; }
-  if (!wallAt(o, r, c)) setWall(o, r, c, 'wall');
+  const cur = wallAt(o, r, c);
+  if (!cur) { setWall(o, r, c, 'wall'); setWallsMode(true); return; }
+  selectWallType(wallTypeOf(cur));
+  setWall(o, r, c, null);
   setWallsMode(true);
 }
 
@@ -67,6 +78,7 @@ function initWalls() {
     activeWallType = t;
     for (const k in buttons) buttons[k].setAttribute('aria-pressed', String(k === t));
   };
+  selectWallType = select;
   for (const [sectionId, types] of Object.entries(WALL_SECTIONS)) {
     const host = document.getElementById(sectionId);
     if (!host) continue;
@@ -105,6 +117,12 @@ function initWalls() {
   });
 
   setWallsMode = (on) => {
+    // Walls and Select are separate modes; don't show both bars at once. The
+    // handover happens BEFORE our own flag flips: the Select button's handler turns
+    // walls mode off when it sees it on, so setting the flag first made the two
+    // cancel each other out and walls mode never came on from select mode.
+    const selBtn = document.getElementById('btn-select');
+    if (on && selBtn && selBtn.getAttribute('aria-pressed') === 'true') selBtn.click();
     wallsMode = on;
     // The squares are not clickable while walls mode is on, so they stop
     // answering the pointer — the seams and the walls are what respond.
@@ -112,9 +130,6 @@ function initWalls() {
     btn.setAttribute('aria-pressed', String(on));
     btn.title = on ? 'Walls — on (Esc to exit)' : 'Walls — draw walls, doors and windows on the seams';
     bar.hidden = !on;
-    // Walls and Select are separate modes; don't show both bars at once.
-    const selBtn = document.getElementById('btn-select');
-    if (on && selBtn && selBtn.getAttribute('aria-pressed') === 'true') selBtn.click();
     emit(); // re-render, so the insert guides stand down / come back with the mode
   };
   btn.addEventListener('click', () => setWallsMode(!wallsMode));

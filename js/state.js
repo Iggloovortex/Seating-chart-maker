@@ -1763,6 +1763,23 @@ function doorsMeetOpening(arms) {
   return a.o === b.o && doorOpenEnd(a.value) === a.end && doorOpenEnd(b.value) === b.end;
 }
 
+/** The table a seam runs INSIDE, or null. A seam is inside a table when both of
+ *  the squares it divides belong to the SAME table — `h:r,c` divides (r-1,c) from
+ *  (r,c), `v:r,c` divides (r,c-1) from (r,c) — so a table's own outer boundary is
+ *  not inside it.
+ *
+ *  Such a wall is not a room wall but a DESK DIVIDER: the panel between two seats
+ *  of one cubicle run. It is drawn at half weight (WALL_DIVIDER_SCALE) in both
+ *  renderers, and outside walls mode the seam belongs to the TABLE — a plain click
+ *  there picks the table rather than reaching for the wall. */
+function tableAtSeam(o, r, c) {
+  if (typeof tableAt !== 'function') return null;
+  const a = o === 'h' ? tableAt(r - 1, c) : tableAt(r, c - 1);
+  const b = tableAt(r, c);
+  return a && b && a.id === b.id ? a : null;
+}
+function seamInsideTable(o, r, c) { return !!tableAtSeam(o, r, c); }
+
 /** The edges meeting at grid point (R,C) and the piece that belongs there. Each
  *  arm carries WHICH of its ends lands on the point, since a door's two ends are
  *  not alike. */
@@ -1807,6 +1824,21 @@ function wallEndJoin(o, r, c, end) {
     : [wallAt('h', R, C - 1), wallAt('h', R, C)]).map(wallTypeOf);
   const anyPerp = perp.some(Boolean);
   const joint = junctionAt(R, C).type;
+
+  // A DIVIDER is half a wall thick (see tableAtSeam), so it cannot fuse with a
+  // full-weight bar: reaching into a joint it does not fill leaves a notch in the
+  // thicker bar. It gives way instead, and the point — sized by the thickest thing
+  // on it (wallJunctions) — is what its end terminates against. Two dividers meeting
+  // are the same weight, so they join exactly as two walls do.
+  const mine = seamInsideTable(o, r, c);
+  const armKeys = o === 'h'
+    ? [{ o: 'h', r: R, c: end === 'A' ? C - 1 : C }, { o: 'v', r: R - 1, c: C }, { o: 'v', r: R, c: C }]
+    : [{ o: 'v', r: end === 'A' ? R - 1 : R, c: C }, { o: 'h', r: R, c: C - 1 }, { o: 'h', r: R, c: C }];
+  const weights = armKeys.filter((a) => wallAt(a.o, a.r, a.c))
+                         .map((a) => seamInsideTable(a.o, a.r, a.c));
+  const other = weights.some((w) => w !== mine);
+  if (other && mine) return 'trim';                             // the divider gives way
+  if (other && !weights.some((w) => w === mine)) return 'plain'; // only dividers here
 
   if (isWallBar(type)) {
     // A door across the junction is an opening: it keeps its width, we give way.

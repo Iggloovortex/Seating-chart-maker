@@ -82,7 +82,16 @@ function initInteractions(chartEl) {
     // the long-press are withheld (see `inWalls` below).
     const inWalls = typeof isWallsMode === 'function' && isWallsMode();
     const cell = cellFrom(e.target);
-    if (!cell) return;
+    if (!cell) {
+      // Nothing under the pointer means a SEAM — the gap between two squares, which
+      // is no element at all. Where that seam runs inside a table the table is drawn
+      // across it and owns the click (the wall layer stands down there outside walls
+      // mode), so the press picks the table.
+      const table = !inWalls && typeof tableAtSeamPoint === 'function'
+        ? tableAtSeamPoint(e.clientX, e.clientY) : null;
+      if (table) pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, table, timer: 0 };
+      return;
+    }
 
     const additive = e.ctrlKey || e.metaKey; // Ctrl (Win/Linux) or Cmd (Mac) = add to selection
     const shift = e.shiftKey;                 // Shift = range-select from the anchor
@@ -114,6 +123,7 @@ function initInteractions(chartEl) {
   chartEl.addEventListener('pointermove', (e) => {
     if (drag) return;                       // a drag listens on the window instead
     if (!pointer || e.pointerId !== pointer.id) return;
+    if (pointer.table) return;              // a seam press: nothing to carry from there
     if (Math.hypot(e.clientX - pointer.x, e.clientY - pointer.y) > MOVE_TOLERANCE) {
       // On a mouse, pulling a square off its cell picks it up and carries it to
       // another one. Touch keeps the old meaning — the travel is a scroll — so
@@ -128,6 +138,14 @@ function initInteractions(chartEl) {
     if (drag) return;                       // the window listeners finish a drag
     if (!pointer || e.pointerId !== pointer.id) return;
     window.clearTimeout(pointer.timer);
+    // A press that began in a seam over a table: the table is the target there.
+    if (pointer.table) {
+      const table = pointer.table;
+      pointer = null;
+      if (!selectMode) enterTableHandler();
+      toggleTableSelection(table.id);
+      return;
+    }
     if (!pointer.longFired && !pointer.unitSurround && !pointer.inWalls) fireTap(pointer.cell, { additive: pointer.additive, shift: pointer.shift, sub: pointer.sub });
     pointer = null;
   };
@@ -369,6 +387,26 @@ function fireTap(cell, mods = {}) {
   const [r, c] = parseKey(cell.dataset.key);
   const { additive, shift, sub } = mods;
 
+  // A click that lands on a table picks the TABLE, whatever kind of square is
+  // hiding under it — plain, split or merged. The table is what you can see there,
+  // so it is what a click should mean, and it is the SAME rule for every square:
+  // this test used to sit below the split and merge branches, so a piece of a split
+  // square toggled and a merged desk seated while a plain square picked the table.
+  // Plain and Ctrl/Cmd clicks agree; Ctrl only differs in not disturbing a square
+  // selection. Covered squares stay editable through right-click / long-press,
+  // which addresses the square by its key rather than by what is drawn over it.
+  //
+  // The shapes are pointer-events:none overlays, so the square underneath is what
+  // the pointer actually lands on and the table is found from its position.
+  if (!shift) {
+    const table = tableAt(r, c);
+    if (table) {
+      if (!selectMode) enterTableHandler();
+      toggleTableSelection(table.id);
+      return;
+    }
+  }
+
   // A tap on a piece of a split square fills or empties just that piece — it is
   // its own little square, edited through long-press / right-click. But only when
   // we are NOT picking: in select mode (or a Ctrl/Shift gesture) a tap must select
@@ -398,24 +436,6 @@ function fireTap(cell, mods = {}) {
       if (!picking) enterSelectHandler();
       toggleMergeSelection(merge);
       if (state.selection.size === 0) selectionEmptiedHandler();
-      return;
-    }
-  }
-
-  // A click that lands on a table picks the TABLE, not the square hiding under
-  // it — the table is what you can see there, so it is what a click should mean.
-  // Plain and Ctrl/Cmd clicks agree on this; the difference is only that Ctrl
-  // reaches for a table without otherwise disturbing a square selection. Covered
-  // squares stay editable through right-click / long-press, which addresses the
-  // square by its key rather than by what is drawn over it.
-  //
-  // The shapes are pointer-events:none overlays, so the square underneath is what
-  // the pointer actually lands on and the table is found from its position.
-  if (!shift) {
-    const table = tableAt(r, c);
-    if (table) {
-      if (!selectMode) enterTableHandler();
-      toggleTableSelection(table.id);
       return;
     }
   }

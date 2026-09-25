@@ -449,6 +449,31 @@ and push it; don't stack new work directly on `main`.
   Walls mode lives in `js/walls.js` (`#btn-walls` +
   `#wall-bar`): pick a type, click a seam to place, click the wall again / Erase
   to remove.
+  **A wall inside a TABLE is a DIVIDER, drawn at half weight** (`WALL_DIVIDER_SCALE`,
+  js/layout.js — folded into `wallScale`/`railScale` exactly as `WALL_OUT_SCALE` is,
+  so every measure of the bar scales together). A seam between two squares of one
+  table is not a wall of the room but the panel between two seats of a cubicle run,
+  and at full weight a run of them buried the desks they divide. `tableAtSeam` /
+  `seamInsideTable` (js/state.js) is the one decision both renderers read — the grid
+  passes `divider` in its paint opts, the export puts it on each item and on the
+  junction — so grid and export agree. The sub-measures struck INSIDE `renderWalls`
+  (the railing's `wallHalf` clip, the glass pane's inset, the hatch's unit) take the
+  scaled `wu`, or the bar thins while its trimmings stay full size.
+  A divider cannot fuse with a full-weight bar — reaching into a joint it does not
+  fill leaves a notch in the thicker one — so `wallEndJoin` makes it give way
+  ('trim'), a full wall meeting only dividers caps 'plain', and a junction point is
+  a divider's only when EVERY arm on it is one (`wallJunctions`). A run crossing the
+  table's edge therefore steps from thin to thick on the boundary with no notch.
+  **Clicking an existing wall from OUTSIDE walls mode lifts it** (`placeWallFromHint`):
+  the mode comes on, the bar is armed with that wall's own type (`selectWallType`,
+  the module-level handle on the bar's `select`) and the wall is removed — one press.
+  So a wall deleted by accident goes straight back with a second click, and a run is
+  re-laid in its own type without hunting for it in the bar. Inside walls mode nothing
+  changes: the press places, replaces or clears exactly as the bar says.
+  **`setWallsMode` hands over to Select BEFORE flipping its own flag.** The Select
+  button's handler turns walls mode off when it sees it on, so setting `wallsMode =
+  on` first made the two cancel each other and walls mode never came on from select
+  mode — the wall was lifted and the mode stayed off.
   **Placing is a hover gesture, not a hit layer** (`updateWallHint`, js/grid.js):
   running the pointer near a seam reveals a slim bar (`.wall-hint`) lying exactly
   where the wall would be drawn, with a + through its middle — the insert guides'
@@ -497,6 +522,24 @@ and push it; don't stack new work directly on `main`.
   table keeps the data:** `removeTable` (the ✕) empties the covered squares
   (unseats them, content intact) and leaves them selected in select mode, so a
   second delete clears the content.
+- **A table owns the plain click over everything it is drawn on — DONE.** One rule,
+  every kind of square: the table test is the FIRST thing `fireTap` (js/interactions.js)
+  does, before the split-piece and merge branches. It used to sit below them, so a
+  plain square picked the table while a piece of a split square toggled and a merged
+  desk seated — three behaviours on one table. Covered squares stay editable through
+  right-click / long-press, which address the square by its key rather than by what
+  is drawn over it.
+  **The SEAMS are the table's too.** Outside walls mode `wallEdgeNear` refuses a seam
+  that runs inside a table (`seamInsideTable`), so no wall bar is offered there; the
+  press lands on no element at all (a seam is a gap in the DOM), and the pointerdown
+  handler resolves it with `tableAtSeamPoint` — the seam's twin of `tableAt`, read
+  with `raw` so a seam a merge or a table has taken out of the wall layer still
+  resolves. Inside walls mode the seam is a seam again and takes a divider.
+  **The table lights under the pointer** (`setHoverTable` → `.table-shape--hot`, on
+  the `.table-shape` div and the `.table-poly` svg alike), from a covered square and
+  from a seam, so you can see what the click will reach. It has to be the TABLE that
+  lights: a covered square's own hover background paints BELOW `.table-shape` (z 1)
+  and showed nothing, which is why it was impossible to tell square from table.
 - **Floating labels on small squares — DONE.** A square holding a special icon
   (chair / server / stairs) takes its row/column weight like an empty one instead of
   claiming a full unit, and its name hangs in a band BELOW it. Before this, every
