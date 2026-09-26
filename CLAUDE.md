@@ -306,6 +306,24 @@ and push it; don't stack new work directly on `main`.
   `width: calc(46% * var(--icon-k, 1))` with a `max-width` scaled the same way — so the
   percentage stays responsive to the cell while the glyph's shape is applied on top of
   it. `height: auto` + `aspect-ratio` is what keeps the box scaled whole.
+  **How BIG an icon is: `contentIconBox` (js/layout.js), one rule for both renderers.**
+  Icons follow the EXPORT and labels follow the GRID (the user's call). With labels, an
+  icon takes the room its OWN lines leave, capped at `ICON_MAX` (0.72) — it used to be
+  the room left by the MOST-lined square in the whole chart (`planContent`'s maxLines),
+  so one two-line desk anywhere shrank every one-line desk's icon, and raising the cap
+  did nothing. With no labels it fills its box to ONE even margin (`ICON_ALONE_PAD`,
+  8%) on whichever side it reaches first — a fixed 0.6 nominal in a 94% room left a
+  wide top/bottom margin and next to none at the sides. A desk keeps `mergeIconSize`
+  (`ICON_ROOM` 0.80). The grid sizes its icons in px through the same function
+  (`sizeCellIcon` / `sizeSubcellIcon`, and `fitSquareContent` for a centred desk) and
+  then fits in the EXPORT's order — if icon and lines overrun, BOTH come down by the same
+  factor; keeping the icon and squeezing only the text, against a stricter budget,
+  shrank every label the moment icons grew. `drawIconOnly` is FURNITURE only (chair and
+  server tiles, a merge's icon cell) and keeps its own tile size — routing it through
+  the "alone" rule enlarged every chair in the export. Line height is
+  `LABEL_LINE_HEIGHT` (1.15, the grid square's) in every stack of both renderers; the
+  font did not change. Pictures: `tools/survey/icon-options.js`, `before-after.js`,
+  `lineheight.js`; numbers: `tools/survey/survey.js`.
   **An icon is only ever enlarged or reduced, never stretched.** Where the room is too
   narrow for the width the shape asks for, the WHOLE box comes down — the height with it.
   Clamping the width alone squashes it (a 2.1:1 glyph came out 75×56 on a narrow desk

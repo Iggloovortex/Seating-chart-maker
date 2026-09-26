@@ -488,12 +488,12 @@ function drawWalls(ctx, rectOf) {
 // the text and the icons gain the room they gave up, so a chart of short labels
 // gets big icons and a chart of long ones stays readable.
 
-const BASE_LINE = 0.18;      // label line height, as a fraction of the square
-const FONT_OF_LINE = 0.82;   // glyph height within that line
+// Labels follow the grid's plain square: the font is unchanged, the pitch is
+// LABEL_LINE_HEIGHT (1.15) of it, where it used to be 1 / 0.82 = 1.22 (js/layout.js).
+const BASE_LINE = LABEL_LINE_UNITS;         // label line height, as a fraction of the square
+const FONT_OF_LINE = 1 / LABEL_LINE_HEIGHT; // glyph height within that line
 const LABEL_WIDTH = 0.92;    // share of the square a label may span
 const MIN_TEXT_SCALE = 0.4;  // past this, ellipsize rather than shrink further
-const MAX_ICON = 0.62;       // an icon never fills more than this much
-const MIN_ICON = 0.3;
 
 function labelsOf(data) {
   return (data.labels || []).filter((l) => l.text);
@@ -503,13 +503,12 @@ function contentFont(size) {
   return `600 ${size}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
 }
 
-/** One text scale and one icon size for the whole chart. */
+/** One text scale for the whole chart. (Icons are sized per square — contentIconBox.) */
 function planContent(ctx, items) {
-  let scale = 1, maxLines = 0;
+  let scale = 1;
   for (const { data, geo } of items) {
     const labels = labelsOf(data);
     if (!labels.length) continue;
-    maxLines = Math.max(maxLines, labels.length);
     const s = Math.min(geo.w, geo.h);
     ctx.font = contentFont(s * BASE_LINE * FONT_OF_LINE);
     let widest = 0;
@@ -518,9 +517,10 @@ function planContent(ctx, items) {
   }
   const textScale = Math.max(MIN_TEXT_SCALE, Math.min(1, scale));
   const lineFrac = BASE_LINE * textScale;
-  // Whatever vertical room the labels no longer need goes to the icon.
-  const iconFrac = Math.max(MIN_ICON, Math.min(MAX_ICON, 0.94 - maxLines * lineFrac));
-  return { lineFrac, iconFrac };
+  // The icon is NOT planned chart-wide any more: each square's icon takes the room its
+  // own lines leave (contentIconBox). Planning it from the most-lined square gave every
+  // one-line desk a two-line desk's icon.
+  return { lineFrac };
 }
 
 /** An individual desk: fills its whole cell so neighbours touch; borders only on
@@ -1283,7 +1283,11 @@ function drawIconOnly(ctx, cx, cy, size, data, imgCache) {
   if (!data.icon) return;
   const img = imgCache.get(iconKey(data.icon, data));
   if (!img) return;
-  // A square glyph's worth of icon, in this glyph's own shape, contained in `size`.
+  // Every caller is a FURNITURE tile (a chair, a server, a nameless merged server) or
+  // a merge's icon cell — never a plain square, whose icon goes through drawContent and
+  // the shared rule. So this keeps its own tile-sized glyph: a square glyph's worth of
+  // icon, in this glyph's own shape, contained in `size`. The grid's furniture tiles
+  // are sized to match (`.cell__furniture .cell__icon`).
   const ratio = iconRatio(data.icon) || 1;
   const { w: iw, h: ih } = iconBox(size * 0.64, ratio, size * 0.94, size * 0.94);
   ctx.save();
@@ -1429,22 +1433,25 @@ function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, 
   // box, so `iconSize` below is the drawn HEIGHT and `iconW` the drawn width. Treating
   // the share as the height drew a 2:1 glyph twice as wide as a square one; treating it
   // as the width (what the grid's CSS did) drew it half as tall.
-  const iconNominal = iconOverride || s * (labels.length ? plan.iconFrac : 0.6);
-  const iconAspect = hasIcon && !printerAsIcon ? iconRatio(iconId) : 1;
-  const iconFit = iconBox(iconNominal, iconAspect, w * 0.94, h * 0.94);
-  let iconSize = printerAsIcon ? iconNominal : iconFit.h;
-  let iconW = printerAsIcon ? iconNominal : iconFit.w;
-  let lineH = (base || s) * plan.lineFrac;
-  let totalH = (hasIcon ? iconSize : 0) + labels.length * lineH;
-
-  // Keep the stack inside `clip` when one is given (a table's drawn shape). The
-  // stack runs down the square, or across it once rotated a quarter turn.
+  // The stack runs down the square, or across it once rotated a quarter turn.
   const rot = (data.rotation || 0) + extraRot;   // a table's angle carries through
-
   // A quarter-turned label reads along the box's HEIGHT and its lines stack across
   // the WIDTH; upright it is the other way round.
   const quarter = (((Math.round(rot / 90) * 90) % 360) + 360) % 360;
   const vertical = quarter === 90 || quarter === 270;
+
+  let lineH = (base || s) * plan.lineFrac;
+  // The icon's box comes from contentIconBox (js/layout.js), the ONE rule the grid
+  // uses too: with labels it takes the room its OWN lines leave, capped; alone it fills
+  // the box to an even margin on every side. A merged DESK hands in its own size
+  // (mergeIconSize), which is laid out in the glyph's shape the same way.
+  const iconAspect = hasIcon && !printerAsIcon ? iconRatio(iconId) : 1;
+  const iconFit = iconOverride
+    ? iconBox(iconOverride, iconAspect, w * CONTENT_ROOM, h * CONTENT_ROOM)
+    : contentIconBox(w, h, labels.length, lineH, iconAspect, vertical);
+  let iconSize = iconFit.h;
+  let iconW = iconFit.w;
+  let totalH = (hasIcon ? iconSize : 0) + labels.length * lineH;
 
   if (base) {
     // Struck from a whole square; now shrink only as far as THIS box requires. The

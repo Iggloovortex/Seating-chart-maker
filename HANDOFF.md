@@ -36,6 +36,24 @@ Anything in the scratchpad is wiped by a container reset — commit what matters
 | `8b3c15a` | `targetAt` — one hit test for every gesture |
 | (this push) | A piece keeps its names inside until they would be too small to read; two-renderer survey; line-height picture |
 
+## AWAITING THE USER'S REVIEW — icons follow the export, labels follow the grid
+
+Committed so a container reset cannot lose it, but **not yet approved**: the user
+asked to see it rendered first, and the before/after was sent
+(`node tools/survey/before-after.js [out]`, committed tree on :8124 vs working tree
+on :8123). One `git revert` backs it out. What it does — see CLAUDE.md, "icon size":
+- `contentIconBox` (js/layout.js) sizes every square's / piece's icon in BOTH
+  renderers: option E — with labels, the room its OWN lines leave, capped 0.72; with
+  none, fills to an even 8% margin (`ICON_ALONE_PAD`); desks `ICON_ROOM` 0.80.
+- Line height 1.15 everywhere (`LABEL_LINE_HEIGHT`), font unchanged.
+- The grid's fit now follows the export's order: if icon + lines overrun, BOTH shrink.
+Open questions put to the user:
+- A double monitor ALONE is width-bound by the even margin, so it carries ~0.69x a
+  single monitor's weight (weight2/weight4 read 0.689 for "square"). Accept, or size
+  it by weight and let it overshoot the side margin?
+- Grid ninths draw ~15% smaller than the export: the grid piece's border + padding
+  take ~4px of a 26px piece.
+
 ## OPEN — the biggest one: the universal icon & text pass
 
 The user asked for a chart of every rendering case, then "determine and eliminate

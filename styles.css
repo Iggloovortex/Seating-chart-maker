@@ -703,7 +703,9 @@ body {
   border-radius: 6px;
   overflow: hidden;
 }
-.cell__rackunit .cell__label { position: relative; z-index: 2; }
+/* A rack's name sits outside .cell__labels, so it inherited `line-height: normal` — a
+   keyword the font resolves, not the square's 1.15. */
+.cell__rackunit .cell__label { position: relative; z-index: 2; line-height: 1.15; }
 /* Upright server icon in the square's empty top-left corner (the rack is centred
    and only as wide as its labels, so the corner is free). */
 .cell__rackicon {
@@ -725,7 +727,10 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
+  /* No gap: the lines are pitched by line-height alone, like a square's. A 1px gap
+     here made a chair's lines 1.23x the font where a square's are 1.15x. */
+  gap: 0;
+  line-height: 1.15;
   padding: 1px;
   z-index: 2;
   pointer-events: none;
@@ -832,7 +837,9 @@ body {
 /* A piece's icon is sized to the piece by fitSubcellLabels (like its labels), so it
    grows with the space instead of freezing at a fixed ceiling. */
 .subcell .cell__icon { width: 42%; }
-.subcell .cell__label { font-size: 9px; line-height: 1.1; }
+/* Every label stack pitches its lines at the plain square's 1.15 (LABEL_LINE_HEIGHT in
+   js/layout.js) — the user's reference for labels, in both renderers. */
+.subcell .cell__label { font-size: 9px; line-height: 1.15; }
 /* A vertical (side-facing) split-piece label is fitted by JS (fitSubcellLabels)
    and reads along the piece's long axis, so it must not be clipped to the piece's
    narrow width. */

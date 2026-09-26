@@ -477,8 +477,56 @@ function floatsOutside(cell, shrunk) {
 /** How much room a hung name needs below its square, in units. */
 const FLOAT_BAND = 0.5;
 
+/** LABELS follow the editing grid (the user's call): a plain square's
+ *  `.cell__labels { line-height: 1.15 }` is the reference, and every label stack in
+ *  both renderers uses it. The export used to pitch its lines at 1.22× the font while
+ *  the grid ran 1.10–1.23 depending on what kind of thing held the label. The FONT is
+ *  unchanged — the two renderers already agreed on it (0.150 vs 0.148 of a square) —
+ *  only the gap between lines closes up. */
+const LABEL_LINE_HEIGHT = 1.15;
+/** A full square's label font, as a share of the square (the grid's 12px on 80). */
+const LABEL_FONT_UNITS = 0.1476;
 /** A label line's height as a fraction of a full square — BASE_LINE in js/export.js. */
-const LABEL_LINE_UNITS = 0.18;
+const LABEL_LINE_UNITS = LABEL_FONT_UNITS * LABEL_LINE_HEIGHT;
+
+// ------------------------------------------------------------- icon size
+//
+// ICONS follow the export (the user's call), and both renderers now size a square's
+// or a piece's icon through ONE function, contentIconBox. The rule is option E of the
+// limit-break sheet (tools/survey/icon-options.js):
+//
+//  * With labels, an icon takes the room ITS OWN lines leave, capped at ICON_MAX of
+//    the box. It used to be the room left by the MOST-lined square in the whole
+//    chart (planContent's maxLines), so one two-line desk anywhere shrank every
+//    one-line desk's icon to a two-line desk's — and raising the cap did nothing.
+//  * With no labels, an icon fills the box up to ONE EVEN margin on all four sides
+//    (ICON_ALONE_PAD), whichever side it reaches first. It was a fixed 0.6 nominal
+//    inside a 94% room, so its height stopped at the nominal while a wide glyph ran
+//    almost to the edge sideways: a wide top/bottom margin and next to none at the
+//    sides.
+//  * A merged desk keeps its own rule (mergeIconSize), with ICON_ROOM raised to 0.80.
+const ICON_MAX = 0.72;        // an icon with labels never takes more of its box
+const ICON_MIN = 0.30;        // …nor less, however many lines (they shrink to fit)
+const ICON_ALONE_PAD = 0.08;  // an icon on its own stops this far from every edge
+const CONTENT_ROOM = 0.94;    // the share of a box the content stack may fill
+
+/** The drawn box {w, h} of a square's or a piece's icon, in the caller's px.
+ *  `w`/`h` the box it sits in; `lines` how many label lines share it; `lineH` one
+ *  line's px (struck from a whole cell, so a piece passes the CELL's line); `ratio`
+ *  the glyph's own shape; `vertical` when the stack runs across the box (a quarter
+ *  turn). The box keeps the glyph's shape — see iconBox. */
+function contentIconBox(w, h, lines, lineH, ratio, vertical = false) {
+  if (!lines) {
+    const k = 1 - 2 * ICON_ALONE_PAD;
+    // Ask for more than can fit; iconBox contains it, so the glyph grows until its
+    // limiting side meets the margin — the same margin on every side of the box.
+    return iconBox(Math.max(w, h) * 4, ratio, w * k, h * k);
+  }
+  const s = Math.min(w, h);
+  const stack = (vertical ? w : h) * CONTENT_ROOM;
+  const n = Math.max(ICON_MIN * s, Math.min(ICON_MAX * s, stack - lines * lineH));
+  return iconBox(n, ratio, w * CONTENT_ROOM, h * CONTENT_ROOM);
+}
 
 /** How much of a square a KEPT-INSIDE name needs: the piece's own half plus its stack.
  *  A square that is not floating its names shrinks only to this, rather than jumping
@@ -596,7 +644,6 @@ const READABLE_TEXT = 0.6;
  *  (~10px on the editing grid's 80px square). Below it the names hang outside and
  *  give the icon the piece back. */
 const READABLE_ICON = 0.12;
-const PIECE_ICON_SHARE = 0.46;   // a piece's icon, of its short side (ICON_FRAC)
 const PIECE_ROOM = 0.94;         // the share of a box the content may fill (drawContent)
 
 let TEXT_MEASURE = null;
@@ -621,16 +668,21 @@ function keptInsideScale(cell, wU, hU) {
   const stack = (vertical ? wU : hU) * PIECE_ROOM;
   const run = (vertical ? hU : wU) * PIECE_ROOM;
   const lineU = LABEL_LINE_UNITS;
-  const fontU = lineU * 0.82;                       // FONT_OF_LINE in js/export.js
-  const iconN = cell.icon ? Math.min(wU, hU) * PIECE_ICON_SHARE : 0;
-  const ratio = cell.icon && typeof iconRatio === 'function' ? iconRatio(cell.icon) : 1;
-  const iconH = cell.icon ? iconBox(iconN, ratio, run, 0).h : 0;
+  const fontU = LABEL_FONT_UNITS;
+  // The icon the piece would really have: the shared rule, in squares.
+  const iconH = cell.icon ? pieceIconBox(cell, wU, hU, lines.length, vertical).h : 0;
   const total = iconH + lines.length * lineU;
   let k = total > stack ? stack / total : 1;
   let widest = 0;
   for (const l of lines) widest = Math.max(widest, textRunUnits(l.text, fontU * k));
   if (widest > run) k *= run / widest;
   return k;
+}
+
+/** A piece's icon box in squares, by contentIconBox — what both renderers will draw. */
+function pieceIconBox(cell, wU, hU, lines, vertical) {
+  const ratio = cell.icon && typeof iconRatio === 'function' ? iconRatio(cell.icon) : 1;
+  return contentIconBox(wU, hU, lines, LABEL_LINE_UNITS, ratio, vertical);
 }
 
 /** True when a piece's names must hang OUTSIDE it: keeping them in would push the text
@@ -647,8 +699,13 @@ function pieceNamesHang(cell, wU, hU, furniture = false) {
   }
   const k = keptInsideScale(cell, wU, hU);
   if (k < READABLE_TEXT) return true;
-  const iconN = cell.icon ? Math.min(wU, hU) * PIECE_ICON_SHARE : 0;
-  return iconN >= READABLE_ICON && iconN * k < READABLE_ICON;
+  if (!cell.icon) return false;
+  // Squeezed by the names kept beside it — measured against the icon it would have
+  // with the piece to itself, so hanging the names only counts when it would help.
+  const lines = cell.labels.filter((l) => l.text && l.text.trim()).length;
+  const kept = Math.sqrt(pieceIconBox(cell, wU, hU, lines, false).w * pieceIconBox(cell, wU, hU, lines, false).h);
+  const alone = Math.sqrt(pieceIconBox(cell, wU, hU, 0, false).w * pieceIconBox(cell, wU, hU, 0, false).h);
+  return alone >= READABLE_ICON && kept * k < READABLE_ICON;
 }
 
 /** Where each of a table's edges sits, as a signed fraction of ONE square. 0 is flush
@@ -756,7 +813,7 @@ function tableBox(table, rectOf) {
  *  until the short side caps it. Both renderers call this, so a desk's icon is the same
  *  size in the editing grid and in the export. */
 const ICON_SHARE = 0.46;   // of the long side — the share a square's icon takes
-const ICON_ROOM = 0.70;    // of the short side — how much of the depth an icon may fill
+const ICON_ROOM = 0.80;    // of the short side — how much of the depth an icon may fill (E)
 function mergeIconSize(w, h) {
   const long = Math.max(w, h), short = Math.min(w, h);
   return Math.max(8, Math.min(long * ICON_SHARE, short * ICON_ROOM));

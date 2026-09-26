@@ -109,28 +109,48 @@ function measureLabelWidth(text) {
  *  the widest line to the cell width AND the whole stack to the height under any
  *  icon. A no-op for labels that already fit. */
 function fitCellLabels() {
-  const BASE = 12;        // .cell__label font-size, px
-  const LINE = BASE * 1.25; // line box at the base font (line-height 1.15 + gap)
   for (const cell of chart.querySelectorAll('.cell')) {
     // A split cell's label spans belong to its sub-cells, each far narrower than
     // the whole cell — sizing them against the cell width would let them overflow.
     // The sub-cells clip and ellipsize their own labels via CSS instead.
     if (cell.classList.contains('cell--split')) continue;
+    fitSquareContent(cell);
+  }
+}
+
+/** Size one square's icon by the export's rule and fit its labels around it. Shared by
+ *  a plain square and a CENTRED merged desk, which is a square in its own right — the
+ *  export already sized it by the square rule; the grid left it to the CSS 46%. */
+function fitSquareContent(cell) {
+  const BASE = 12;                               // .cell__label font-size, px
+  const LINE = BASE * LABEL_LINE_HEIGHT;         // one line box at the base font
+  const PAD = 4, GAP = 2;                        // .cell__content's padding (2+2) and gap
+  {
+    // The icon first, by the export's rule (contentIconBox) — an icon-only square
+    // needs it too.
+    sizeCellIcon(cell);
     const spans = cell.querySelectorAll('.cell__label');
-    if (!spans.length) continue;
+    if (!spans.length) return;
     const availW = cell.clientWidth - 10;
-    if (availW <= 0) continue;
+    if (availW <= 0) return;
     let widest = 0;
     for (const s of spans) widest = Math.max(widest, measureLabelWidth(s.textContent));
     const wScale = widest > availW ? availW / widest : 1;
-    // Height budget: the cell minus any icon above the labels and a little padding.
-    const iconEl = cell.querySelector('.cell__icon');
-    const iconH = iconEl ? iconEl.getBoundingClientRect().height : 0;
-    const availH = cell.clientHeight - iconH - 10;
+    // Then the EXPORT's order: if icon and lines together overrun the square, BOTH come
+    // down by the same factor. The grid used to keep the icon and squeeze only the text,
+    // against a stricter budget (1.25x lines and 10px of padding), so the moment icons
+    // grew to the export's size the labels shrank — backwards for "labels follow the grid".
+    const iconEl = cell.querySelector(':scope > .cell__content > .cell__icon');
+    const iconH = iconEl ? parseFloat(iconEl.style.height) || iconEl.getBoundingClientRect().height : 0;
+    const availH = cell.clientHeight - PAD - (iconEl ? GAP : 0);
     const stackH = spans.length * LINE;
-    const hScale = stackH > availH && availH > 0 ? availH / stackH : 1;
+    const hScale = iconH + stackH > availH && availH > 0 ? availH / (iconH + stackH) : 1;
+    if (iconEl && hScale < 1) {
+      iconEl.style.width = `${parseFloat(iconEl.style.width) * hScale}px`;
+      iconEl.style.height = `${iconH * hScale}px`;
+    }
     const scale = Math.min(wScale, hScale);
-    const px = scale < 1 ? Math.max(6, Math.round(BASE * scale)) : null; // floor so it stays legible
+    const px = scale < 1 ? Math.max(6, Math.round(BASE * scale * 10) / 10) : null; // floor so it stays legible
     for (const s of spans) s.style.fontSize = px ? `${px}px` : '';
   }
 }
@@ -158,8 +178,8 @@ function sizeUnitSubmerges(root = chart) {
 
 function fitSubcellLabels() {
   const BASE = 12;          // match a normal square's label size when it fits
-  const LINE = BASE * 1.25;
-  const PAD = 4;
+  const LINE = BASE * LABEL_LINE_HEIGHT;
+  const PAD = 2, GAP = 1;   // .subcell .cell__content's padding (1+1) and gap
   for (const sc of chart.querySelectorAll('.subcell')) {
     // A piece whose name hangs OUTSIDE it is not competing for the piece's room, so it
     // keeps a full square's text rather than being shrunk to fit a space it left.
@@ -187,21 +207,28 @@ function fitSubcellLabels() {
     // 6px floor.
     sizeSubcellIcon(sc);
     const iconEl = sc.querySelector('.cell__icon');
-    const iconExtent = iconEl
-      ? (vertical ? iconEl.getBoundingClientRect().width : iconEl.getBoundingClientRect().height)
-      : 0;
+    const iconW = iconEl ? parseFloat(iconEl.style.width) || 0 : 0;
+    const iconH = iconEl ? parseFloat(iconEl.style.height) || 0 : 0;
+    const iconExtent = vertical ? iconW : iconH;
     // A vertical label reads along the piece's HEIGHT; its line-stack runs across
     // the WIDTH. A horizontal one is the other way round.
     const availLen = (vertical ? h : w);
-    const availStack = (vertical ? w : h) - iconExtent;
+    const availStack = (vertical ? w : h) - (iconEl ? GAP : 0);
 
     let widest = 0;
     for (const s of spans) widest = Math.max(widest, measureLabelWidth(s.textContent));
     const wScale = widest > availLen ? availLen / widest : 1;
+    // The export's order: icon and lines come down TOGETHER if they overrun the piece,
+    // so a piece's icon and text keep the proportions the export gives them.
     const stackH = spans.length * LINE;
-    const hScale = (availStack > 0 && stackH > availStack) ? availStack / stackH : 1;
+    const hScale = (availStack > 0 && iconExtent + stackH > availStack)
+      ? availStack / (iconExtent + stackH) : 1;
+    if (iconEl && hScale < 1) {
+      iconEl.style.width = `${iconW * hScale}px`;
+      iconEl.style.height = `${iconH * hScale}px`;
+    }
     const scale = Math.min(1, wScale, hScale);
-    const px = Math.max(6, Math.floor(BASE * scale));
+    const px = Math.max(6, Math.round(BASE * scale * 10) / 10);
     // A vertical label must not be clipped to the piece's narrow width, so free its
     // max-width and let it extend along the (long) rotated axis. A horizontal one is
     // capped to the length axis so a too-long name ellipsizes cleanly (the flex
@@ -218,29 +245,56 @@ function fitSubcellLabels() {
   }
 }
 
-/** The share of its square an icon takes — `.cell__icon`'s 46% in styles.css, as a
- *  number, so a split piece can be given the SAME proportion its square would have. */
-const ICON_FRAC = 0.46;
+/** A quarter turn read off a piece's or square's content (`--rot`), so a turned stack
+ *  measures its room across the box the way the export's `vertical` does. */
+function contentIsVertical(host) {
+  const content = host.querySelector('.cell__content');
+  const m = content && /([-\d.]+)deg/.exec(content.style.getPropertyValue('--rot') || '');
+  const a = ((((Math.round((m ? parseFloat(m[1]) : 0) / 90) * 90) % 360) + 360) % 360);
+  return a === 90 || a === 270;
+}
 
-/** Size a split piece's icon to the piece it sits in, rather than freezing it at the
- *  fixed 38px ceiling — the icon twin of the label fit above. It takes the same share
- *  of the piece that an ordinary square's icon takes of the square, so a piece reads
- *  like a small square and not like a magnified one. An icon is square, so the share
- *  is measured against the piece's SHORT side. */
-function sizeSubcellIcon(sc) {
-  const icon = sc.querySelector('.cell__icon');
-  if (!icon) return;
-  const base = Math.min(sc.clientWidth, sc.clientHeight);
-  if (base <= 0) return;
-  // The share is the NOMINAL size; iconBox lays that much icon out in the glyph's own
-  // shape and contains it in the piece, so a wide glyph is not half as tall here as it
-  // is on a square. `aspect-ratio` is what iconUse set the glyph's ratio on.
+/** Lay an icon out by the SHARED rule — contentIconBox, the export's own call — in a
+ *  box of `w` x `h` px shared with `lines` label lines of `lineH` px each. Set as px in
+ *  both dimensions so the CSS percentage never gets a say and the box keeps the glyph's
+ *  shape (a bare max-width would clamp one axis and squash it). */
+function sizeIconByRule(icon, w, h, lines, lineH, vertical) {
+  if (!icon || w <= 0 || h <= 0) return;
   const ratio = parseFloat(icon.style.aspectRatio) || 1;
-  const b = iconBox(Math.max(8, base * ICON_FRAC), ratio,
-                    sc.clientWidth * 0.94, sc.clientHeight * 0.94);
+  const b = contentIconBox(w, h, lines, lineH, ratio, vertical);
   icon.style.width = `${b.w}px`;
   icon.style.height = `${b.h}px`;
   icon.style.maxWidth = 'none';
+}
+
+/** One line of label, in grid px, struck from a whole drawn square — the grid's twin of
+ *  the export's `(base || s) * plan.lineFrac`. */
+function gridLineH() {
+  const unit = layoutUnit() > 0 ? layoutUnit() - CELL_GAP : 80;
+  return unit * LABEL_LINE_UNITS;
+}
+
+/** A split piece's icon, by the shared rule. Its lines are the ones it KEEPS inside
+ *  (a piece whose names hang outside has the piece to itself), and a line is struck
+ *  from a whole cell, exactly as the export strikes it from `cellRef`. */
+function sizeSubcellIcon(sc) {
+  const icon = sc.querySelector('.cell__icon');
+  if (!icon) return;
+  const lines = sc.classList.contains('subcell--floatlabel')
+    ? 0 : sc.querySelectorAll('.cell__content .cell__label').length;
+  sizeIconByRule(icon, sc.offsetWidth, sc.offsetHeight, lines, gridLineH(), contentIsVertical(sc));
+}
+
+/** A plain square's icon, by the shared rule — it used to be CSS alone (46% of the
+ *  square, capped at 38px), which is why the export's icons ran about a third larger.
+ *  Furniture (a chair, a server) keeps its own tile and is not touched here. */
+function sizeCellIcon(cell) {
+  const icon = cell.querySelector(':scope > .cell__content > .cell__icon');
+  if (!icon) return;
+  const lines = cell.querySelectorAll(':scope > .cell__content .cell__label').length;
+  const s = Math.min(cell.offsetWidth, cell.offsetHeight);
+  sizeIconByRule(icon, cell.offsetWidth, cell.offsetHeight, lines,
+                 s * LABEL_LINE_UNITS, contentIsVertical(cell));
 }
 
 /** Output-accurate rectangles for the true-size preview, at the grid's own unit
@@ -1932,6 +1986,9 @@ function renderMerges() {
   // to the piece.
   sizeUnitSubmerges();
   fitSubcellLabels();
+  // A centred desk is built here too, after the grid's own pass — give it the square
+  // rule now, or its icon keeps the CSS 46% while the export draws it at the square's.
+  for (const unit of chart.querySelectorAll('.merge-unit')) fitSquareContent(unit);
 }
 
 /** One 'unit' merge: a single square (one cell in size) centred in the block, so
