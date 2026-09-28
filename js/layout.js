@@ -509,6 +509,7 @@ const ICON_MAX = 0.72;        // an icon with labels never takes more of its box
 const ICON_MIN = 0.30;        // …nor less, however many lines (they shrink to fit)
 const ICON_ALONE_PAD = 0.08;  // an icon on its own stops this far from every edge
 const CONTENT_ROOM = 0.94;    // the share of a box the content stack may fill
+const LABEL_WIDTH = 0.92;     // the share of a box a label may span — fit AND truncation
 
 /** The drawn box {w, h} of a square's or a piece's icon, in the caller's px.
  *  `w`/`h` the box it sits in; `lines` how many label lines share it; `lineH` one

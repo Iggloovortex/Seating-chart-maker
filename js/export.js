@@ -492,7 +492,7 @@ function drawWalls(ctx, rectOf) {
 // LABEL_LINE_HEIGHT (1.15) of it, where it used to be 1 / 0.82 = 1.22 (js/layout.js).
 const BASE_LINE = LABEL_LINE_UNITS;         // label line height, as a fraction of the square
 const FONT_OF_LINE = 1 / LABEL_LINE_HEIGHT; // glyph height within that line
-const LABEL_WIDTH = 0.92;    // share of the square a label may span
+// LABEL_WIDTH (the share of a box a label may span) lives in js/layout.js, shared with the grid.
 const MIN_TEXT_SCALE = 0.4;  // past this, ellipsize rather than shrink further
 
 function labelsOf(data) {
@@ -1458,7 +1458,10 @@ function drawContent(ctx, cx, cy, w, h, data, imgCache, forceChair, plan, clip, 
     // stack runs down the box, or across it once turned a quarter — the same
     // rotation-aware fit the grid does per piece.
     const availStack = (vertical ? w : h) * 0.94;
-    const availLen = (vertical ? h : w) * 0.94;
+    // Fit to the SAME width the text is truncated at below (LABEL_WIDTH). Fitting to
+    // 0.94 and then truncating at 0.92 left every width-bound name 2% too wide, so it
+    // always lost its last letter to an ellipsis — "Ann" in a third came out "A…".
+    const availLen = (vertical ? h : w) * LABEL_WIDTH;
     let k = totalH > availStack && totalH > 0 ? availStack / totalH : 1;
     if (labels.length) {
       ctx.save();

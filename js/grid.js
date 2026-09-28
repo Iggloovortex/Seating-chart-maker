@@ -179,7 +179,7 @@ function sizeUnitSubmerges(root = chart) {
 function fitSubcellLabels() {
   const BASE = 12;          // match a normal square's label size when it fits
   const LINE = BASE * LABEL_LINE_HEIGHT;
-  const PAD = 2, GAP = 1;   // .subcell .cell__content's padding (1+1) and gap
+  const PAD = 0, GAP = 0;   // .subcell .cell__content has neither — a piece's content gets the piece, as on export
   for (const sc of chart.querySelectorAll('.subcell')) {
     // A piece whose name hangs OUTSIDE it is not competing for the piece's room, so it
     // keeps a full square's text rather than being shrunk to fit a space it left.
@@ -199,8 +199,16 @@ function fitSubcellLabels() {
     const a = (((Math.round(rot / 90) * 90) % 360) + 360) % 360;
     const vertical = a === 90 || a === 270;
 
-    const w = sc.clientWidth - PAD, h = sc.clientHeight - PAD;
-    if (w <= 0 || h <= 0) continue;
+    // The export's budget: CONTENT_ROOM of the piece's share of the square — not the
+    // element's inside, which the borders and gutters have already cut into. At most a
+    // fraction of a px of that can fall under the piece's own 1px border.
+    const room = pieceRoom(sc);
+    // The stack gets the export's room; a label's LENGTH also may not pass what is
+    // really inside the piece's border, or a narrow third's name runs over its edge.
+    const h = room.h * CONTENT_ROOM - PAD;
+    const wLen = Math.min(room.w * LABEL_WIDTH, sc.clientWidth) - PAD;
+    const hLen = Math.min(room.h * LABEL_WIDTH, sc.clientHeight) - PAD;
+    if (wLen <= 0 || h <= 0) continue;
     // Size the icon BEFORE measuring what it leaves for the labels. At its CSS size
     // an icon is a share of the piece's WIDTH (capped), so on a wide, short piece it
     // measured taller than the icon will actually be and squeezed the labels to the
@@ -212,12 +220,16 @@ function fitSubcellLabels() {
     const iconExtent = vertical ? iconW : iconH;
     // A vertical label reads along the piece's HEIGHT; its line-stack runs across
     // the WIDTH. A horizontal one is the other way round.
-    const availLen = (vertical ? h : w);
-    const availStack = (vertical ? w : h) - (iconEl ? GAP : 0);
+    const availLen = vertical ? hLen : wLen;
+    const availStack = (vertical ? room.w * CONTENT_ROOM : h) - (iconEl ? GAP : 0);
 
     let widest = 0;
     for (const s of spans) widest = Math.max(widest, measureLabelWidth(s.textContent));
-    const wScale = widest > availLen ? availLen / widest : 1;
+    // 2% slack: the browser lays text out a hair wider than the canvas measure, and a
+    // name fitted to the exact width then picks up the CSS ellipsis — "Ann" in a third
+    // came out "A…" in the grid just as it did on export.
+    const fitLen = availLen * 0.98;
+    const wScale = widest > fitLen ? fitLen / widest : 1;
     // The export's order: icon and lines come down TOGETHER if they overrun the piece,
     // so a piece's icon and text keep the proportions the export gives them.
     const stackH = spans.length * LINE;
@@ -228,7 +240,7 @@ function fitSubcellLabels() {
       iconEl.style.height = `${iconH * hScale}px`;
     }
     const scale = Math.min(1, wScale, hScale);
-    const px = Math.max(6, Math.round(BASE * scale * 10) / 10);
+    const px = Math.max(6, Math.floor(BASE * scale * 10) / 10);   // round DOWN — up overshoots the fit
     // A vertical label must not be clipped to the piece's narrow width, so free its
     // max-width and let it extend along the (long) rotated axis. A horizontal one is
     // capped to the length axis so a too-long name ellipsizes cleanly (the flex
@@ -282,7 +294,24 @@ function sizeSubcellIcon(sc) {
   if (!icon) return;
   const lines = sc.classList.contains('subcell--floatlabel')
     ? 0 : sc.querySelectorAll('.cell__content .cell__label').length;
-  sizeIconByRule(icon, sc.offsetWidth, sc.offsetHeight, lines, gridLineH(), contentIsVertical(sc));
+  const { w, h } = pieceRoom(sc);
+  sizeIconByRule(icon, w, h, lines, gridLineH(), contentIsVertical(sc));
+}
+
+/** The room a piece's content is measured against, as the EXPORT sees it: a plain
+ *  split piece is a straight share of its square (square / cols x square / rows). The
+ *  element is smaller — the square's border and the 1px gutters between pieces come out
+ *  of it — and an icon's room is "piece minus text", a small difference of two larger
+ *  numbers, so those 2px cost a ninth's icon a sixth of its size. A merged piece or a
+ *  desk split keeps its own element box. */
+function pieceRoom(sc) {
+  const host = sc.parentElement && sc.parentElement.parentElement;
+  const data = host && host.classList && host.classList.contains('cell') && host.dataset.key
+    ? peekCell(...parseKey(host.dataset.key)) : null;
+  if (data && data.split && !sc.classList.contains('subcell--merged')) {
+    return { w: host.offsetWidth / data.split.cols, h: host.offsetHeight / data.split.rows };
+  }
+  return { w: sc.offsetWidth, h: sc.offsetHeight };
 }
 
 /** A plain square's icon, by the shared rule — it used to be CSS alone (46% of the

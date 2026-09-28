@@ -324,6 +324,17 @@ and push it; don't stack new work directly on `main`.
   `LABEL_LINE_HEIGHT` (1.15, the grid square's) in every stack of both renderers; the
   font did not change. Pictures: `tools/survey/icon-options.js`, `before-after.js`,
   `lineheight.js`; numbers: `tools/survey/survey.js`.
+  **A split piece's content is measured as the EXPORT sees it** (`pieceRoom`, js/grid.js):
+  a plain split's piece is a straight share of its square, and `.subcell .cell__content`
+  has no padding and no gap. An icon's room is "piece minus text" — a small difference
+  of two larger numbers — so the ~4px the grid's chrome took from a 26px ninth cost its
+  icon a sixth; every split drew 10–28% smaller in the grid until this. The user's call:
+  pieces follow the LARGER. **One width for fitting AND truncating a label**
+  (`LABEL_WIDTH`, js/layout.js): the export fitted to 0.94 and cut at 0.92, and the grid
+  rounded its fitted size up into its own ellipsis, so a width-bound name always lost its
+  last letter ("Ann" in a third read "A…" in both). The grid rounds DOWN, with 2% slack.
+  A double monitor ALONE stays width-bound by the even margin (~0.69x a single's weight):
+  it grows on a merged desk, which is where it gets its room — the user's call.
   **An icon is only ever enlarged or reduced, never stretched.** Where the room is too
   narrow for the width the shape asks for, the WHOLE box comes down — the height with it.
   Clamping the width alone squashes it (a 2.1:1 glyph came out 75×56 on a narrow desk

@@ -19,6 +19,9 @@ const CASES = [
   ['quarter piece + 1 line',  [3, 3], 1],
   ['2×1 merged desk + line',  [3, 5], 2],
   ['centred desk + line',     [7, 1], 2],
+  ['halves piece + line',     [7, 4], 1],
+  ['thirds piece + line',     [7, 6], 1],
+  ['ninths piece + line',     [7, 8], 1],
   ['two-line labels',         [5, 1], 1],
   ['chair + 2 lines',         [5, 3], 1],
 ];
@@ -43,6 +46,11 @@ function build() {
   updateCell(7, 1, { enabled: true, icon: 'monitor', labels: lab('Ann Lee') });
   updateCell(7, 2, { enabled: true });
   state.selection = new Set(['7,1', '7,2']); addMerge('unit'); state.selection = new Set();
+  for (const [c, rows, cols] of [[4, 1, 2], [6, 1, 3], [8, 3, 3]]) {
+    updateCell(7, c, { enabled: true });
+    splitCell(7, c, rows, cols);
+    updateSubcell(7, c, 0, { enabled: true, icon: 'monitor', labels: lab('Ann') });
+  }
   emit();
 }
 

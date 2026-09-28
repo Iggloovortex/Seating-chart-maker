@@ -36,23 +36,25 @@ Anything in the scratchpad is wiped by a container reset — commit what matters
 | `8b3c15a` | `targetAt` — one hit test for every gesture |
 | (this push) | A piece keeps its names inside until they would be too small to read; two-renderer survey; line-height picture |
 
-## AWAITING THE USER'S REVIEW — icons follow the export, labels follow the grid
+## DECIDED — icons follow the export, labels follow the grid
 
-Committed so a container reset cannot lose it, but **not yet approved**: the user
-asked to see it rendered first, and the before/after was sent
-(`node tools/survey/before-after.js [out]`, committed tree on :8124 vs working tree
-on :8123). One `git revert` backs it out. What it does — see CLAUDE.md, "icon size":
+Built in `d7f4d0f`, refined after the user's review:
 - `contentIconBox` (js/layout.js) sizes every square's / piece's icon in BOTH
-  renderers: option E — with labels, the room its OWN lines leave, capped 0.72; with
-  none, fills to an even 8% margin (`ICON_ALONE_PAD`); desks `ICON_ROOM` 0.80.
-- Line height 1.15 everywhere (`LABEL_LINE_HEIGHT`), font unchanged.
-- The grid's fit now follows the export's order: if icon + lines overrun, BOTH shrink.
-Open questions put to the user:
-- A double monitor ALONE is width-bound by the even margin, so it carries ~0.69x a
-  single monitor's weight (weight2/weight4 read 0.689 for "square"). Accept, or size
-  it by weight and let it overshoot the side margin?
-- Grid ninths draw ~15% smaller than the export: the grid piece's border + padding
-  take ~4px of a 26px piece.
+  renderers: with labels, the room its OWN lines leave, capped 0.72; with none, fills
+  to an even 8% margin; desks `ICON_ROOM` 0.80. Line height 1.15 everywhere.
+- **A double monitor ALONE stays width-bound** (~0.69x a single monitor's weight).
+  User: "double monitors grow in a merged space — it doesn't need to spill over."
+- **Every split matches the export, the larger** (user: "ninths same as quarters, all
+  the splits, larger should be ideal"). A grid piece had lost 10-28% to its own
+  padding, gap and the square's border; `.subcell .cell__content` now has neither,
+  and a plain split's pieces are measured as a straight share of the square
+  (`pieceRoom`), as the export does. Measured: ninths 0.142 vs 0.144, halves 0.298
+  vs 0.300, text 0.149 vs 0.148.
+- **Found on the way, both renderers:** a width-bound name always lost its last
+  letter — the export fitted to 0.94 and truncated at 0.92, and the grid rounded
+  the fitted size UP into its own CSS ellipsis, so "Ann" in a third read "A…"
+  everywhere. `LABEL_WIDTH` now lives in js/layout.js and is both the fit and the
+  cut; the grid rounds down with 2% slack.
 
 ## OPEN — the biggest one: the universal icon & text pass
 

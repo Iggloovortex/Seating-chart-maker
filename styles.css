@@ -833,7 +833,11 @@ body {
   max-width: 100%;
 }
 
-.subcell .cell__content { padding: 1px; gap: 1px; }
+/* No padding and no gap inside a piece: the export gives a piece's icon and text the
+   whole piece (less its 6% room), and in a ninth the 1px padding + 1px gap here, on
+   top of the piece's border, took ~4px of 26 — every split drew 10-28% smaller in the
+   grid than on export. Pieces follow the LARGER, the export's. */
+.subcell .cell__content { padding: 0; gap: 0; }
 /* A piece's icon is sized to the piece by fitSubcellLabels (like its labels), so it
    grows with the space instead of freezing at a fixed ceiling. */
 .subcell .cell__icon { width: 42%; }
